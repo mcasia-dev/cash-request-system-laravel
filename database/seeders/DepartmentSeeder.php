@@ -23,18 +23,83 @@ class DepartmentSeeder extends Seeder
                 'added_by'        => null,
             ],
             [
+                'department_name' => 'Customer Service',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Warehouse',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Logistic',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Demand Planning',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Quality Assurance',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Sales Retail',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Sales Food Service',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Sales Non-Food',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Sales Beverages',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Sales Frozen',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Accounting',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Treasury',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Credit and Collections',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
                 'department_name' => 'Finance',
                 'department_head' => 'Juan Dela Cruz',
                 'added_by'        => null,
             ],
             [
-                'department_name' => 'Marketing',
-                'department_head' => 'Ana Santos',
+                'department_name' => 'Purchasing',
+                'department_head' => 'Juan Dela Cruz',
                 'added_by'        => null,
             ],
             [
-                'department_name' => 'Operations',
-                'department_head' => 'Carlos Reyes',
+                'department_name' => 'Office of the President',
+                'department_head' => 'Juan Dela Cruz',
                 'added_by'        => null,
             ],
         ];

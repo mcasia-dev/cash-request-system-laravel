@@ -4,13 +4,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Spatie\Activitylog\LogOptions;
-use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 
 class CashRequest extends Model implements HasMedia
 {
-    use InteractsWithMedia, LogsActivity;
+    use InteractsWithMedia;
 
     protected $fillable = [
         'request_no',
@@ -23,6 +22,7 @@ class CashRequest extends Model implements HasMedia
         'requesting_amount',
         'nature_of_payment',
         'reason_for_rejection',
+        'reason_for_cancelling',
         'payee',
         'payment_to',
         'bank_account_no',

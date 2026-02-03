@@ -1,9 +1,9 @@
 <?php
 namespace App\Filament\Resources\CashRequestResource\Pages;
 
+use App\Enums\CashRequest\Status;
 use App\Filament\Resources\CashRequestResource;
 use Illuminate\Support\HtmlString;
-use Illuminate\Support\Str;
 use JaOcero\ActivityTimeline\Pages\ActivityTimelinePage;
 
 class TrackRequestStatus extends ActivityTimelinePage
@@ -17,16 +17,18 @@ class TrackRequestStatus extends ActivityTimelinePage
             'activity_section'     => [
                 'label'                   => 'Track Status',
                 'description'             => 'These are the activities that have been recorded.',
-                'show_items_count'        => 0,
+                'show_items_count'        => 5,
                 'show_items_label'        => 'Show more',
                 'show_items_icon'         => 'heroicon-o-chevron-down',
                 'show_items_color'        => 'gray',
-                'aside'                   => true,
+                'aside'                   => false,
                 'empty_state_heading'     => 'No activities yet',
                 'empty_state_description' => 'Check back later for activities that have been recorded.',
                 'empty_state_icon'        => 'heroicon-o-bolt-slash',
-                'heading_visible'         => true,
-                'extra_attributes'        => [],
+                'heading_visible'         => false,
+                'extra_attributes'        => [
+                    'class' => 'my-5'
+                ],
             ],
             'activity_title'       => [
                 'placeholder'  => 'Activity',
@@ -36,25 +38,22 @@ class TrackRequestStatus extends ActivityTimelinePage
                         return new HtmlString('No activity data.');
                     }
 
-                    if ($record['description'] == $record['event']) {
-                        $className  = Str::lower(Str::snake(class_basename($record['subject'] ?? \App\Models\CashRequest::class), ' '));
-                        $causerName = $record['causer']->name ?? $record['causer']->first_name ?? $record['causer']->last_name ?? $record['causer']->username ?? 'Unknown';
-
-                        return new HtmlString(sprintf('The <strong>%s</strong> was <strong>%s</strong> by <strong>%s</strong>.', $className, $record['event'], $causerName));
-                    }
-
-                    return new HtmlString($record['description']);
+                    // return new HtmlString(sprintf('The <strong>%s</strong> was <strong>%s</strong> by <strong>%s</strong>.', $className, $record['event'], $causerName));
+                    return new HtmlString(sprintf('<strong> ' . ucfirst($record['event']) . ' </strong>'));
                 },
             ],
             'activity_description' => [
                 'placeholder'  => 'No description is set',
                 'allow_html'   => true,
                 'modify_state' => function ($record) {
-                    if (!$record || empty($record['properties'])) {
+                    if (! $record || empty($record['properties'])) {
                         return new HtmlString('');
                     }
 
                     $properties = $record['properties'];
+                    $date       = $record->created_at
+                        ? $record->created_at->format('F j, Y h:i A')
+                        : '';
 
                     if (isset($properties['old']) && isset($properties['attributes'])) {
                         $oldValues = $properties['old'];
@@ -77,40 +76,40 @@ class TrackRequestStatus extends ActivityTimelinePage
                         }
                     }
 
-                    return new HtmlString('Hello there');
+                    // return new HtmlString($record['description']);
+                    return new HtmlString(
+                        "<span class='text-sm text-gray-500 block mb-1'>{$date}</span>"
+                        . $record['description']
+                    );
                 },
             ],
             'activity_date' => [
                 'name'         => 'created_at',
-                'date'         => 'F j, Y g:i A',
+                'date'         => 'F d, Y h:i A',
                 'placeholder'  => 'No date is set',
-                'modify_state' => function ($state) {
-                    return new HtmlString($state ?? '');
-                },
+                'modify_state' => fn($state) => new HtmlString($state ? $state : ''),
             ],
             'activity_icon' => [
                 'icon'  => function ($record) {
                     return match ($record->event) {
-                        'created'    => 'heroicon-o-plus-circle',
-                        'updated'    => 'heroicon-o-pencil',
-                        'deleted'    => 'heroicon-o-trash',
-                        'approved'   => 'heroicon-o-check-circle',
-                        'rejected'   => 'heroicon-o-x-circle',
-                        'released'   => 'heroicon-o-currency-dollar',
-                        'liquidated' => 'heroicon-o-arrow-path',
-                        default      => 'heroicon-o-information-circle',
+                        'created'                 => 'heroicon-o-plus-circle',
+                        Status::APPROVED->value   => 'heroicon-o-check-circle',
+                        Status::REJECTED->value   => 'heroicon-o-x-mark',
+                        Status::CANCELLED->value  => 'heroicon-o-x-circle',
+                        Status::RELEASED->value   => 'heroicon-o-currency-dollar',
+                        Status::LIQUIDATED->value => 'heroicon-o-arrow-path',
+                        default                   => 'heroicon-o-information-circle',
                     };
                 },
                 'color' => function ($record) {
                     return match ($record->event) {
-                        'created'    => 'success',
-                        'updated'    => 'info',
-                        'deleted'    => 'danger',
-                        'approved'   => 'success',
-                        'rejected'   => 'danger',
-                        'released'   => 'primary',
-                        'liquidated' => 'warning',
-                        default      => 'gray',
+                        'created'                 => 'warning',
+                        Status::APPROVED->value   => 'success',
+                        Status::REJECTED->value   => 'danger',
+                        Status::CANCELLED->value  => 'danger',
+                        Status::RELEASED->value   => 'primary',
+                        Status::LIQUIDATED->value => 'warning',
+                        default                   => 'gray',
                     };
                 },
             ],
