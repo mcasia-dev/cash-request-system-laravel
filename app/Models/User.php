@@ -2,11 +2,12 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Spatie\Permission\Traits\HasRoles;
-use Illuminate\Notifications\Notifiable;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
@@ -60,8 +61,24 @@ class User extends Authenticatable
         ];
     }
 
+    protected static function booted()
+    {
+        static::creating(function ($user) {
+            $last_id     = self::latest()->first()->id ?? 0;
+            $tracking_no = 'MCA-2025-' . str_pad($last_id + 1, 4, '0', STR_PAD_LEFT);
+
+            $user->control_no = $tracking_no;
+            $user->name       = "{$user->first_name} {$user->last_name}";
+        });
+    }
+
     public function cashRequests(): HasMany
     {
         return $this->hasMany(CashRequest::class);
+    }
+
+    public function department(): BelongsTo
+    {
+        return $this->belongsTo(Department::class);
     }
 }

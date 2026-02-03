@@ -21,8 +21,6 @@ class Register extends BaseRegister
     {
         return parent::form($schema)
             ->components([
-                $this->getControlNumberFormComponent(),
-                $this->getNameFormComponent(),
                 $this->getFirstNameFormComponent(),
                 $this->getMiddleNameFormComponent(),
                 $this->getLastNameFormComponent(),
@@ -36,23 +34,6 @@ class Register extends BaseRegister
                 $this->getSignatureNumberFormComponent(),
                 $this->getTermsFormComponent(),
             ]);
-    }
-
-    protected function getControlNumberFormComponent()
-    {
-        $last_id     = User::latest()->first()->id ?? 0;
-        $tracking_no = 'MCA-2025-' . str_pad($last_id + 1, 4, '0', STR_PAD_LEFT);
-
-        return Hidden::make('control_no')
-            ->default($tracking_no)
-            ->required();
-    }
-
-    protected function getNameFormComponent(): Component
-    {
-        return Hidden::make('name')
-            ->default(fn() => '')
-            ->dehydrated();
     }
 
     protected function getFirstNameFormComponent(): Component
@@ -205,11 +186,6 @@ class Register extends BaseRegister
     {
         // Remove terms field as it's only for validation
         unset($data['terms']);
-
-        // Concatenate first_name and last_name into name field
-        $firstName    = $data['first_name'] ?? '';
-        $lastName     = $data['last_name'] ?? '';
-        $data['name'] = trim("{$firstName} {$lastName}");
 
         return $data;
     }

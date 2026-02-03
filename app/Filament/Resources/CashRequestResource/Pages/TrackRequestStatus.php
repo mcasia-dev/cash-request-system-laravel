@@ -39,7 +39,7 @@ class TrackRequestStatus extends ActivityTimelinePage
                     }
 
                     // return new HtmlString(sprintf('The <strong>%s</strong> was <strong>%s</strong> by <strong>%s</strong>.', $className, $record['event'], $causerName));
-                    return new HtmlString(sprintf('<strong> ' . ucfirst($record['event']) . ' </strong>'));
+                    return new HtmlString(sprintf('<strong> ' . ucfirst($record['properties']['status_remarks']) . ' </strong>'));
                 },
             ],
             'activity_description' => [

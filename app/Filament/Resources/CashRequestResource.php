@@ -20,6 +20,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Tables\Actions\ActionGroup;
 use Filament\Forms\Components\DatePicker;
+use Filament\Tables\Filters\SelectFilter;
 use Illuminate\Database\Eloquent\Builder;
 use App\Filament\Resources\CashRequestResource\Pages;
 use Filament\Tables\Columns\SpatieMediaLibraryImageColumn;
@@ -138,7 +139,13 @@ class CashRequestResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                //
+                SelectFilter::make('status')
+                    ->options([
+                        'pending'  => 'For Approval',
+                        'approved' => 'Approved',
+                        'rejected' => 'Rejected',
+                    ])
+                    ->attribute('status'),
             ])
             ->actions([
                 Tables\Actions\Action::make('activity_timeline')
@@ -164,24 +171,25 @@ class CashRequestResource extends Resource
                         ->modalHeading('Reject Cash Request')
                         ->modalSubmitActionLabel('Submit')
                         ->action(function ($record, array $data) {
+                            $user = Auth::user();
                             $record->update([
                                 'status'                => Status::CANCELLED->value,
                                 'reason_for_cancelling' => $data['reason_for_cancelling'],
                             ]);
 
                             activity()
-                                ->causedBy(Auth::user())
+                                ->causedBy($user)
                                 ->performedOn($record)
                                 ->event('cancelled')
                                 ->withProperties([
                                     'request_no'            => $record->request_no,
                                     'activity_name'         => $record->activity_name,
                                     'requesting_amount'     => $record->requesting_amount,
-                                    'previous_status'       => 'pending',
-                                    'new_status'            => 'cancelled',
+                                    'previous_status'       => Status::PENDING->value,
+                                    'new_status'            => Status::CANCELLED->value,
                                     'reason_for_cancelling' => $data['reason_for_cancelling'],
                                 ])
-                                ->log("Cash request {$record->request_no} was cancelled by " . Auth::user()->name);
+                                ->log("Cash request {$record->request_no} was cancelled by {$user->name}");
 
                             Notification::make()
                                 ->title('Cash Request Cancelled!')

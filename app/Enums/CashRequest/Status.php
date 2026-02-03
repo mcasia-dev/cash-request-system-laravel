@@ -9,6 +9,7 @@ enum Status: string
     use EnumsWithOptions;
 
     case PENDING = 'pending';
+    case IN_PROGRESS = 'in progress';
     case APPROVED = 'approved';
     case REJECTED = 'rejected';
     case CANCELLED = 'cancelled';

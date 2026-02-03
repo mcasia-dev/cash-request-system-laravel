@@ -6,6 +6,7 @@ use App\Filament\Resources\ForApprovalRequestResource;
 use App\Jobs\ApproveCashRequestJob;
 use App\Jobs\RejectCashRequestJob;
 use App\Models\CashRequest;
+use App\Services\ApprovalStatusResolver;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Infolists\Components\Section;
@@ -26,10 +27,14 @@ class ViewForApprovalRequest extends ViewRecord
                 ->visible(fn($record) => $record->status === Status::PENDING->value)
                 ->requiresConfirmation()
                 ->action(function (CashRequest $record) {
-                    $user = Auth::user();
-                    
+                    $user           = Auth::user();
+                    $status_remarks = ApprovalStatusResolver::approve($user);
+
                     // Update the record status
-                    $record->update(['status' => Status::APPROVED->value]);
+                    $record->update([
+                        'status'         => Status::IN_PROGRESS->value,
+                        'status_remarks' => $status_remarks,
+                    ]);
 
                     // Log activity
                     activity()
@@ -40,8 +45,9 @@ class ViewForApprovalRequest extends ViewRecord
                             'request_no'        => $record->request_no,
                             'activity_name'     => $record->activity_name,
                             'requesting_amount' => $record->requesting_amount,
-                            'previous_status'   => 'pending',
-                            'new_status'        => 'approved',
+                            'previous_status'   => Status::PENDING->value,
+                            'new_status'        => Status::IN_PROGRESS->value,
+                            'status_remarks'    => $status_remarks,
                         ])
                         ->log("Cash request {$record->request_no} was approved by {$user->name} ({$user->position})");
 
@@ -67,25 +73,28 @@ class ViewForApprovalRequest extends ViewRecord
                 ->modalHeading('Reject Cash Request')
                 ->modalSubmitActionLabel('Reject')
                 ->action(function (CashRequest $record, array $data) {
-                    $user = Auth::user();
+                    $user           = Auth::user();
+                    $status_remarks = ApprovalStatusResolver::reject($user);
 
                     // Update the record status and save rejection reason
                     $record->update([
                         'status'               => Status::REJECTED->value,
+                        'status_remarks'       => $status_remarks,
                         'reason_for_rejection' => $data['rejection_reason'],
                     ]);
 
                     // Log activity
                     activity()
-                        ->causedBy(Auth::user())
+                        ->causedBy($user)
                         ->performedOn($record)
                         ->event('rejected')
                         ->withProperties([
                             'request_no'           => $record->request_no,
                             'activity_name'        => $record->activity_name,
                             'requesting_amount'    => $record->requesting_amount,
-                            'previous_status'      => 'pending',
-                            'new_status'           => 'rejected',
+                            'previous_status'      => Status::PENDING->value,
+                            'new_status'           => Status::REJECTED->value,
+                            'status_remarks'       => $status_remarks,
                             'reason_for_rejection' => $data['rejection_reason'],
                         ])
                         ->log("Cash request {$record->request_no} was rejected by {$user->name} ({$user->position})");
@@ -111,8 +120,10 @@ class ViewForApprovalRequest extends ViewRecord
                     ->schema([
                         TextEntry::make('request_no')
                             ->label('Request No.'),
+
                         TextEntry::make('user.name')
                             ->label('Requestor'),
+
                         TextEntry::make('status')
                             ->badge()
                             ->color(fn(string $state): string => match ($state) {
@@ -123,6 +134,7 @@ class ViewForApprovalRequest extends ViewRecord
                                 'rejected'   => 'danger',
                                 default      => 'gray',
                             }),
+
                         TextEntry::make('nature_of_request')
                             ->badge(),
                     ])
@@ -132,11 +144,14 @@ class ViewForApprovalRequest extends ViewRecord
                     ->schema([
                         TextEntry::make('activity_name')
                             ->label('Activity Name'),
+
                         TextEntry::make('activity_date')
                             ->label('Activity Date')
                             ->date(),
+
                         TextEntry::make('activity_venue')
                             ->label('Venue'),
+
                         TextEntry::make('purpose')
                             ->label('Purpose')
                             ->columnSpanFull(),
@@ -148,17 +163,24 @@ class ViewForApprovalRequest extends ViewRecord
                         TextEntry::make('requesting_amount')
                             ->label('Requesting Amount')
                             ->money('PHP'),
+
                         TextEntry::make('nature_of_payment')
                             ->label('Payment Type'),
+
                         TextEntry::make('payee'),
+
                         TextEntry::make('payment_to')
                             ->label('Payment To'),
+
                         TextEntry::make('bank_name')
                             ->label('Bank'),
+
                         TextEntry::make('bank_account_no')
                             ->label('Account Number'),
+
                         TextEntry::make('account_type')
                             ->label('Account Type'),
+
                     ])
                     ->columns(2),
 
