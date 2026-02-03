@@ -36,6 +36,7 @@ class CashRequest extends Model implements HasMedia
         'date_released',
         'due_date',
         'status',
+        'status_remarks',
     ];
 
     protected $casts = [

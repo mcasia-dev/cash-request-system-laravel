@@ -1,32 +1,33 @@
 <?php
 namespace App\Filament\Resources\ActivityListResource\Pages;
 
-use Filament\Forms\Form;
-use Filament\Tables\Table;
-use App\Models\CashRequest;
-use App\Models\ActivityList;
 use App\Enums\CashRequest\Status;
+use App\Enums\CashRequest\StatusRemarks;
 use App\Enums\NatureOfRequestEnum;
-use Filament\Resources\Pages\Page;
-use Illuminate\Support\Facades\DB;
-use Filament\Tables\Actions\Action;
-// use Filament\Pages\Page;
-use Illuminate\Support\Facades\Auth;
+use App\Filament\Resources\ActivityListResource;
+use App\Models\ActivityList;
+use App\Models\CashRequest;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Contracts\HasForms;
+use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
+// use Filament\Pages\Page;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Concerns\InteractsWithForms;
+use Filament\Forms\Contracts\HasForms;
+use Filament\Forms\Form;
+use Filament\Notifications\Notification;
+use Filament\Resources\Pages\Page;
+use Filament\Tables\Actions\Action;
+use Filament\Tables\Actions\ActionGroup;
+use Filament\Tables\Actions\DeleteAction;
 use Filament\Tables\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Contracts\HasTable;
-use Filament\Forms\Components\TextInput;
-use Filament\Notifications\Notification;
-use Filament\Tables\Actions\ActionGroup;
-use Filament\Forms\Components\DatePicker;
-use Filament\Tables\Actions\DeleteAction;
-use Filament\Forms\Concerns\InteractsWithForms;
-use App\Filament\Resources\ActivityListResource;
 use Filament\Tables\Concerns\InteractsWithTable;
-use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
+use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Table;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class CreateActivityListWithTable extends Page implements HasForms, HasTable
 {
@@ -113,12 +114,6 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
         return $table
             ->query(ActivityList::where('user_id', Auth::id()))
             ->columns([
-                TextColumn::make('nature_of_request')
-                    ->label('Nature of Request')
-                    ->badge()
-                    ->sortable()
-                    ->searchable(),
-
                 TextColumn::make('activity_name')
                     ->label('Activity Name')
                     ->sortable()
@@ -133,6 +128,12 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
                     ->label('Activity Date')
                     ->sortable()
                     ->date(),
+
+                TextColumn::make('nature_of_request')
+                    ->label('Nature of Request')
+                    ->badge()
+                    ->sortable()
+                    ->searchable(),
 
                 TextColumn::make('requesting_amount')
                     ->label('Requesting Amount')
@@ -180,6 +181,7 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
                     'purpose'           => $activity->purpose,
                     'nature_of_request' => $activity->nature_of_request,
                     'requesting_amount' => $activity->requesting_amount,
+                    'status_remarks'    => StatusRemarks::REQUEST_SUBMITTED->value,
                 ]);
 
                 // Log each cash requests created
@@ -192,6 +194,7 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
                         'activity_name'     => $cashRequest->activity_name,
                         'requesting_amount' => $cashRequest->requesting_amount,
                         'status'            => Status::PENDING->value,
+                        'status_remarks'    => StatusRemarks::REQUEST_SUBMITTED->value,
                     ])
                     ->log("Cash request {$cashRequest->request_no} was submitted by {$user->name} ({$user->position})");
 

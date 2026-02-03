@@ -21,7 +21,7 @@ return new class extends Migration
             $table->enum('nature_of_request', ['petty cash', 'cash advance'])->nullable();
             $table->decimal('requesting_amount');
             $table->date('due_date')->nullable();
-            $table->string('status')->default('pending')->nullable();
+            $table->enum('status', ['pending', 'in progress', 'approved', 'rejected', 'cancelled', 'liquidated', 'released'])->default('pending')->nullable();
             $table->timestamps();
         });
     }
