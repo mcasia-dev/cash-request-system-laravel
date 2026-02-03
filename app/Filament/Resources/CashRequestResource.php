@@ -1,26 +1,30 @@
 <?php
 namespace App\Filament\Resources;
 
-use App\Enums\NatureOfRequestEnum;
-use App\Filament\Resources\CashRequestResource\Pages;
+use Filament\Tables;
+use Filament\Forms\Form;
+use Filament\Tables\Table;
 use App\Models\CashRequest;
-use Filament\Forms\Components\DatePicker;
+use Filament\Resources\Resource;
+use App\Enums\CashRequest\Status;
+use App\Enums\NatureOfRequestEnum;
+use Filament\Tables\Actions\Action;
+use Illuminate\Support\Facades\Auth;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\TextInput;
-use Filament\Forms\Form;
-use Filament\Resources\Resource;
-use Filament\Tables;
-use Filament\Tables\Actions\ActionGroup;
-use Filament\Tables\Actions\DeleteAction;
 use Filament\Tables\Actions\EditAction;
 use Filament\Tables\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Table;
+use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
+use Filament\Tables\Actions\ActionGroup;
+use Filament\Forms\Components\DatePicker;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\Auth;
+use App\Filament\Resources\CashRequestResource\Pages;
+use Filament\Tables\Columns\SpatieMediaLibraryImageColumn;
+use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
+use App\Filament\Resources\ActivityListResource\Pages\CreateActivityListWithTable;
 
 class CashRequestResource extends Resource
 {
@@ -79,8 +83,12 @@ class CashRequestResource extends Resource
     {
         return $table
             ->columns([
-                // TextColumn::make('user.name')
-                //     ->searchable(),
+                SpatieMediaLibraryImageColumn::make('attachment')
+                    ->collection('attachments'),
+
+                TextColumn::make('request_no')
+                    ->sortable()
+                    ->searchable(),
 
                 TextColumn::make('activity_name')
                     ->label('Activity Name')
@@ -100,7 +108,6 @@ class CashRequestResource extends Resource
                 TextColumn::make('requesting_amount')
                     ->label('Requesting Amount')
                     ->money('PHP')
-                    ->numeric()
                     ->sortable(),
 
                 TextColumn::make('due_date')
@@ -110,6 +117,15 @@ class CashRequestResource extends Resource
 
                 TextColumn::make('status')
                     ->badge()
+                    ->color(fn(string $state): string => match ($state) {
+                        Status::PENDING->value    => 'warning',
+                        Status::APPROVED->value   => 'success',
+                        Status::REJECTED->value   => 'danger',
+                        Status::CANCELLED->value  => 'gray',
+                        Status::LIQUIDATED->value => 'info',
+                        Status::RELEASED->value   => 'primary',
+                        default                   => 'secondary',
+                    })
                     ->searchable(),
 
                 TextColumn::make('created_at')
@@ -134,10 +150,45 @@ class CashRequestResource extends Resource
                 ActionGroup::make([
                     ViewAction::make(),
                     EditAction::make()
-                        ->visible(fn($record) => $record->status === 'pending'),
+                        ->visible(fn() => Status::PENDING->value),
 
-                    DeleteAction::make()
-                        ->visible(fn($record) => $record->status === 'pending'),
+                    Action::make('cancel')
+                        ->color('danger')
+                        ->form([
+                            Textarea::make('reason_for_cancelling')
+                                ->label('Reason for Cancelling')
+                                ->required()
+                                ->maxLength(65535),
+                        ])
+                        ->icon('heroicon-o-x-circle')
+                        ->modalHeading('Reject Cash Request')
+                        ->modalSubmitActionLabel('Submit')
+                        ->action(function ($record, array $data) {
+                            $record->update([
+                                'status'                => Status::CANCELLED->value,
+                                'reason_for_cancelling' => $data['reason_for_cancelling'],
+                            ]);
+
+                            activity()
+                                ->causedBy(Auth::user())
+                                ->performedOn($record)
+                                ->event('cancelled')
+                                ->withProperties([
+                                    'request_no'            => $record->request_no,
+                                    'activity_name'         => $record->activity_name,
+                                    'requesting_amount'     => $record->requesting_amount,
+                                    'previous_status'       => 'pending',
+                                    'new_status'            => 'cancelled',
+                                    'reason_for_cancelling' => $data['reason_for_cancelling'],
+                                ])
+                                ->log("Cash request {$record->request_no} was cancelled by " . Auth::user()->name);
+
+                            Notification::make()
+                                ->title('Cash Request Cancelled!')
+                                ->success()
+                                ->send();
+                        })
+                        ->visible(fn($record) => $record->status === Status::PENDING->value),
                 ]),
 
             ])
@@ -159,7 +210,7 @@ class CashRequestResource extends Resource
     {
         return [
             'index'        => Pages\ListCashRequests::route('/'),
-            'create'       => Pages\CreateCashRequest::route('/create'),
+            'create'       => CreateActivityListWithTable::route('/create'),
             'edit'         => Pages\EditCashRequest::route('/{record}/edit'),
             'view'         => Pages\ViewCashRequest::route('/{record}/view'),
             'track-status' => Pages\TrackRequestStatus::route('/{record}/track-status'),

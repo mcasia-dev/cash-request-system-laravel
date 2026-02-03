@@ -96,6 +96,7 @@ class Register extends BaseRegister
             ->label('Department')
             ->options(Department::whereNotNull('department_name')->pluck('department_name', 'id')->toArray())
             ->required()
+            ->searchable()
             ->live()
             ->afterStateUpdated(function ($state, callable $set) {
                 if ($state) {

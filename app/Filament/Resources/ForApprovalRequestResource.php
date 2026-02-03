@@ -1,15 +1,16 @@
 <?php
 namespace App\Filament\Resources;
 
-use App\Enums\CashRequest\Status;
-use App\Filament\Resources\ForApprovalRequestResource\Pages;
-use App\Models\CashRequest;
-use Filament\Forms\Form;
-use Filament\Resources\Resource;
 use Filament\Tables;
-use Filament\Tables\Columns\TextColumn;
+use Filament\Forms\Form;
 use Filament\Tables\Table;
+use App\Models\CashRequest;
+use Filament\Resources\Resource;
+use App\Enums\CashRequest\Status;
+use Filament\Tables\Columns\TextColumn;
 use Illuminate\Database\Eloquent\Builder;
+use Filament\Tables\Columns\SpatieMediaLibraryImageColumn;
+use App\Filament\Resources\ForApprovalRequestResource\Pages;
 
 class ForApprovalRequestResource extends Resource
 {
@@ -42,6 +43,9 @@ class ForApprovalRequestResource extends Resource
     {
         return $table
             ->columns([
+                SpatieMediaLibraryImageColumn::make('attachment')
+                    ->collection('attachments'),
+
                 TextColumn::make('request_no')
                     ->label('Request No.')
                     ->sortable()
@@ -70,7 +74,6 @@ class ForApprovalRequestResource extends Resource
                 TextColumn::make('requesting_amount')
                     ->label('Requesting Amount')
                     ->money('PHP')
-                    ->numeric()
                     ->sortable(),
 
                 TextColumn::make('due_date')
@@ -86,6 +89,7 @@ class ForApprovalRequestResource extends Resource
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+                    
                 TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()
@@ -119,5 +123,10 @@ class ForApprovalRequestResource extends Resource
             'edit'   => Pages\EditForApprovalRequest::route('/{record}/edit'),
             'view'   => Pages\ViewForApprovalRequest::route('/{record}/view'),
         ];
+    }
+
+    public static function canCreate(): bool
+    {
+        return false;
     }
 }

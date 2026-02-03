@@ -19,11 +19,31 @@ class RoleSeeder extends Seeder
                 'guard_name' => 'web',
             ],
             [
-                'name' => 'admin',
+                'name' => 'deparment_head',
                 'guard_name' => 'web',
             ],
             [
-                'name' => 'staff',
+                'name' => 'president',
+                'guard_name' => 'web',
+            ],
+            [
+                'name' => 'sales_channel_manager',
+                'guard_name' => 'web',
+            ],
+            [
+                'name' => 'national_sales_manager',
+                'guard_name' => 'web',
+            ],
+            [
+                'name' => 'treasury_manager',
+                'guard_name' => 'web',
+            ],
+            [
+                'name' => 'treasury_supervisor',
+                'guard_name' => 'web',
+            ],
+            [
+                'name' => 'treasury_staff',
                 'guard_name' => 'web',
             ],
         ];
