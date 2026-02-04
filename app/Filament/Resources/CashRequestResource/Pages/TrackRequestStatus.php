@@ -87,7 +87,7 @@ class TrackRequestStatus extends ActivityTimelinePage
                 'name'         => 'created_at',
                 'date'         => 'F d, Y h:i A',
                 'placeholder'  => 'No date is set',
-                'modify_state' => fn($state) => new HtmlString($state ? $state : ''),
+                'modify_state' => fn($state) => new HtmlString($state ?? ''),
             ],
             'activity_icon' => [
                 'icon'  => function ($record) {
@@ -107,7 +107,7 @@ class TrackRequestStatus extends ActivityTimelinePage
                         Status::APPROVED->value   => 'success',
                         Status::REJECTED->value   => 'danger',
                         Status::CANCELLED->value  => 'danger',
-                        Status::RELEASED->value   => 'primary',
+                        Status::RELEASED->value   => 'info',
                         Status::LIQUIDATED->value => 'warning',
                         default                   => 'gray',
                     };

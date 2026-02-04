@@ -63,7 +63,7 @@ class ViewForApprovalRequest extends ViewRecord
 
             Action::make('Reject')
                 ->visible(fn($record) => $record->status === Status::PENDING->value)
-                ->color('danger')
+                ->color('secondary')
                 ->form([
                     Textarea::make('rejection_reason')
                         ->label('Reason for Rejection')
@@ -184,28 +184,15 @@ class ViewForApprovalRequest extends ViewRecord
                     ])
                     ->columns(2),
 
-                Section::make('Dates')
-                    ->schema([
-                        TextEntry::make('due_date')
-                            ->label('Due Date')
-                            ->date(),
-                        TextEntry::make('date_released')
-                            ->label('Date Released')
-                            ->date(),
-                        TextEntry::make('date_liquidated')
-                            ->label('Date Liquidated')
-                            ->date(),
-                    ])
-                    ->columns(3),
-
                 Section::make('Additional Information')
                     ->schema([
                         TextEntry::make('created_at')
                             ->label('Created At')
-                            ->dateTime(),
+                            ->dateTime('F d, Y h:i A'),
+
                         TextEntry::make('updated_at')
                             ->label('Last Updated')
-                            ->dateTime(),
+                            ->dateTime('F d, Y h:i A'),
                     ])
                     ->columns(2),
             ]);

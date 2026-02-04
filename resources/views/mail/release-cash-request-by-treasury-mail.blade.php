@@ -1,9 +1,9 @@
 <x-mail::message>
-# Cash Request Approved by Department Head
+# Cash Request Released
 
 Dear {{ $record->user->name }},
 
-Your cash request has been **approved** by your department head. The next step is review and approval by the Treasury department. You will be notified once Treasury has completed their evaluation.
+Your cash request has been **released** by the Treasury team and is now **ready for pickup**. Please proceed with the next steps as advised by the Treasury department.
 
 ## Request Summary
 
@@ -15,13 +15,13 @@ Your cash request has been **approved** by your department head. The next step i
 
 **Activity Venue:** {{ $record->activity_venue }}
 
-**Amount Approved:** ₱{{ number_format($record->requesting_amount, 2) }}
+**Amount Released:** â‚±{{ number_format($record->requesting_amount, 2) }}
 
 <x-mail::button :url="route('filament.admin.resources.cash-requests.track-status', ['record' => $record])">
 View Request Status
 </x-mail::button>
 
-If you have any questions, please contact your department head.
+If you have any questions, please contact the Treasury department.
 
 Thank you for your cooperation.
 

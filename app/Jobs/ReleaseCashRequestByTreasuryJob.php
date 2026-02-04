@@ -1,13 +1,13 @@
 <?php
 namespace App\Jobs;
 
-use App\Mail\ApproveCashRequestMail;
 use Illuminate\Support\Facades\Mail;
 use App\Enums\CashRequest\StatusRemarks;
-use Illuminate\Foundation\Queue\Queueable; 
+use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use App\Mail\ReleaseCashRequestByTreasuryMail;
 
-class ApproveCashRequestJob implements ShouldQueue
+class ReleaseCashRequestByTreasuryJob implements ShouldQueue
 {
     use Queueable;
 
@@ -24,10 +24,10 @@ class ApproveCashRequestJob implements ShouldQueue
      */
     public function handle(): void
     {
-        Mail::to($this->record->user->email)->send(new ApproveCashRequestMail($this->record));
+        Mail::to($this->record->user->email)->send(new ReleaseCashRequestByTreasuryMail($this->record));
 
-        // Update the status once the email is sent.
-        $this->record->status_remarks = StatusRemarks::FOR_PAYMENT_PROCESSING->value;
+         // Update the status once the email is sent.
+        $this->record->status_remarks = StatusRemarks::FOR_LIQUIDATION->value;
         $this->record->save();
     }
 }

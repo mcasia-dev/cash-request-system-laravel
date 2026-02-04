@@ -9,7 +9,7 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class ApproveCashRequestMail extends Mailable
+class ApproveCashRequestByTreasuryMail extends Mailable
 {
     use Queueable, SerializesModels;
 
@@ -27,7 +27,7 @@ class ApproveCashRequestMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Your Cash Request Has Been Approved By Department Head - ' . $this->record->request_no,
+            subject: 'Approve Cash Request By Treasury Mail',
         );
     }
 
@@ -37,10 +37,7 @@ class ApproveCashRequestMail extends Mailable
     public function content(): Content
     {
         return new Content(
-            markdown: 'mail.approve-cash-request-mail',
-            with: [
-                'record' => $this->record,
-            ],
+            markdown: 'mail.approve-cash-request-by-treasury-mail',
         );
     }
 
