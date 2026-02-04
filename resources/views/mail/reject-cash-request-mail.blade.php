@@ -25,7 +25,7 @@ We regret to inform you that your cash request has **not been approved**.
 
 ## Next Steps
 
-If you believe this decision was made in error, please contact your department head to discuss further. You may also submit a new cash request with updated information if needed.
+If you believe this decision was made in error, please contact us to discuss further. You may also submit a new cash request with updated information if needed.
 
 <x-mail::button :url="route('filament.admin.resources.cash-requests.index')">
 Submit New Request

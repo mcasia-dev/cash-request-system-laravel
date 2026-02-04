@@ -2,8 +2,8 @@
 namespace App\Filament\Resources;
 
 use App\Enums\CashRequest\Status;
-use App\Filament\Resources\ForApprovalRequestResource\Pages;
-use App\Models\CashRequest;
+use App\Filament\Resources\ForCashReleaseResource\Pages;
+use App\Models\ForCashRelease;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -11,25 +11,21 @@ use Filament\Tables\Columns\SpatieMediaLibraryImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 
-class ForApprovalRequestResource extends Resource
+class ForCashReleaseResource extends Resource
 {
-    protected static ?string $model           = CashRequest::class;
-    protected static ?string $navigationGroup = 'Administrator';
-    protected static ?string $slug            = 'for-approval-requests';
-    protected static ?string $navigationLabel = 'For Approval Requests';
-    protected static ?string $label           = 'For Approval Requests';
+    protected static ?string $model           = ForCashRelease::class;
+    protected static ?string $navigationGroup = 'For Approval (Treasury)';
+    protected static ?string $navigationIcon  = 'heroicon-o-rectangle-stack';
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
-
-    public static function getEloquentQuery(): Builder
-    {
-        return parent::getEloquentQuery()
-        // ->whereHas('roles', function ($query) {
-        //     $query->where('name', 'User');
-        // })
-            ->where('status', Status::PENDING->value);
-    }
+    // public static function getEloquentQuery(): Builder
+    // {
+    //     return parent::getEloquentQuery()
+    //         ->whereHas('roles', function ($query) {
+    //             $query->where('name', 'User');
+    //         });
+    // }
 
     public static function form(Form $form): Form
     {
@@ -46,37 +42,52 @@ class ForApprovalRequestResource extends Resource
                 SpatieMediaLibraryImageColumn::make('attachment')
                     ->collection('attachments'),
 
-                TextColumn::make('request_no')
+                TextColumn::make('cashRequest.request_no')
                     ->label('Request No.')
                     ->sortable()
-                    ->searchable()
-                    ->url(fn($record) => route('filament.admin.resources.for-approval-requests.view', $record)),
+                    ->searchable(),
 
-                TextColumn::make('user.name')
+                TextColumn::make('cashRequest.user.name')
                     ->label('Requestor')
                     ->searchable(),
 
-                TextColumn::make('activity_name')
+                TextColumn::make('cashRequest.activity_name')
                     ->label('Activity Name')
                     ->sortable()
                     ->searchable(),
 
-                TextColumn::make('activity_date')
+                TextColumn::make('cashRequest.activity_date')
                     ->label('Activity Date')
                     ->date()
                     ->sortable(),
 
-                TextColumn::make('nature_of_request')
+                TextColumn::make('cashRequest.nature_of_request')
                     ->label('Nature of Request')
                     ->sortable()
                     ->badge(),
 
-                TextColumn::make('requesting_amount')
+                TextColumn::make('cashRequest.requesting_amount')
                     ->label('Requesting Amount')
                     ->money('PHP')
                     ->sortable(),
 
-                TextColumn::make('status')
+                TextColumn::make('cashRequest.created_at')
+                    ->label('Date Requested')
+                    ->date()
+                    ->sortable(),
+
+                TextColumn::make('releasing_date')
+                    ->label('Releasing Date')
+                    ->date()
+                    ->sortable(),
+
+                TextColumn::make('cashRequest.due_date')
+                    ->label('Due Date')
+                    ->date()
+                    ->sortable(),
+
+                TextColumn::make('cashRequest.status')
+                    ->label('Status')
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
                         Status::PENDING->value    => 'warning',
@@ -88,16 +99,6 @@ class ForApprovalRequestResource extends Resource
                         default                   => 'secondary',
                     })
                     ->searchable(),
-
-                TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-
-                TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 //
@@ -122,14 +123,24 @@ class ForApprovalRequestResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index'  => Pages\ListForApprovalRequests::route('/'),
-            'create' => Pages\CreateForApprovalRequest::route('/create'),
-            'edit'   => Pages\EditForApprovalRequest::route('/{record}/edit'),
-            'view'   => Pages\ViewForApprovalRequest::route('/{record}/view'),
+            'index'  => Pages\ListForCashReleases::route('/'),
+            'create' => Pages\CreateForCashRelease::route('/create'),
+            'edit'   => Pages\EditForCashRelease::route('/{record}/edit'),
+            'view'   => Pages\ViewForCashRelease::route('/{record}/view'),
         ];
     }
 
     public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function canEdit(Model $model): bool
+    {
+        return false;
+    }
+
+    public static function canDelete(Model $model): bool
     {
         return false;
     }

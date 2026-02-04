@@ -2,37 +2,28 @@
 namespace App\Filament\Resources;
 
 use App\Enums\CashRequest\Status;
-use App\Enums\CashRequest\StatusRemarks;
-use App\Filament\Resources\PaymentProcessResource\Pages;
-use App\Models\CashRequest;
+use App\Filament\Resources\ForLiquidationResource\Pages;
+use App\Models\ForLiquidation;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
-use Filament\Tables\Columns\SpatieMediaLibraryImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
-class PaymentProcessResource extends Resource
+class ForLiquidationResource extends Resource
 {
-    protected static ?string $model           = CashRequest::class;
-    protected static ?string $navigationGroup = 'For Approval (Treasury)'; // This is for approval of treasury department
-    protected static ?string $slug            = 'payment-processing';
-    protected static ?string $navigationLabel = 'Payment Process';
-    protected static ?string $label           = 'Payment Process';
+    protected static ?string $model           = ForLiquidation::class;
+    protected static ?string $navigationGroup = 'For Approval (Treasury)';
+    protected static ?string $navigationIcon  = 'heroicon-o-rectangle-stack';
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
-
-    public static function getEloquentQuery(): Builder
-    {
-        return parent::getEloquentQuery()
-        // ->whereHas('roles', function ($query) {
-        //     $query->where('name', 'User');
-        // })
-            ->where('status', Status::IN_PROGRESS->value)
-            ->where('status_remarks', StatusRemarks::FOR_PAYMENT_PROCESSING->value);
-    }
+    // public static function getEloquentQuery(): Builder
+    // {
+    //     return parent::getEloquentQuery()
+    //         ->whereHas('roles', function ($query) {
+    //             $query->where('name', 'User');
+    //         });
+    // }
 
     public static function form(Form $form): Form
     {
@@ -46,40 +37,61 @@ class PaymentProcessResource extends Resource
     {
         return $table
             ->columns([
-                SpatieMediaLibraryImageColumn::make('attachment')
-                    ->collection('attachments'),
-
-                TextColumn::make('request_no')
+                TextColumn::make('cashRequest.request_no')
                     ->label('Request No.')
                     ->sortable()
-                    ->searchable()
-                    ->url(fn($record) => route('filament.admin.resources.payment-processing.view', $record)),
+                    ->searchable(),
 
-                TextColumn::make('user.name')
+                TextColumn::make('cashRequest.user.name')
                     ->label('Requestor')
                     ->searchable(),
 
-                TextColumn::make('activity_name')
+                TextColumn::make('cashRequest.activity_name')
                     ->label('Activity Name')
                     ->sortable()
                     ->searchable(),
 
-                TextColumn::make('activity_date')
+                TextColumn::make('cashRequest.activity_date')
                     ->label('Activity Date')
                     ->date()
                     ->sortable(),
 
-                TextColumn::make('nature_of_request')
+                TextColumn::make('cashRequest.nature_of_request')
                     ->label('Nature of Request')
                     ->sortable()
                     ->badge(),
 
-                TextColumn::make('requesting_amount')
+                TextColumn::make('cashRequest.requesting_amount')
                     ->label('Requesting Amount')
                     ->money('PHP')
                     ->sortable(),
 
-                TextColumn::make('status')
+                TextColumn::make('cashRequest.date_released')
+                    ->label('Date Released')
+                    ->date()
+                    ->sortable(),
+
+                TextColumn::make('cashRequest.due_date')
+                    ->label('Due Date')
+                    ->date()
+                    ->sortable(),
+
+                TextColumn::make('created_at')
+                    ->label('Liquidation Date')
+                    ->date()
+                    ->sortable(),
+
+                TextColumn::make('cashRequest.date_liquidated')
+                    ->label('Date Liquidated')
+                    ->date()
+                    ->sortable(),
+
+                TextColumn::make('aging')
+                    ->sortable()
+                    ->searchable(),
+
+                TextColumn::make('cashRequest.status')
+                    ->label('Status')
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
                         Status::PENDING->value    => 'warning',
@@ -87,20 +99,16 @@ class PaymentProcessResource extends Resource
                         Status::REJECTED->value   => 'danger',
                         Status::CANCELLED->value  => 'gray',
                         Status::LIQUIDATED->value => 'info',
-                        Status::RELEASED->value   => 'primary',
+                        Status::RELEASED->value   => 'info',
                         default                   => 'secondary',
                     })
                     ->searchable(),
 
-                TextColumn::make('created_at')
-                    ->dateTime()
+                TextColumn::make('cashRequest.status_remarks')
+                    ->label('Status Remarks')
+                    ->badge()
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-
-                TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->searchable(),
             ])
             ->filters([
                 //
@@ -125,10 +133,10 @@ class PaymentProcessResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index'  => Pages\ListPaymentProcesses::route('/'),
-            'create' => Pages\CreatePaymentProcess::route('/create'),
-            'edit'   => Pages\EditPaymentProcess::route('/{record}/edit'),
-            'view'   => Pages\ViewPaymentProcess::route('/{record}/view'),
+            'index'  => Pages\ListForLiquidations::route('/'),
+            'create' => Pages\CreateForLiquidation::route('/create'),
+            'edit'   => Pages\EditForLiquidation::route('/{record}/edit'),
+            'view'   => Pages\ViewForLiquidation::route('/{record}/view'),
         ];
     }
 

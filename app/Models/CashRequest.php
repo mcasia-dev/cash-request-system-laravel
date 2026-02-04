@@ -3,6 +3,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Spatie\Activitylog\LogOptions;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
@@ -42,8 +43,8 @@ class CashRequest extends Model implements HasMedia
     protected $casts = [
         'activity_date'   => 'date',
         'due_date'        => 'date',
-        'date_liquidated' => 'date',
-        'date_released'   => 'date',
+        'date_liquidated' => 'datetime',
+        'date_released'   => 'datetime',
     ];
 
     protected static function booted()
@@ -74,6 +75,11 @@ class CashRequest extends Model implements HasMedia
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function forCashRelease(): HasOne
+    {
+        return $this->hasOne(ForCashRelease::class);
     }
 
     public function getActivitylogOptions(): LogOptions

@@ -124,7 +124,7 @@ class CashRequestResource extends Resource
                         Status::REJECTED->value   => 'danger',
                         Status::CANCELLED->value  => 'gray',
                         Status::LIQUIDATED->value => 'info',
-                        Status::RELEASED->value   => 'primary',
+                        Status::RELEASED->value   => 'info',
                         default                   => 'secondary',
                     })
                     ->searchable(),

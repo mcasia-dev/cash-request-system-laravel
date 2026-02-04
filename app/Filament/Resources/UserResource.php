@@ -119,20 +119,21 @@ class UserResource extends Resource
                 TextColumn::make('account_status')
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
-                        Status::PENDING->value     => 'warning',
-                        Status::APPROVED->value    => 'success',
-                        Status::DISAPPROVED->value => 'danger',
-                        default                    => 'secondary',
-                    })
-                    ->sortable(),
-
-                TextColumn::make('status')
-                    ->badge()
-                    ->color(fn(string $state): string => match ($state) {
                         AccountStatus::SUSPENDED->value => 'warning',
                         AccountStatus::ACTIVE->value    => 'success',
                         AccountStatus::BLOCKED->value   => 'danger',
                         default                         => 'secondary',
+                    })
+                    ->sortable(),
+
+                TextColumn::make('status')
+                    ->label('Approval Status')
+                    ->badge()
+                    ->color(fn(string $state): string => match ($state) {
+                        Status::PENDING->value     => 'warning',
+                        Status::APPROVED->value    => 'success',
+                        Status::DISAPPROVED->value => 'danger',
+                        default                    => 'secondary',
                     })
                     ->sortable(),
 
