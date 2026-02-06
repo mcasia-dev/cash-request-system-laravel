@@ -1,31 +1,40 @@
 <?php
 namespace App\Filament\Resources;
 
-use Filament\Tables;
-use Filament\Forms\Form;
-use Filament\Tables\Table;
-use App\Models\CashRequest;
-use Filament\Resources\Resource;
 use App\Enums\CashRequest\Status;
 use App\Enums\NatureOfRequestEnum;
-use Filament\Tables\Actions\Action;
-use Illuminate\Support\Facades\Auth;
+use App\Filament\Resources\ActivityListResource\Pages\CreateActivityListWithTable;
+use App\Filament\Resources\CashRequestResource\Pages;
+use App\Models\CashRequest;
+use App\Models\ForLiquidation;
+use App\Models\LiquidationReceipt;
+use Carbon\Carbon;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Form;
+use Filament\Forms\Get;
+use Filament\Notifications\Notification;
+use Filament\Resources\Resource;
+use Filament\Tables;
+use Filament\Tables\Actions\Action;
+use Filament\Tables\Actions\ActionGroup;
 use Filament\Tables\Actions\EditAction;
 use Filament\Tables\Actions\ViewAction;
-use Filament\Tables\Columns\TextColumn;
-use Filament\Forms\Components\TextInput;
-use Filament\Notifications\Notification;
-use Filament\Tables\Actions\ActionGroup;
-use Filament\Forms\Components\DatePicker;
-use Filament\Tables\Filters\SelectFilter;
-use Illuminate\Database\Eloquent\Builder;
-use App\Filament\Resources\CashRequestResource\Pages;
 use Filament\Tables\Columns\SpatieMediaLibraryImageColumn;
-use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
-use App\Filament\Resources\ActivityListResource\Pages\CreateActivityListWithTable;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\HtmlString;
 
 class CashRequestResource extends Resource
 {
@@ -148,14 +157,164 @@ class CashRequestResource extends Resource
                     ->attribute('status'),
             ])
             ->actions([
-                Tables\Actions\Action::make('activity_timeline')
-                    ->label('Track Status')
-                    ->icon('heroicon-o-clock')
-                    ->color('info')
-                    ->url(fn($record) => route('filament.admin.resources.cash-requests.track-status', ['record' => $record])),
-
                 ActionGroup::make([
+                    Action::make('activity_timeline')
+                        ->label('Track Status')
+                        ->icon('heroicon-o-clock')
+                        ->color('warning')
+                        ->url(fn($record) => route('filament.admin.resources.cash-requests.track-status', ['record' => $record])),
+
+                    Action::make('liquidate')
+                        ->icon('heroicon-o-banknotes')
+                        ->color('info')
+                        ->form(fn($record) => [
+                            Repeater::make('liquidation_items')
+                                ->label('Liquidation Receipts')
+                                ->addActionLabel('Add another receipt')
+                                ->minItems(1)
+                                ->reactive()
+                                ->schema([
+                                    FileUpload::make('receipt')
+                                        ->label('Upload Receipt')
+                                        ->disk('public')
+                                        ->directory('liquidation-receipts')
+                                        ->preserveFilenames()
+                                        ->required(),
+
+                                    TextInput::make('amount')
+                                        ->numeric()
+                                        ->required(),
+
+                                    Textarea::make('remarks')
+                                        ->nullable()
+                                        ->columnSpanFull(),
+                                ])
+                                ->columns(2),
+
+                            Placeholder::make('total_receipts')
+                                ->label('Total Receipt Amount')
+                                ->content(function (Get $get) {
+                                    $total = collect($get('liquidation_items'))
+                                        ->sum(fn($item) => (float) ($item['amount'] ?? 0));
+
+                                    return number_format($total, 2, '.', ',');
+                                }),
+
+                            Placeholder::make('amount_to_liquidate')
+                                ->label('Amount to Liquidate'),
+
+                            Placeholder::make('amount_to_reimburse')
+                                ->label('Amount to Reimburse')
+                                ->visible(function (Get $get) use ($record): bool {
+                                    $total = collect($get('liquidation_items'))
+                                        ->sum(fn($item) => (float) ($item['amount'] ?? 0));
+
+                                    return $total > (float) $record->requesting_amount;
+                                })
+                                ->content(function (Get $get) use ($record) {
+                                    $total = collect($get('liquidation_items'))
+                                        ->sum(fn($item) => (float) ($item['amount'] ?? 0));
+
+                                    $reimburse = $total - (float) $record->requesting_amount;
+
+                                    $formatted = number_format($reimburse, 2, '.', ',');
+
+                                    return new HtmlString("<span style=\"color:#16a34a;font-weight:600;\">{$formatted}</span>");
+                                }),
+
+                            Placeholder::make('missing_amount')
+                                ->label('Missing Amount')
+                                ->visible(function (Get $get) use ($record): bool {
+                                    $total = collect($get('liquidation_items'))
+                                        ->sum(fn($item) => (float) ($item['amount'] ?? 0));
+
+                                    return $total < (float) $record->requesting_amount;
+                                })
+                                ->content(function (Get $get) use ($record) {
+                                    $total = collect($get('liquidation_items'))
+                                        ->sum(fn($item) => (float) ($item['amount'] ?? 0));
+
+                                    $missing = (float) $record->requesting_amount - $total;
+
+                                    $formatted = number_format($missing, 2, '.', ',');
+
+                                    return new HtmlString("<span style=\"color:#dc2626;font-weight:600;\">{$formatted}</span>");
+                                }),
+                        ])
+                        ->modalSubmitActionLabel('Submit')
+                        ->action(function ($record, array $data) {
+                            $user           = Auth::user();
+                            $previousStatus = $record->status;
+
+                            $totalReceipts = collect($data['liquidation_items'] ?? [])
+                                ->sum(fn($item) => (float) ($item['amount'] ?? 0));
+
+                            $requestingAmount  = (float) $record->requesting_amount;
+                            $amountToReimburse = $totalReceipts > $requestingAmount
+                                ? $totalReceipts - $requestingAmount
+                                : 0.0;
+                            $missingAmount = $totalReceipts < $requestingAmount
+                                ? $requestingAmount - $totalReceipts
+                                : 0.0;
+
+                            $liquidation = ForLiquidation::firstOrCreate([
+                                'cash_request_id' => $record->id,
+                            ], [
+                                'total_liquidated' => $totalReceipts,
+                                'total_change'     => $amountToReimburse,
+                                'missing_amount'   => $missingAmount,
+                            ]);
+
+                            if (! $liquidation->wasRecentlyCreated) {
+                                $liquidation->update([
+                                    'total_change'     => $amountToReimburse,
+                                    'missing_amount'   => $missingAmount,
+                                    'receipt_amount'   => $totalReceipts,
+                                ]);
+                            }
+
+                            foreach ($data['liquidation_items'] as $item) {
+                                $receipt = LiquidationReceipt::create([
+                                    'liquidation_id' => $liquidation->id,
+                                    'receipt_amount' => $item['amount'],
+                                    'remarks'        => $item['remarks'] ?? null,
+                                ]);
+
+                                if (! empty($item['receipt'])) {
+                                    $path = $item['receipt'];
+
+                                    $receipt
+                                        ->addMedia(Storage::disk('public')->path($path))
+                                        ->toMediaCollection('liquidation-receipts');
+                                }
+                            }
+
+                            $record->update([
+                                'status'          => Status::LIQUIDATED->value,
+                                'date_liquidated' => Carbon::now(),
+                            ]);
+
+                            activity()
+                                ->causedBy($user)
+                                ->performedOn($record)
+                                ->event('liquidated')
+                                ->withProperties([
+                                    'request_no'        => $record->request_no,
+                                    'activity_name'     => $record->activity_name,
+                                    'requesting_amount' => $record->requesting_amount,
+                                    'previous_status'   => $previousStatus,
+                                    'new_status'        => Status::LIQUIDATED->value,
+                                ])
+                                ->log("Cash request {$record->request_no} was liquidated by {$user->name}");
+
+                            Notification::make()
+                                ->title('Cash Request Liquidated!')
+                                ->success()
+                                ->send();
+                        }),
+
                     ViewAction::make(),
+
                     EditAction::make()
                         ->visible(fn() => Status::PENDING->value),
 

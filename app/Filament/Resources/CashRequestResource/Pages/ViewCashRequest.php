@@ -1,12 +1,17 @@
 <?php
 namespace App\Filament\Resources\CashRequestResource\Pages;
 
+use App\Enums\CashRequest\Status;
 use App\Filament\Resources\CashRequestResource;
+use App\Models\CashRequest;
+use App\Models\ForLiquidation;
+use App\Models\LiquidationReceipt;
 use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
 use Filament\Resources\Pages\ViewRecord;
+use Spatie\Activitylog\Models\Activity;
 
 class ViewCashRequest extends ViewRecord
 {
@@ -83,6 +88,48 @@ class ViewCashRequest extends ViewRecord
 
                         TextEntry::make('account_type')
                             ->label('Account Type'),
+
+                        TextEntry::make('cc_holder_name')
+                            ->label('Card Holder Name')
+                            ->visible(fn($record) => filled($record->cc_holder_name)),
+
+                        TextEntry::make('cc_number')
+                            ->label('Card Number')
+                            ->visible(fn($record) => filled($record->cc_number)),
+
+                        TextEntry::make('cc_type')
+                            ->label('Card Type')
+                            ->visible(fn($record) => filled($record->cc_type)),
+
+                        TextEntry::make('cc_expiration')
+                            ->label('Card Expiration')
+                            ->visible(fn($record) => filled($record->cc_expiration)),
+                    ])
+                    ->columns(2),
+
+                Section::make('Approval and Processing')
+                    ->schema([
+                        TextEntry::make('approved_by')
+                            ->label('Approved By')
+                            ->state(function ($record) {
+                                $activity = $this->getLatestActivity($record, 'approved');
+
+                                return $activity?->causer?->name ?? 'N/A';
+                            }),
+
+                        TextEntry::make('approved_at')
+                            ->label('Approved At')
+                            ->state(fn($record) => $this->getLatestActivity($record, 'approved')?->created_at)
+                            ->dateTime(),
+
+                        TextEntry::make('processed_by')
+                            ->label('Processed By')
+                            ->state(fn($record) => $record->forCashRelease?->processedBy?->name ?? 'N/A'),
+
+                        TextEntry::make('date_processed')
+                            ->label('Date Processed')
+                            ->state(fn($record) => $record->forCashRelease?->date_processed)
+                            ->dateTime(),
                     ])
                     ->columns(2),
 
@@ -102,8 +149,82 @@ class ViewCashRequest extends ViewRecord
                     ])
                     ->columns(3),
 
+                Section::make('Liquidation Details')
+                    ->schema([
+                        TextEntry::make('total_liquidated')
+                            ->label('Total Liquidated')
+                            ->state(fn($record) => $this->getLiquidationFor($record)?->total_liquidated)
+                            ->money('PHP'),
+
+                        TextEntry::make('total_change')
+                            ->label('Total Change')
+                            ->state(fn($record) => $this->getLiquidationFor($record)?->total_change)
+                            ->money('PHP'),
+
+                        TextEntry::make('missing_amount')
+                            ->label('Missing Amount')
+                            ->state(fn($record) => $this->getLiquidationFor($record)?->missing_amount)
+                            ->money('PHP'),
+
+                        TextEntry::make('liquidated_by')
+                            ->label('Liquidated By')
+                            ->state(function ($record) {
+                                $activity = $this->getLatestActivity($record, 'liquidated');
+
+                                return $activity?->causer?->name ?? 'N/A';
+                            }),
+
+                        TextEntry::make('liquidated_at')
+                            ->label('Liquidated At')
+                            ->state(fn($record) => $this->getLatestActivity($record, 'liquidated')?->created_at)
+                            ->dateTime(),
+
+                        TextEntry::make('receipt_count')
+                            ->label('Receipt Count')
+                            ->state(function ($record) {
+                                $liquidation = $this->getLiquidationFor($record);
+
+                                return $liquidation
+                                    ? LiquidationReceipt::where('liquidation_id', $liquidation->id)->count()
+                                    : 0;
+                            }),
+
+                        TextEntry::make('total_receipts')
+                            ->label('Total Receipts')
+                            ->state(function ($record) {
+                                $liquidation = $this->getLiquidationFor($record);
+
+                                return $liquidation
+                                    ? LiquidationReceipt::where('liquidation_id', $liquidation->id)->sum('receipt_amount')
+                                    : 0;
+                            })
+                            ->money('PHP'),
+
+                        TextEntry::make('liquidation_remarks')
+                            ->label('Liquidation Remarks')
+                            ->state(fn($record) => $this->getLiquidationFor($record)?->remarks)
+                            ->columnSpanFull(),
+                    ])
+                    ->columns(3)
+                    ->visible(fn($record) => $this->getLiquidationFor($record) !== null),
+
                 Section::make('Additional Information')
                     ->schema([
+                        TextEntry::make('status_remarks')
+                            ->label('Status Remarks')
+                            ->visible(fn($record) => $record->status != Status::LIQUIDATED->value)
+                            ->columnSpanFull(),
+
+                        TextEntry::make('reason_for_rejection')
+                            ->label('Reason for Rejection')
+                            ->visible(fn($record) => filled($record->reason_for_rejection))
+                            ->columnSpanFull(),
+
+                        TextEntry::make('reason_for_cancelling')
+                            ->label('Reason for Cancelling')
+                            ->visible(fn($record) => filled($record->reason_for_cancelling))
+                            ->columnSpanFull(),
+
                         TextEntry::make('created_at')
                             ->label('Created At')
                             ->dateTime(),
@@ -114,5 +235,34 @@ class ViewCashRequest extends ViewRecord
                     ])
                     ->columns(2),
             ]);
+    }
+
+    private function getLiquidationFor(CashRequest $record): ?ForLiquidation
+    {
+        static $cache = [];
+
+        if (! array_key_exists($record->id, $cache)) {
+            $cache[$record->id] = ForLiquidation::where('cash_request_id', $record->id)->first();
+        }
+
+        return $cache[$record->id];
+    }
+
+    private function getLatestActivity(CashRequest $record, string $event): ?Activity
+    {
+        static $cache = [];
+        $key = $record->id . '|' . $event;
+
+        if (! array_key_exists($key, $cache)) {
+            $cache[$key] = Activity::query()
+                ->where('subject_type', $record::class)
+                ->where('subject_id', $record->id)
+                ->where('event', $event)
+                ->latest('created_at')
+                ->with('causer')
+                ->first();
+        }
+
+        return $cache[$key];
     }
 }
