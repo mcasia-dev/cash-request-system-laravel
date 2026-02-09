@@ -39,7 +39,7 @@ use Illuminate\Support\HtmlString;
 class CashRequestResource extends Resource
 {
     protected static ?string $model = CashRequest::class;
-
+    protected static ?string $navigationGroup = 'Cash Requests';
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
 
     public static function getEloquentQuery(): Builder
@@ -149,11 +149,7 @@ class CashRequestResource extends Resource
             ])
             ->filters([
                 SelectFilter::make('status')
-                    ->options([
-                        'pending'  => 'For Approval',
-                        'approved' => 'Approved',
-                        'rejected' => 'Rejected',
-                    ])
+                    ->options(Status::filamentOptions())
                     ->attribute('status'),
             ])
             ->actions([

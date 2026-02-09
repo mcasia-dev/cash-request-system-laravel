@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Model;
 class ForLiquidationResource extends Resource
 {
     protected static ?string $model           = ForLiquidation::class;
-    protected static ?string $navigationGroup = 'For Approval (Treasury)';
+    protected static ?string $navigationGroup = 'Cash Requests';
     protected static ?string $navigationIcon  = 'heroicon-o-rectangle-stack';
 
     // public static function getEloquentQuery(): Builder
