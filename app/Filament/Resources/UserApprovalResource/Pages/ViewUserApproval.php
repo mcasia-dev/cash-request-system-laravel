@@ -26,7 +26,7 @@ class ViewUserApproval extends ViewRecord
             Action::make('Approve')
                 ->visible(fn($record) => $record->status === Status::PENDING->value)
                 ->icon('heroicon-o-check-circle')
-                ->color('success')
+                ->color('primary')
                 ->requiresConfirmation()
                 ->action(function (User $record) {
                     $approver       = Auth::user();
@@ -59,7 +59,7 @@ class ViewUserApproval extends ViewRecord
                 ->successRedirectUrl(route('filament.admin.resources.user-request-approval.index')),
 
             Action::make('Reject')
-                ->color('danger')
+                ->color('secondary')
                 ->visible(fn($record) => $record->status === Status::PENDING->value)
                 ->icon('heroicon-o-x-circle')
                 ->requiresConfirmation()
