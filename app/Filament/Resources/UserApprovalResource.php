@@ -1,23 +1,25 @@
 <?php
 namespace App\Filament\Resources;
 
-use App\Enums\User\AccountStatus;
-use App\Enums\User\Status;
-use App\Filament\Resources\UserApprovalResource\Pages;
-use App\Jobs\ApproveUserRegistrationJob;
-use App\Jobs\RejectUserRegistrationJob;
 use App\Models\User;
-use Filament\Forms\Components\Textarea;
-use Filament\Forms\Form;
-use Filament\Notifications\Notification;
-use Filament\Resources\Resource;
 use Filament\Tables;
-use Filament\Tables\Actions\Action;
-use Filament\Tables\Columns\TextColumn;
+use Filament\Forms\Form;
+use App\Enums\User\Status;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Model;
+use Filament\Resources\Resource;
+use App\Enums\User\AccountStatus;
+use Filament\Tables\Actions\Action;
 use Illuminate\Support\Facades\Auth;
+use App\Jobs\RejectUserRegistrationJob;
+use Filament\Forms\Components\Textarea;
+use Filament\Tables\Actions\ViewAction;
+use Filament\Tables\Columns\TextColumn;
+use Illuminate\Database\Eloquent\Model;
+use App\Jobs\ApproveUserRegistrationJob;
+use Filament\Notifications\Notification;
+use Filament\Tables\Actions\ActionGroup;
+use Illuminate\Database\Eloquent\Builder;
+use App\Filament\Resources\UserApprovalResource\Pages;
 
 class UserApprovalResource extends Resource
 {
@@ -109,80 +111,87 @@ class UserApprovalResource extends Resource
                 //
             ])
             ->actions([
-                Action::make('Approve')
-                    ->visible(fn($record) => $record->status === Status::PENDING->value)
-                    ->requiresConfirmation()
-                    ->action(function (User $record) {
-                        $approver       = Auth::user();
-                        $previousStatus = $record->status;
+                ActionGroup::make([
+                    ViewAction::make(),
 
-                        $record->update([
-                            'status'    => Status::APPROVED->value,
-                            'review_by' => $approver->id,
-                            'review_at' => now(),
-                        ]);
+                    Action::make('Approve')
+                        ->visible(fn($record) => $record->status === Status::PENDING->value)
+                        ->icon('heroicon-o-check-circle')
+                        ->color('success')
+                        ->requiresConfirmation()
+                        ->action(function (User $record) {
+                            $approver       = Auth::user();
+                            $previousStatus = $record->status;
 
-                        activity()
-                            ->causedBy($approver)
-                            ->performedOn($record)
-                            ->event('approved')
-                            ->withProperties([
-                                'previous_status' => $previousStatus,
-                                'new_status'      => Status::APPROVED->value,
-                                'review_by'       => $approver->id,
-                            ])
-                            ->log("User {$record->name} was approved by {$approver->name} ({$approver->position})");
+                            $record->update([
+                                'status'    => Status::APPROVED->value,
+                                'review_by' => $approver->id,
+                                'review_at' => now(),
+                            ]);
 
-                        ApproveUserRegistrationJob::dispatch($record);
+                            activity()
+                                ->causedBy($approver)
+                                ->performedOn($record)
+                                ->event('approved')
+                                ->withProperties([
+                                    'previous_status' => $previousStatus,
+                                    'new_status'      => Status::APPROVED->value,
+                                    'review_by'       => $approver->id,
+                                ])
+                                ->log("User {$record->name} was approved by {$approver->name} ({$approver->position})");
 
-                        Notification::make()
-                            ->title('User Approved!')
-                            ->success()
-                            ->send();
-                    })
-                    ->successRedirectUrl(route('filament.admin.resources.user-request-approval.index')),
+                            ApproveUserRegistrationJob::dispatch($record);
 
-                Action::make('Reject')
-                    ->color('danger')
-                    ->visible(fn($record) => $record->status === Status::PENDING->value)
-                    ->requiresConfirmation()
-                    ->form([
-                        Textarea::make('reason_for_rejection')
-                            ->label('Reason for Rejection')
-                            ->required()
-                            ->maxLength(65535),
-                    ])
-                    ->action(function (User $record, array $data) {
-                        $approver       = Auth::user();
-                        $previousStatus = $record->status;
+                            Notification::make()
+                                ->title('User Approved!')
+                                ->success()
+                                ->send();
+                        })
+                        ->successRedirectUrl(route('filament.admin.resources.user-request-approval.index')),
 
-                        $record->update([
-                            'status'               => Status::DISAPPROVED->value,
-                            'review_by'            => $approver->id,
-                            'review_at'            => now(),
-                            'reason_for_rejection' => $data['reason_for_rejection'],
-                        ]);
+                    Action::make('Reject')
+                        ->color('danger')
+                        ->visible(fn($record) => $record->status === Status::PENDING->value)
+                        ->icon('heroicon-o-x-circle')
+                        ->requiresConfirmation()
+                        ->form([
+                            Textarea::make('reason_for_rejection')
+                                ->label('Reason for Rejection')
+                                ->required()
+                                ->maxLength(65535),
+                        ])
+                        ->action(function (User $record, array $data) {
+                            $approver       = Auth::user();
+                            $previousStatus = $record->status;
 
-                        activity()
-                            ->causedBy($approver)
-                            ->performedOn($record)
-                            ->event('disapproved')
-                            ->withProperties([
-                                'previous_status' => $previousStatus,
-                                'new_status'      => Status::DISAPPROVED->value,
-                                'review_by'       => $approver->id,
-                                'reason'          => $data['reason_for_rejection'],
-                            ])
-                            ->log("User {$record->name} was disapproved by {$approver->name} ({$approver->position})");
+                            $record->update([
+                                'status'               => Status::DISAPPROVED->value,
+                                'review_by'            => $approver->id,
+                                'review_at'            => now(),
+                                'reason_for_rejection' => $data['reason_for_rejection'],
+                            ]);
 
-                        RejectUserRegistrationJob::dispatch($record);
+                            activity()
+                                ->causedBy($approver)
+                                ->performedOn($record)
+                                ->event('disapproved')
+                                ->withProperties([
+                                    'previous_status' => $previousStatus,
+                                    'new_status'      => Status::DISAPPROVED->value,
+                                    'review_by'       => $approver->id,
+                                    'reason'          => $data['reason_for_rejection'],
+                                ])
+                                ->log("User {$record->name} was disapproved by {$approver->name} ({$approver->position})");
 
-                        Notification::make()
-                            ->title('User Rejected!')
-                            ->danger()
-                            ->send();
-                    })
-                    ->successRedirectUrl(route('filament.admin.resources.user-request-approval.index')),
+                            RejectUserRegistrationJob::dispatch($record);
+
+                            Notification::make()
+                                ->title('User Rejected!')
+                                ->danger()
+                                ->send();
+                        })
+                        ->successRedirectUrl(route('filament.admin.resources.user-request-approval.index')),
+                ]),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
