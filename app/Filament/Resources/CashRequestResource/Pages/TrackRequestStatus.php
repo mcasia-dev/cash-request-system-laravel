@@ -11,6 +11,14 @@ class TrackRequestStatus extends ActivityTimelinePage
 
     protected static string $resource = CashRequestResource::class;
 
+    /**
+     * Build the activity timeline configuration used by the tracker view.
+     *
+     * Defines labels, empty states, formatting callbacks, and icon/color
+     * mapping for activity events.
+     *
+     * @return array<string, mixed>
+     */
     protected function configuration(): array
     {
         return [
@@ -27,7 +35,7 @@ class TrackRequestStatus extends ActivityTimelinePage
                 'empty_state_icon'        => 'heroicon-o-bolt-slash',
                 'heading_visible'         => false,
                 'extra_attributes'        => [
-                    'class' => 'my-5'
+                    'class' => 'my-5',
                 ],
             ],
             'activity_title'       => [
@@ -39,7 +47,8 @@ class TrackRequestStatus extends ActivityTimelinePage
                     }
 
                     // return new HtmlString(sprintf('The <strong>%s</strong> was <strong>%s</strong> by <strong>%s</strong>.', $className, $record['event'], $causerName));
-                    return new HtmlString(sprintf('<strong> ' . ucfirst($record['properties']['status_remarks']) . ' </strong>'));
+                    $status_remarks = $record['properties']['status_remarks'] ?? 'No Activity';
+                    return new HtmlString(sprintf('<strong> ' . ucfirst($status_remarks) . ' </strong>'));
                 },
             ],
             'activity_description' => [
@@ -76,7 +85,6 @@ class TrackRequestStatus extends ActivityTimelinePage
                         }
                     }
 
-                    // return new HtmlString($record['description']);
                     return new HtmlString(
                         "<span class='text-sm text-gray-500 block mb-1'>{$date}</span>"
                         . $record['description']
@@ -90,27 +98,23 @@ class TrackRequestStatus extends ActivityTimelinePage
                 'modify_state' => fn($state) => new HtmlString($state ?? ''),
             ],
             'activity_icon' => [
-                'icon'  => function ($record) {
-                    return match ($record->event) {
-                        'created'                 => 'heroicon-o-plus-circle',
-                        Status::APPROVED->value   => 'heroicon-o-check-circle',
-                        Status::REJECTED->value   => 'heroicon-o-x-mark',
-                        Status::CANCELLED->value  => 'heroicon-o-x-circle',
-                        Status::RELEASED->value   => 'heroicon-o-currency-dollar',
-                        Status::LIQUIDATED->value => 'heroicon-o-arrow-path',
-                        default                   => 'heroicon-o-information-circle',
-                    };
+                'icon'  => fn($record): string  => match ($record->event) {
+                    'created'                 => 'heroicon-o-plus-circle',
+                    Status::APPROVED->value   => 'heroicon-o-check-circle',
+                    Status::REJECTED->value   => 'heroicon-o-x-mark',
+                    Status::CANCELLED->value  => 'heroicon-o-x-circle',
+                    Status::RELEASED->value   => 'heroicon-o-currency-dollar',
+                    Status::LIQUIDATED->value => 'heroicon-o-arrow-path',
+                    default                   => 'heroicon-o-information-circle',
                 },
-                'color' => function ($record) {
-                    return match ($record->event) {
-                        'created'                 => 'warning',
-                        Status::APPROVED->value   => 'success',
-                        Status::REJECTED->value   => 'danger',
-                        Status::CANCELLED->value  => 'danger',
-                        Status::RELEASED->value   => 'info',
-                        Status::LIQUIDATED->value => 'warning',
-                        default                   => 'gray',
-                    };
+                'color' => fn($record): string => match ($record->event) {
+                    'created'                 => 'warning',
+                    Status::APPROVED->value   => 'success',
+                    Status::REJECTED->value   => 'danger',
+                    Status::CANCELLED->value  => 'danger',
+                    Status::RELEASED->value   => 'info',
+                    Status::LIQUIDATED->value => 'warning',
+                    default                   => 'gray',
                 },
             ],
         ];

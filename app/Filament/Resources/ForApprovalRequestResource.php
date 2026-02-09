@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Builder;
 class ForApprovalRequestResource extends Resource
 {
     protected static ?string $model           = CashRequest::class;
-    protected static ?string $navigationGroup = 'Administrator';
+    protected static ?string $navigationGroup = 'Cash Requests';
     protected static ?string $slug            = 'for-approval-requests';
     protected static ?string $navigationLabel = 'For Approval Requests';
     protected static ?string $label           = 'For Approval Requests';

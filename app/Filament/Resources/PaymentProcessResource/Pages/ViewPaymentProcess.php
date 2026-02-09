@@ -40,7 +40,7 @@ class ViewPaymentProcess extends ViewRecord
                         ->label('Releasing Date')
                         ->required()
                         ->default(now())
-                        ->minDate(now()),
+                        ->minDate(now()->toDateString()),
 
                     TimePicker::make('releasing_time_from')
                         ->label('Releasing Time From')
@@ -159,11 +159,25 @@ class ViewPaymentProcess extends ViewRecord
             ]);
     }
 
+    /**
+     * Determine if the cash request is eligible for payment processing actions.
+     *
+     * @param mixed $record
+     * @return bool
+     */
     private function getStatus($record): bool
     {
         return $record->status === Status::IN_PROGRESS->value && $record->status_remarks === StatusRemarks::FOR_PAYMENT_PROCESSING->value;
     }
 
+    /**
+     * Approve the cash request, create the release record, set due date (if applicable),
+     * log activity, and dispatch the approval notification.
+     *
+     * @param mixed $record
+     * @param array<string, mixed> $data
+     * @return Notification
+     */
     private function approveCashRequest($record, array $data)
     {
         $user           = Auth::user();
@@ -214,6 +228,12 @@ class ViewPaymentProcess extends ViewRecord
             ->send();
     }
 
+    /**
+     * Resolve the approved status remark based on the user's approval role.
+     *
+     * @param User $user
+     * @return string
+     */
     private function getApprovedStatusRemarks(User $user)
     {
         return match (true) {
@@ -223,6 +243,13 @@ class ViewPaymentProcess extends ViewRecord
         };
     }
 
+    /**
+     * Reject the cash request, log the rejection, and dispatch notification.
+     *
+     * @param mixed $record
+     * @param array<string, mixed> $data
+     * @return Notification
+     */
     private function rejectCashRequest($record, array $data)
     {
         $user           = Auth::user();
@@ -260,6 +287,12 @@ class ViewPaymentProcess extends ViewRecord
             ->send();
     }
 
+    /**
+     * Resolve the rejected status remark based on the user's rejection role.
+     *
+     * @param User $user
+     * @return string
+     */
     private function getRejectedStatusRemarks(User $user)
     {
         return match (true) {

@@ -1,16 +1,20 @@
 <?php
-
 namespace App\Filament\Pages\Auth;
 
 use App\Models\User;
+use Filament\Http\Responses\Auth\LoginResponse;
 use Filament\Pages\Auth\Login;
-use Filament\Pages\Page;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
-use Filament\Http\Responses\Auth\LoginResponse;
 
 class CustomLogin extends Login
 {
+    /**
+     * Authenticate the user, blocking login if the account is not approved.
+     *
+     * @return LoginResponse|null
+     * @throws ValidationException When the account is not approved.
+     */
     public function authenticate(): ?LoginResponse
     {
         $data = $this->form->getState();

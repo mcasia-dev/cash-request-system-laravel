@@ -49,6 +49,14 @@ class CashRequest extends Model implements HasMedia
 
     protected static function booted()
     {
+        /**
+         * Auto-generate a yearly sequential request number before creation.
+         *
+         * Format: REQ-YYYY-####, where the sequence resets each year.
+         *
+         * @param self $cashRequest
+         * @return void
+         */
         static::creating(function ($cashRequest) {
             $year = now()->year;
 
