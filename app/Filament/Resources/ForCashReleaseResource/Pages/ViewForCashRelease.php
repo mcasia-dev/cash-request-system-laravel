@@ -154,11 +154,25 @@ class ViewForCashRelease extends ViewRecord
             ]);
     }
 
+    /**
+     * Determine if the cash request is eligible for releasing.
+     *
+     * @param mixed $record
+     * @return bool
+     */
     private function getStatus($record): bool
     {
         return $record->cashRequest->status === Status::APPROVED->value && $record->cashRequest->status_remarks === StatusRemarks::FOR_RELEASING->value;
     }
 
+    /**
+     * Release the cash request, update related records, log activity,
+     * and dispatch the treasury release notification.
+     *
+     * @param mixed $record
+     * @param array<string, mixed> $data
+     * @return Notification
+     */
     private function releaseCashRequest($record, array $data): Notification
     {
         $user           = Auth::user();
@@ -208,6 +222,13 @@ class ViewForCashRelease extends ViewRecord
             ->send();
     }
 
+    /**
+     * Reject the cash request, log the rejection, and dispatch notification.
+     *
+     * @param mixed $record
+     * @param array<string, mixed> $data
+     * @return Notification
+     */
     private function rejectCashRequest($record, array $data)
     {
         $user           = Auth::user();
@@ -246,6 +267,12 @@ class ViewForCashRelease extends ViewRecord
             ->send();
     }
 
+    /**
+     * Resolve the released status remark based on the user's release role.
+     *
+     * @param User $user
+     * @return string
+     */
     private function getReleasedStatusRemarks(User $user)
     {
         return match (true) {
@@ -255,6 +282,12 @@ class ViewForCashRelease extends ViewRecord
         };
     }
 
+    /**
+     * Resolve the rejected status remark based on the user's rejection role.
+     *
+     * @param User $user
+     * @return string
+     */
     private function getRejectedStatusRemarks(User $user)
     {
         return match (true) {

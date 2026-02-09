@@ -237,6 +237,12 @@ class ViewCashRequest extends ViewRecord
             ]);
     }
 
+    /**
+     * Get the liquidation record for the given cash request, with a simple in-memory cache.
+     *
+     * @param CashRequest $record
+     * @return ForLiquidation|null
+     */
     private function getLiquidationFor(CashRequest $record): ?ForLiquidation
     {
         static $cache = [];
@@ -248,10 +254,17 @@ class ViewCashRequest extends ViewRecord
         return $cache[$record->id];
     }
 
+    /**
+     * Get the most recent activity for the given cash request and event, with a simple cache.
+     *
+     * @param CashRequest $record
+     * @param string $event
+     * @return Activity|null
+     */
     private function getLatestActivity(CashRequest $record, string $event): ?Activity
     {
         static $cache = [];
-        $key = $record->id . '|' . $event;
+        $key          = $record->id . '|' . $event;
 
         if (! array_key_exists($key, $cache)) {
             $cache[$key] = Activity::query()

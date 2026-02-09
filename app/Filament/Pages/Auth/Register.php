@@ -1,18 +1,20 @@
 <?php
 namespace App\Filament\Pages\Auth;
 
-use App\Models\User;
-use Filament\Forms\Form;
-use App\Models\Department;
-use Illuminate\Support\Str;
 use App\Jobs\ConfirmRegistrationJob;
-use Illuminate\Support\Facades\Hash;
-use Filament\Forms\Components\Hidden;
-use Filament\Forms\Components\Select;
+use App\Models\Department;
+use App\Models\User;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Component;
+use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Form;
+use Filament\Notifications\Actions\Action;
+use Filament\Notifications\Notification;
 use Filament\Pages\Auth\Register as BaseRegister;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password as PasswordRule;
 
 class Register extends BaseRegister
@@ -131,7 +133,7 @@ class Register extends BaseRegister
                     ->symbols()
                     ->uncompromised(),
             ])
-            // ->showAllValidationMessages()
+        // ->showAllValidationMessages()
             ->dehydrateStateUsing(fn($state) => Hash::make($state))
             ->same('passwordConfirmation');
     }
@@ -202,12 +204,33 @@ class Register extends BaseRegister
     protected function afterRegister(): void
     {
         // This hook is called after registration
-        // You can access the registered user via the form model
-        // Example: $user = $this->form->getRecord();
+        $user = $this->form->getRecord();
 
-        ConfirmRegistrationJob::dispatch($this->form->getRecord());
+        ConfirmRegistrationJob::dispatch($user);
 
-        // Example: You could assign a default role here
+        $departmentHeads = User::query()
+            ->role('department_head')
+            ->where('department_id', $user->department_id)
+            ->get();
+
+        if ($departmentHeads->isNotEmpty()) {
+            Notification::make()
+                ->title('New User Registration')
+                ->body("{$user->name} has registered and is waiting for your approval.")
+                ->actions([
+                    Action::make('markAsRead')
+                        ->button()
+                        ->markAsRead(),
+
+                    Action::make('view')
+                        ->link()
+                        ->url(route('filament.admin.resources.user-request-approval.view', ['record' => $user->id])),
+
+                ])
+                ->sendToDatabase($departmentHeads)
+                ->toDatabase();
+        }
+
         // $user->assignRole('user');
     }
 }

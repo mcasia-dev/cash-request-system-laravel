@@ -2,6 +2,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -63,9 +64,19 @@ class User extends Authenticatable
 
     protected static function booted()
     {
+        /**
+         * Auto-generate the user's control number and full name before creation.
+         *
+         * Format: MCA-YYYY-####, based on the latest user ID.
+         *
+         * @param self $user
+         * @return void
+         */
         static::creating(function ($user) {
             $last_id     = self::latest()->first()->id ?? 0;
-            $tracking_no = 'MCA-2025-' . str_pad($last_id + 1, 4, '0', STR_PAD_LEFT);
+            $year        = Carbon::now()->year;
+            $random_char = str_pad($last_id + 1, 4, '0', STR_PAD_LEFT);
+            $tracking_no = "MCA-{$year}-{$random_char}";
 
             $user->control_no = $tracking_no;
             $user->name       = "{$user->first_name} {$user->last_name}";

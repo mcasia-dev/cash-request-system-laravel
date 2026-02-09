@@ -160,8 +160,8 @@ class CashRequestResource extends Resource
                 ActionGroup::make([
                     Action::make('activity_timeline')
                         ->label('Track Status')
-                        ->icon('heroicon-o-clock')
                         ->color('warning')
+                        ->icon('heroicon-o-clipboard-document-check')
                         ->url(fn($record) => route('filament.admin.resources.cash-requests.track-status', ['record' => $record])),
 
                     Action::make('liquidate')
@@ -304,6 +304,7 @@ class CashRequestResource extends Resource
                                     'requesting_amount' => $record->requesting_amount,
                                     'previous_status'   => $previousStatus,
                                     'new_status'        => Status::LIQUIDATED->value,
+                                    'status_remarks'    => Status::LIQUIDATED->value
                                 ])
                                 ->log("Cash request {$record->request_no} was liquidated by {$user->name}");
 
@@ -311,7 +312,8 @@ class CashRequestResource extends Resource
                                 ->title('Cash Request Liquidated!')
                                 ->success()
                                 ->send();
-                        }),
+                        })
+                        ->visible(fn($record) => $record->status === Status::RELEASED->value),
 
                     ViewAction::make(),
 

@@ -85,6 +85,12 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
             ]);
     }
 
+    /**
+     * Create a new activity list entry from the current form data,
+     * reset the form, and notify the user.
+     *
+     * @return void
+     */
     public function create(): void
     {
         ActivityList::create([
@@ -161,6 +167,15 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
             ]);
     }
 
+    /**
+     * Submit all pending activities for the current user as cash requests.
+     *
+     * Wraps creation and logging in a database transaction. If no activities
+     * exist, it returns early. Each activity is converted to a cash request,
+     * activity is logged, and the original activity entry is deleted.
+     *
+     * @return void
+     */
     private function submitCashRequest(): void
     {
         DB::transaction(function () {
@@ -207,5 +222,4 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
     {
         return 'Create Cash Request';
     }
-
 }

@@ -1,11 +1,14 @@
 <?php
 namespace App\Filament\Resources\ForLiquidationResource\Pages;
 
-use Filament\Infolists\Infolist;
-use Filament\Resources\Pages\ViewRecord;
+use App\Filament\Resources\ForLiquidationResource;
+use App\Models\ForLiquidation;
+use App\Models\LiquidationReceipt;
 use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\TextEntry;
-use App\Filament\Resources\ForLiquidationResource;
+use Filament\Infolists\Infolist;
+use Filament\Resources\Pages\ViewRecord;
+use Illuminate\Support\HtmlString;
 
 class ViewForLiquidation extends ViewRecord
 {
@@ -124,6 +127,40 @@ class ViewForLiquidation extends ViewRecord
                     ])
                     ->columns(3),
 
+                Section::make('Receipt Images')
+                    ->schema([
+                        TextEntry::make('receipt_images')
+                            ->label('Receipts')
+                            ->state(function (ForLiquidation $record) {
+                                $urls = $this->getReceiptImageUrls($record);
+
+                                if (empty($urls)) {
+                                    return 'No receipt images uploaded.';
+                                }
+
+                                $html = '<div style="display:flex;flex-wrap:wrap;gap:10px;">';
+
+                                foreach ($urls as $url) {
+                                    $safeUrl = e($url);
+
+                                    $html .= '<a href="'
+                                        . $safeUrl
+                                        . '" target="_blank" rel="noopener noreferrer">'
+                                        . '<img src="'
+                                        . $safeUrl
+                                        . '" alt="Receipt image" style="max-width:180px;max-height:180px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;" />'
+                                        . '</a>';
+                                }
+
+                                $html .= '</div>';
+
+                                return new HtmlString($html);
+                            })
+                            ->columnSpanFull()
+                            ->html(),
+                    ])
+                    ->visible(fn(ForLiquidation $record) => ! empty($this->getReceiptImageUrls($record))),
+
                 Section::make('Dates')
                     ->schema([
                         TextEntry::make('cashRequest.created_at')
@@ -147,5 +184,29 @@ class ViewForLiquidation extends ViewRecord
                     ])
                     ->columns(3),
             ]);
+    }
+
+    /**
+     * Get all receipt image URLs for a liquidation record, cached by liquidation ID.
+     *
+     * @param ForLiquidation $record
+     * @return array<int, string>
+     */
+    private function getReceiptImageUrls(ForLiquidation $record): array
+    {
+        static $cache = [];
+
+        if (! array_key_exists($record->id, $cache)) {
+            $cache[$record->id] = LiquidationReceipt::query()
+                ->where('liquidation_id', $record->id)
+                ->get()
+                ->flatMap(fn(LiquidationReceipt $receipt) => $receipt->getMedia('liquidation-receipts'))
+                ->map(fn($media) => $media->getUrl())
+                ->filter()
+                ->values()
+                ->all();
+        }
+
+        return $cache[$record->id];
     }
 }
