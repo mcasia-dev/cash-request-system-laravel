@@ -32,15 +32,19 @@
 
         .tracker-step--right .tracker-card {
             grid-column: 3;
+            grid-row: 1;
         }
 
         .tracker-step--left .tracker-card {
             grid-column: 1;
+            grid-row: 1;
         }
 
         .tracker-dot-wrap {
             grid-column: 2;
+            grid-row: 1;
             display: flex;
+            align-items: center;
             justify-content: center;
             z-index: 2;
         }
