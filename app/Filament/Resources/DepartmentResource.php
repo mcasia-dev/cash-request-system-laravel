@@ -1,16 +1,16 @@
 <?php
 namespace App\Filament\Resources;
 
-use Filament\Tables;
-use Filament\Forms\Form;
-use App\Models\Department;
-use Filament\Tables\Table;
-use Filament\Resources\Resource;
-use Illuminate\Support\Facades\Auth;
-use Filament\Forms\Components\Hidden;
-use Filament\Tables\Columns\TextColumn;
-use Filament\Forms\Components\TextInput;
 use App\Filament\Resources\DepartmentResource\Pages;
+use App\Models\Department;
+use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Form;
+use Filament\Resources\Resource;
+use Filament\Tables;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
+use Illuminate\Support\Facades\Auth;
 
 class DepartmentResource extends Resource
 {
@@ -38,14 +38,17 @@ class DepartmentResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('department_name')
+                    ->label('Department Name')
                     ->searchable()
                     ->sortable(),
 
                 TextColumn::make('department_head')
+                    ->label('Department Head')
                     ->searchable()
                     ->sortable(),
 
                 TextColumn::make('added_by')
+                    ->label('Added By')
                     ->searchable()
                     ->sortable(),
 

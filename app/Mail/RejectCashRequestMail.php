@@ -27,7 +27,7 @@ class RejectCashRequestMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Your Cash Request Was Not Approved - ' . $this->record->request_no,
+            subject: "Cash Request {$this->record->request_no} Status",
         );
     }
 

@@ -6,6 +6,7 @@ use App\Filament\Resources\CashRequestResource;
 use App\Models\CashRequest;
 use App\Models\ForLiquidation;
 use App\Models\LiquidationReceipt;
+use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
@@ -29,6 +30,14 @@ class ViewCashRequest extends ViewRecord
                         TextEntry::make('user.name')
                             ->label('Requestor'),
 
+                        TextEntry::make('requesting_amount')
+                            ->label('Total Requesting Amount')
+                            ->money('PHP'),
+
+                        TextEntry::make('created_at')
+                            ->label('Date Submitted')
+                            ->dateTime('F d, Y h:i A'),
+
                         TextEntry::make('status')
                             ->badge()
                             ->color(fn(string $state): string => match ($state) {
@@ -39,39 +48,49 @@ class ViewCashRequest extends ViewRecord
                                 'rejected'   => 'danger',
                                 default      => 'gray',
                             }),
-
-                        TextEntry::make('nature_of_request')
-                            ->badge(),
                     ])
-                    ->columns(2),
+                    ->columns(3),
 
                 Section::make('Activity Information')
+                    ->collapsible()
+                    ->collapsed()
                     ->schema([
-                        TextEntry::make('activity_name')
-                            ->label('Activity Name'),
+                        RepeatableEntry::make('activityLists')
+                            ->label('')
+                            ->schema([
+                                TextEntry::make('activity_name')
+                                    ->label('Activity Name'),
 
-                        TextEntry::make('activity_date')
-                            ->label('Activity Date')
-                            ->date(),
+                                TextEntry::make('activity_date')
+                                    ->label('Activity Date')
+                                    ->date(),
 
-                        TextEntry::make('activity_venue')
-                            ->label('Venue'),
+                                TextEntry::make('activity_venue')
+                                    ->label('Venue'),
 
-                        TextEntry::make('purpose')
-                            ->label('Purpose')
-                            ->columnSpanFull(),
+                                TextEntry::make('purpose')
+                                    ->label('Purpose'),
 
-                        SpatieMediaLibraryImageEntry::make('attachment')
-                            ->collection('attachments'),
-                    ])
-                    ->columns(2),
+                                TextEntry::make('nature_of_request')
+                                    ->label('Nature of Request')
+                                    ->badge(),
+
+                                TextEntry::make('requesting_amount')
+                                    ->label('Requesting Amount')
+                                    ->money('PHP'),
+
+                                SpatieMediaLibraryImageEntry::make('attachment')
+                                    ->label('Attached File/Image')
+                                    ->collection('attachments')
+                                    ->columnSpanFull(),
+                            ])
+                            ->columns(3),
+                    ]),
 
                 Section::make('Payment Details')
+                    ->collapsible()
+                    ->collapsed()
                     ->schema([
-                        TextEntry::make('requesting_amount')
-                            ->label('Requesting Amount')
-                            ->money('PHP'),
-
                         TextEntry::make('nature_of_payment')
                             ->label('Payment Type'),
 
@@ -108,6 +127,8 @@ class ViewCashRequest extends ViewRecord
                     ->columns(2),
 
                 Section::make('Approval and Processing')
+                    ->collapsible()
+                    ->collapsed()
                     ->schema([
                         TextEntry::make('approved_by')
                             ->label('Approved By')
@@ -134,6 +155,8 @@ class ViewCashRequest extends ViewRecord
                     ->columns(2),
 
                 Section::make('Dates')
+                    ->collapsible()
+                    ->collapsed()
                     ->schema([
                         TextEntry::make('due_date')
                             ->label('Due Date')
@@ -150,6 +173,8 @@ class ViewCashRequest extends ViewRecord
                     ->columns(3),
 
                 Section::make('Liquidation Details')
+                    ->collapsible()
+                    ->collapsed()
                     ->schema([
                         TextEntry::make('total_liquidated')
                             ->label('Total Liquidated')
@@ -209,6 +234,8 @@ class ViewCashRequest extends ViewRecord
                     ->visible(fn($record) => $this->getLiquidationFor($record) !== null),
 
                 Section::make('Additional Information')
+                    ->collapsible()
+                    ->collapsed()
                     ->schema([
                         TextEntry::make('status_remarks')
                             ->label('Status Remarks')

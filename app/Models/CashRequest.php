@@ -1,12 +1,13 @@
 <?php
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasOne;
-use Spatie\Activitylog\LogOptions;
 use Spatie\MediaLibrary\HasMedia;
+use Spatie\Activitylog\LogOptions;
+use Illuminate\Database\Eloquent\Model;
 use Spatie\MediaLibrary\InteractsWithMedia;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CashRequest extends Model implements HasMedia
 {
@@ -26,6 +27,7 @@ class CashRequest extends Model implements HasMedia
         'reason_for_cancelling',
         'payee',
         'payment_to',
+        'voucher_no',
         'bank_account_no',
         'bank_name',
         'account_type',
@@ -88,6 +90,11 @@ class CashRequest extends Model implements HasMedia
     public function forCashRelease(): HasOne
     {
         return $this->hasOne(ForCashRelease::class);
+    }
+
+    public function activityLists(): HasMany
+    {
+        return $this->hasMany(ActivityList::class);
     }
 
     public function getActivitylogOptions(): LogOptions

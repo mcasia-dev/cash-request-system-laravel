@@ -3,11 +3,12 @@
 namespace App\Mail;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Mail\Mailables\Content;
-use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Mail\Mailables\Envelope;
+use Illuminate\Contracts\Queue\ShouldQueue;
 
 class ApproveCashRequestByTreasuryMail extends Mailable
 {
@@ -27,7 +28,7 @@ class ApproveCashRequestByTreasuryMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Approve Cash Request By Treasury Mail',
+            subject: "Cash Request {$this->record->request_no} Status",
         );
     }
 
@@ -38,6 +39,10 @@ class ApproveCashRequestByTreasuryMail extends Mailable
     {
         return new Content(
             markdown: 'mail.approve-cash-request-by-treasury-mail',
+            with: [
+                'record' => $this->record,
+                'user'   => Auth::user(),
+            ],
         );
     }
 

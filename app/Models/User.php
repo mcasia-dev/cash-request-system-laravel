@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Str;
 use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
@@ -65,7 +66,7 @@ class User extends Authenticatable
     protected static function booted()
     {
         /**
-         * Auto-generate the user's control number and full name before creation.
+         * Auto-generate the user's control number, signature number and full name before creation.
          *
          * Format: MCA-YYYY-####, based on the latest user ID.
          *
@@ -78,8 +79,19 @@ class User extends Authenticatable
             $random_char = str_pad($last_id + 1, 4, '0', STR_PAD_LEFT);
             $tracking_no = "MCA-{$year}-{$random_char}";
 
-            $user->control_no = $tracking_no;
-            $user->name       = "{$user->first_name} {$user->last_name}";
+            $length = 12;
+
+            $characters       = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            $charactersLength = Str::length($characters);
+            $randomString     = '';
+
+            for ($i = 0; $i < $length; $i++) {
+                $randomString .= $characters[random_int(0, $charactersLength - 1)];
+            }
+
+            $user->control_no        = $tracking_no;
+            $user->name              = "{$user->first_name} {$user->last_name}";
+            $user->signature_number  = $randomString;
         });
     }
 

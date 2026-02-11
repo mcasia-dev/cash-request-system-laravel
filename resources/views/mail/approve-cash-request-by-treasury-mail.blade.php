@@ -1,29 +1,23 @@
 <x-mail::message>
-# Cash Request Approved by Treasury
+# Cash Request Status
 
 Dear {{ $record->user->name }},
 
-Your cash request has been **approved** by the Treasury Manager/Supervisor. The status is now **For Releasing**. Please await further instructions from the Treasury department regarding the release process.
+Your cash request has been **approved** by the {{ \Illuminate\Support\Str::of($user->getRoleNames()->first() ?? 'Admin')->replace('_', ' ')->title() }}.
+Please await further instructions regarding the next process.
 
 ## Request Summary
 
 **Request No.:** {{ $record->request_no }}
-
-**Activity Name:** {{ $record->activity_name }}
-
-**Activity Date:** {{ $record->activity_date->format('F d, Y') }}
-
-**Activity Venue:** {{ $record->activity_venue }}
-
-**Amount Approved:** â‚±{{ number_format($record->requesting_amount, 2) }}
+**Amount Approved:** {{ number_format($record->requesting_amount, 2) }}
 
 <x-mail::button :url="route('filament.admin.resources.cash-requests.track-status', ['record' => $record])">
 View Request Status
 </x-mail::button>
 
-If you have any questions, please contact the Treasury department.
+If you have any questions or need further assistance, please don't hesitate to contact us.
 
-Thank you for your cooperation.
+Thank you for your cooperation and prompt attention.
 
 Best regards,
 {{ config('app.name') }}
