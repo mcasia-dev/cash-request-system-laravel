@@ -27,7 +27,7 @@ class ReleaseCashRequestByTreasuryMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Release Cash Request By Treasury Mail',
+            subject: "Cash Request {$this->record->request_no} Status",
         );
     }
 

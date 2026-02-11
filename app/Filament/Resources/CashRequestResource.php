@@ -2,6 +2,7 @@
 namespace App\Filament\Resources;
 
 use App\Enums\CashRequest\Status;
+use App\Enums\CashRequest\StatusRemarks;
 use App\Enums\NatureOfRequestEnum;
 use App\Filament\Resources\ActivityListResource\Pages\CreateActivityListWithTable;
 use App\Filament\Resources\CashRequestResource\Pages;
@@ -25,9 +26,9 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Actions\Action;
 use Filament\Tables\Actions\ActionGroup;
+use Filament\Tables\Actions\DeleteAction;
 use Filament\Tables\Actions\EditAction;
 use Filament\Tables\Actions\ViewAction;
-use Filament\Tables\Columns\SpatieMediaLibraryImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -38,9 +39,9 @@ use Illuminate\Support\HtmlString;
 
 class CashRequestResource extends Resource
 {
-    protected static ?string $model = CashRequest::class;
+    protected static ?string $model           = CashRequest::class;
     protected static ?string $navigationGroup = 'Cash Requests';
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationIcon  = 'heroicon-o-rectangle-stack';
 
     public static function getEloquentQuery(): Builder
     {
@@ -66,7 +67,7 @@ class CashRequestResource extends Resource
 
                 DatePicker::make('activity_date')
                     ->label('Activity Date')
-                    ->minDate(now())
+                    ->minDate(now()->toDateString())
                     ->required(),
 
                 TextInput::make('activity_venue')
@@ -93,27 +94,10 @@ class CashRequestResource extends Resource
     {
         return $table
             ->columns([
-                SpatieMediaLibraryImageColumn::make('attachment')
-                    ->collection('attachments'),
-
                 TextColumn::make('request_no')
+                    ->label('Request No.')
                     ->sortable()
                     ->searchable(),
-
-                TextColumn::make('activity_name')
-                    ->label('Activity Name')
-                    ->sortable()
-                    ->searchable(),
-
-                TextColumn::make('activity_date')
-                    ->label('Activity Date')
-                    ->date()
-                    ->sortable(),
-
-                TextColumn::make('nature_of_request')
-                    ->label('Nature of Request')
-                    ->sortable()
-                    ->badge(),
 
                 TextColumn::make('requesting_amount')
                     ->label('Requesting Amount')
@@ -122,6 +106,16 @@ class CashRequestResource extends Resource
 
                 TextColumn::make('due_date')
                     ->label('Due Date')
+                    ->date()
+                    ->sortable(),
+
+                TextColumn::make('date_liquidated')
+                    ->label('Date Liquidated')
+                    ->date()
+                    ->sortable(),
+
+                TextColumn::make('date_released')
+                    ->label('Date Released')
                     ->date()
                     ->sortable(),
 
@@ -138,10 +132,18 @@ class CashRequestResource extends Resource
                     })
                     ->searchable(),
 
+                TextColumn::make('status_remarks')
+                    ->label('Status Remarks')
+                    ->badge()
+                    ->color('secondary')
+                    ->sortable()
+                    ->searchable(),
+
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+
                 TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()
@@ -263,9 +265,9 @@ class CashRequestResource extends Resource
 
                             if (! $liquidation->wasRecentlyCreated) {
                                 $liquidation->update([
-                                    'total_change'     => $amountToReimburse,
-                                    'missing_amount'   => $missingAmount,
-                                    'receipt_amount'   => $totalReceipts,
+                                    'total_change'   => $amountToReimburse,
+                                    'missing_amount' => $missingAmount,
+                                    'receipt_amount' => $totalReceipts,
                                 ]);
                             }
 
@@ -287,6 +289,7 @@ class CashRequestResource extends Resource
 
                             $record->update([
                                 'status'          => Status::LIQUIDATED->value,
+                                'status_remarks'  => StatusRemarks::LIQUIDATED->value,
                                 'date_liquidated' => Carbon::now(),
                             ]);
 
@@ -300,7 +303,7 @@ class CashRequestResource extends Resource
                                     'requesting_amount' => $record->requesting_amount,
                                     'previous_status'   => $previousStatus,
                                     'new_status'        => Status::LIQUIDATED->value,
-                                    'status_remarks'    => Status::LIQUIDATED->value
+                                    'status_remarks'    => StatusRemarks::LIQUIDATED->value,
                                 ])
                                 ->log("Cash request {$record->request_no} was liquidated by {$user->name}");
 
@@ -315,6 +318,9 @@ class CashRequestResource extends Resource
 
                     EditAction::make()
                         ->visible(fn() => Status::PENDING->value),
+
+                    DeleteAction::make()
+                        ->visible(fn($record) => Status::PENDING->value && $record->status_remarks == null),
 
                     Action::make('cancel')
                         ->color('danger')
@@ -359,7 +365,7 @@ class CashRequestResource extends Resource
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    // Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ]);
     }
@@ -374,11 +380,12 @@ class CashRequestResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index'        => Pages\ListCashRequests::route('/'),
-            'create'       => CreateActivityListWithTable::route('/create'),
-            'edit'         => Pages\EditCashRequest::route('/{record}/edit'),
-            'view'         => Pages\ViewCashRequest::route('/{record}/view'),
-            'track-status' => Pages\TrackRequestStatus::route('/{record}/track-status'),
+            'index'             => Pages\ListCashRequests::route('/'),
+            'create'            => CreateActivityListWithTable::route('/create'),
+            'edit'              => Pages\EditCashRequest::route('/{record}/edit'),
+            'view'              => Pages\ViewCashRequest::route('/{record}/view'),
+            'track-status'      => Pages\TrackRequestStatus::route('/{record}/track-status'),
+            'track-status-text' => Pages\TrackRequestStatusText::route('/{record}/track-status-text'),
         ];
     }
 }

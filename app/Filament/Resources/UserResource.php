@@ -5,6 +5,7 @@ use App\Enums\User\AccountStatus;
 use App\Enums\User\Status;
 use App\Filament\Resources\UserResource\Pages;
 use App\Models\User;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
@@ -12,6 +13,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Auth;
 
 class UserResource extends Resource
 {
@@ -65,6 +67,18 @@ class UserResource extends Resource
                     ->relationship('department', 'department_name')
                     ->preload()
                     ->searchable()
+                    ->createOptionForm([
+                        TextInput::make('department_name')
+                            ->label('Department Name')
+                            ->required(),
+
+                        TextInput::make('department_head')
+                            ->label('Department Head')
+                            ->required(),
+
+                        Hidden::make('added_by')
+                            ->default(fn() => Auth::user()->name),
+                    ])
                     ->required(),
 
                 Select::make('account_status')
@@ -90,6 +104,7 @@ class UserResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('control_no')
+                    ->label('Control No.')
                     ->sortable()
                     ->searchable(),
 
@@ -106,6 +121,7 @@ class UserResource extends Resource
                     ->searchable(),
 
                 TextColumn::make('contact_number')
+                    ->label('Contact Number')
                     ->sortable()
                     ->searchable(),
 
@@ -114,9 +130,12 @@ class UserResource extends Resource
                     ->sortable(),
 
                 TextColumn::make('signature_number')
+                    ->label('Signature Number')
+                    ->sortable()
                     ->searchable(),
 
                 TextColumn::make('account_status')
+                    ->label('Account Status')
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
                         AccountStatus::SUSPENDED->value => 'warning',

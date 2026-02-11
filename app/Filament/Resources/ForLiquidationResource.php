@@ -1,21 +1,36 @@
 <?php
 namespace App\Filament\Resources;
 
-use App\Enums\CashRequest\Status;
-use App\Filament\Resources\ForLiquidationResource\Pages;
-use App\Models\ForLiquidation;
-use Filament\Forms\Form;
-use Filament\Resources\Resource;
 use Filament\Tables;
-use Filament\Tables\Columns\TextColumn;
+use Filament\Forms\Form;
 use Filament\Tables\Table;
+use App\Models\ForCashRelease;
+use App\Models\ForLiquidation;
+use Filament\Resources\Resource;
+use App\Enums\CashRequest\Status;
+use Filament\Tables\Columns\TextColumn;
 use Illuminate\Database\Eloquent\Model;
+use App\Filament\Resources\ForLiquidationResource\Pages;
 
 class ForLiquidationResource extends Resource
 {
     protected static ?string $model           = ForLiquidation::class;
     protected static ?string $navigationGroup = 'Cash Requests';
     protected static ?string $navigationIcon  = 'heroicon-o-rectangle-stack';
+
+    public static function getNavigationBadge(): ?string
+    {
+        $count = ForCashRelease::whereHas('cashRequest', function ($query) {
+            $query->where('status', Status::RELEASED->value);
+        })->count();
+        
+        return $count > 0 ? $count : null;
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'info';
+    }
 
     // public static function getEloquentQuery(): Builder
     // {
@@ -45,21 +60,6 @@ class ForLiquidationResource extends Resource
                 TextColumn::make('cashRequest.user.name')
                     ->label('Requestor')
                     ->searchable(),
-
-                TextColumn::make('cashRequest.activity_name')
-                    ->label('Activity Name')
-                    ->sortable()
-                    ->searchable(),
-
-                TextColumn::make('cashRequest.activity_date')
-                    ->label('Activity Date')
-                    ->date()
-                    ->sortable(),
-
-                TextColumn::make('cashRequest.nature_of_request')
-                    ->label('Nature of Request')
-                    ->sortable()
-                    ->badge(),
 
                 TextColumn::make('cashRequest.requesting_amount')
                     ->label('Requesting Amount')

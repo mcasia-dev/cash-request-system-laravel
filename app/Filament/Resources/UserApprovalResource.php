@@ -1,25 +1,25 @@
 <?php
 namespace App\Filament\Resources;
 
-use App\Models\User;
-use Filament\Tables;
-use Filament\Forms\Form;
-use App\Enums\User\Status;
-use Filament\Tables\Table;
-use Filament\Resources\Resource;
 use App\Enums\User\AccountStatus;
-use Filament\Tables\Actions\Action;
-use Illuminate\Support\Facades\Auth;
+use App\Enums\User\Status;
+use App\Filament\Resources\UserApprovalResource\Pages;
+use App\Jobs\ApproveUserRegistrationJob;
 use App\Jobs\RejectUserRegistrationJob;
+use App\Models\User;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Form;
+use Filament\Notifications\Notification;
+use Filament\Resources\Resource;
+use Filament\Tables;
+use Filament\Tables\Actions\Action;
+use Filament\Tables\Actions\ActionGroup;
 use Filament\Tables\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
-use Illuminate\Database\Eloquent\Model;
-use App\Jobs\ApproveUserRegistrationJob;
-use Filament\Notifications\Notification;
-use Filament\Tables\Actions\ActionGroup;
+use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use App\Filament\Resources\UserApprovalResource\Pages;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Auth;
 
 class UserApprovalResource extends Resource
 {
@@ -29,6 +29,20 @@ class UserApprovalResource extends Resource
     protected static ?string $navigationLabel = 'User Request (For Approval)';
     protected static ?string $label           = 'User Request (For Approval)';
     protected static ?string $navigationIcon  = 'heroicon-o-rectangle-stack';
+
+    public static function getNavigationBadge(): ?string
+    {
+        $count = static::getModel()::where('department_id', Auth::user()->department_id)
+            ->where('status', Status::PENDING->value)
+            ->count();
+
+        return $count > 0 ? $count : null;
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'info';
+    }
 
     public static function getEloquentQuery(): Builder
     {
@@ -50,6 +64,7 @@ class UserApprovalResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('control_no')
+                    ->label('Control No.')
                     ->sortable()
                     ->searchable(),
 
@@ -66,6 +81,7 @@ class UserApprovalResource extends Resource
                     ->searchable(),
 
                 TextColumn::make('contact_number')
+                    ->label('Contact Number')
                     ->sortable()
                     ->searchable(),
 
@@ -74,9 +90,12 @@ class UserApprovalResource extends Resource
                     ->sortable(),
 
                 TextColumn::make('signature_number')
+                    ->label('Signature Number')
+                    ->sortable()
                     ->searchable(),
 
                 TextColumn::make('account_status')
+                    ->label('Account Status')
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
                         AccountStatus::SUSPENDED->value => 'warning',
@@ -117,7 +136,7 @@ class UserApprovalResource extends Resource
                     Action::make('Approve')
                         ->visible(fn($record) => $record->status === Status::PENDING->value)
                         ->icon('heroicon-o-check-circle')
-                        ->color('success')
+                        ->color('primary')
                         ->requiresConfirmation()
                         ->action(function (User $record) {
                             $approver       = Auth::user();

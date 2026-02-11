@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Filament\Resources\ActivityListResource\Pages;
 
 use App\Enums\CashRequest\Status;
@@ -8,14 +9,16 @@ use App\Filament\Resources\ActivityListResource;
 use App\Models\ActivityList;
 use App\Models\CashRequest;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
-// use Filament\Pages\Page;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Form;
+use Filament\Forms\Get;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Page;
 use Filament\Tables\Actions\Action;
@@ -39,9 +42,12 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
     protected static string $view            = 'filament.pages.create-activity-list';
 
     public array $data = [];
+    public ?int $draftCashRequestId = null;
+    public ?string $draftNatureOfRequest = null;
 
     public function mount(): void
     {
+        $this->loadDraftCashRequestState();
         $this->form->fill();
     }
 
@@ -51,61 +57,79 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
             ->statePath('data')
             ->columns(2)
             ->schema([
-                Select::make('nature_of_request')
-                    ->options(NatureOfRequestEnum::filamentOptions())
-                    ->live()
-                    ->required(),
-
-                TextInput::make('activity_name')
-                    ->label('Activity Name')
-                    ->required(),
-
-                DatePicker::make('activity_date')
-                    ->label('Activity Date')
-                    ->minDate(now())
-                    ->required(),
-
-                TextInput::make('activity_venue')
-                    ->label('Activity Venue')
-                    ->required(),
-
-                TextInput::make('requesting_amount')
-                    ->label('Requesting Amount')
-                    ->prefix('₱')
-                    ->required()
-                    ->numeric()
-                    ->maxValue(fn($get) => $get('nature_of_request') === NatureOfRequestEnum::PETTY_CASH->value ? 1500 : null),
-
-                SpatieMediaLibraryFileUpload::make('attachment')
-                    ->collection('attachments'),
-
-                Textarea::make('purpose')
+                Section::make('Nature of Request')
                     ->columnSpanFull()
-                    ->required(),
+                    ->schema([
+                        Select::make('nature_of_request')
+                            ->options(NatureOfRequestEnum::filamentOptions())
+                            ->live()
+                            ->visible(fn() => blank($this->draftCashRequestId))
+                            ->required(fn() => blank($this->draftCashRequestId))
+                            ->dehydrated(fn() => blank($this->draftCashRequestId)),
+
+                        Placeholder::make('selected_nature_of_request')
+                            ->label('Selected Nature of Request')
+                            ->visible(fn() => filled($this->draftCashRequestId))
+                            ->content(fn() => (string) $this->draftNatureOfRequest),
+                    ]),
+
+                Section::make('Activity Details')
+                    ->columnSpanFull()
+                    ->columns(2)
+                    ->schema([
+                        TextInput::make('activity_name')
+                            ->label('Activity Name')
+                            ->required(),
+
+                        DatePicker::make('activity_date')
+                            ->label('Activity Date')
+                            ->minDate(now()->toDateString())
+                            ->required(),
+
+                        TextInput::make('activity_venue')
+                            ->label('Activity Venue')
+                            ->required(),
+
+                        TextInput::make('requesting_amount')
+                            ->label('Requesting Amount')
+                            ->prefix('PHP ')
+                            ->required()
+                            ->numeric()
+                            ->maxValue(function (Get $get): ?int {
+                                $natureOfRequest = $this->draftNatureOfRequest ?? $get('nature_of_request');
+
+                                return $natureOfRequest === NatureOfRequestEnum::PETTY_CASH->value ? 1500 : null;
+                            }),
+
+                        SpatieMediaLibraryFileUpload::make('attachment')
+                            ->collection('attachments'),
+
+                        Textarea::make('purpose')
+                            ->columnSpanFull()
+                            ->required(),
+                    ]),
             ]);
     }
 
-    /**
-     * Create a new activity list entry from the current form data,
-     * reset the form, and notify the user.
-     *
-     * @return void
-     */
     public function create(): void
     {
-        ActivityList::create([
+        $formData = $this->form->getState();
+        $cashRequest = $this->getOrCreateDraftCashRequest($formData['nature_of_request'] ?? null);
+
+        $activityList = ActivityList::create([
             'user_id'           => Auth::id(),
+            'cash_request_id'   => $cashRequest->id,
             'control_no'        => Auth::user()->control_no,
-            'nature_of_request' => $this->data['nature_of_request'],
-            'activity_name'     => $this->data['activity_name'],
-            'activity_date'     => $this->data['activity_date'],
-            'activity_venue'    => $this->data['activity_venue'],
-            'requesting_amount' => $this->data['requesting_amount'],
-            'purpose'           => $this->data['purpose'],
+            'activity_name'     => $formData['activity_name'],
+            'activity_date'     => $formData['activity_date'],
+            'activity_venue'    => $formData['activity_venue'],
+            'requesting_amount' => $formData['requesting_amount'],
+            'purpose'           => $formData['purpose'],
         ]);
 
+        $this->form->model($activityList)->saveRelationships();
+        $this->loadDraftCashRequestState();
         $this->form->fill();
-
         $this->dispatch('$refresh');
 
         Notification::make()
@@ -118,7 +142,15 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
     public function table(Table $table): Table
     {
         return $table
-            ->query(ActivityList::where('user_id', Auth::id()))
+            ->query(
+                ActivityList::query()
+                    ->where('user_id', Auth::id())
+                    ->when(
+                        filled($this->draftCashRequestId),
+                        fn($query) => $query->where('cash_request_id', $this->draftCashRequestId),
+                        fn($query) => $query->whereNull('id')
+                    )
+            )
             ->columns([
                 TextColumn::make('activity_name')
                     ->label('Activity Name')
@@ -135,18 +167,17 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
                     ->sortable()
                     ->date(),
 
-                TextColumn::make('nature_of_request')
+                TextColumn::make('cashRequest.nature_of_request')
                     ->label('Nature of Request')
-                    ->badge()
-                    ->sortable()
-                    ->searchable(),
+                    ->badge(),
 
                 TextColumn::make('requesting_amount')
                     ->label('Requesting Amount')
                     ->money('PHP')
                     ->sortable(),
 
-                TextColumn::make('purpose'),
+                TextColumn::make('purpose')
+                    ->words(4),
             ])
             ->headerActions([
                 Action::make('submitCashRequest')
@@ -161,65 +192,149 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
             ])
             ->actions([
                 ActionGroup::make([
-                    EditAction::make(),
+                    EditAction::make()
+                        ->form([
+                            TextInput::make('activity_name')
+                                ->label('Activity Name')
+                                ->required(),
+
+                            DatePicker::make('activity_date')
+                                ->label('Activity Date')
+                                ->minDate(now()->toDateString())
+                                ->required(),
+
+                            TextInput::make('activity_venue')
+                                ->label('Activity Venue')
+                                ->required(),
+
+                            TextInput::make('requesting_amount')
+                                ->label('Requesting Amount')
+                                ->prefix('PHP ')
+                                ->required()
+                                ->numeric()
+                                ->maxValue(fn() => $this->draftNatureOfRequest === NatureOfRequestEnum::PETTY_CASH->value ? 1500 : null),
+
+                            SpatieMediaLibraryFileUpload::make('attachment')
+                                ->collection('attachments'),
+
+                            Textarea::make('purpose')
+                                ->columnSpanFull()
+                                ->required(),
+                        ]),
                     DeleteAction::make(),
                 ]),
             ]);
     }
 
-    /**
-     * Submit all pending activities for the current user as cash requests.
-     *
-     * Wraps creation and logging in a database transaction. If no activities
-     * exist, it returns early. Each activity is converted to a cash request,
-     * activity is logged, and the original activity entry is deleted.
-     *
-     * @return void
-     */
     private function submitCashRequest(): void
     {
-        DB::transaction(function () {
+        $failureMessage = 'Nothing to submit';
 
-            $activities = ActivityList::where('user_id', Auth::id())->get();
+        $submitted = DB::transaction(function () use (&$failureMessage): bool {
+            $user = Auth::user();
+            $cashRequest = $this->getDraftCashRequest();
+
+            if (! $cashRequest) {
+                $failureMessage = 'Nothing to submit';
+
+                return false;
+            }
+
+            $activities = ActivityList::query()
+                ->where('user_id', Auth::id())
+                ->where('cash_request_id', $cashRequest->id)
+                ->get();
 
             if ($activities->isEmpty()) {
-                return;
+                $failureMessage = 'Nothing to submit';
+
+                return false;
             }
 
-            foreach ($activities as $activity) {
-                $user        = Auth::user();
-                $cashRequest = CashRequest::create([
-                    'user_id'           => $activity->user_id,
-                    'activity_name'     => $activity->activity_name,
-                    'activity_date'     => $activity->activity_date,
-                    'activity_venue'    => $activity->activity_venue,
-                    'purpose'           => $activity->purpose,
-                    'nature_of_request' => $activity->nature_of_request,
-                    'requesting_amount' => $activity->requesting_amount,
+            $totalRequestingAmount = (float) $activities->sum('requesting_amount');
+
+            if ($totalRequestingAmount > 1500) {
+                $failureMessage = 'Total requesting amount must not be greater than PHP 1,500.';
+
+                return false;
+            }
+
+            $cashRequest->update([
+                'requesting_amount' => $totalRequestingAmount,
+                'status'            => Status::PENDING->value,
+                'status_remarks'    => StatusRemarks::REQUEST_SUBMITTED->value,
+            ]);
+
+            activity()
+                ->causedBy($user)
+                ->performedOn($cashRequest)
+                ->event('created')
+                ->withProperties([
+                    'request_no'        => $cashRequest->request_no,
+                    'activity_name'     => $cashRequest->activity_name,
+                    'requesting_amount' => $cashRequest->requesting_amount,
+                    'status'            => Status::PENDING->value,
                     'status_remarks'    => StatusRemarks::REQUEST_SUBMITTED->value,
-                ]);
+                ])
+                ->log("Cash request {$cashRequest->request_no} was submitted by {$user->name} ({$user->position})");
 
-                // Log each cash requests created
-                activity()
-                    ->causedBy($user)
-                    ->performedOn($cashRequest)
-                    ->event('created')
-                    ->withProperties([
-                        'request_no'        => $cashRequest->request_no,
-                        'activity_name'     => $cashRequest->activity_name,
-                        'requesting_amount' => $cashRequest->requesting_amount,
-                        'status'            => Status::PENDING->value,
-                        'status_remarks'    => StatusRemarks::REQUEST_SUBMITTED->value,
-                    ])
-                    ->log("Cash request {$cashRequest->request_no} was submitted by {$user->name} ({$user->position})");
-
-                $activity->delete();
-            }
+            return true;
         });
+
+        if (! $submitted) {
+            Notification::make()
+                ->title($failureMessage)
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $this->loadDraftCashRequestState();
+        $this->form->fill();
+        $this->dispatch('$refresh');
+
+        Notification::make()
+            ->title('Cash request submitted')
+            ->success()
+            ->send();
     }
 
     public function getTitle(): string
     {
         return 'Create Cash Request';
+    }
+
+    private function getDraftCashRequest(): ?CashRequest
+    {
+        return CashRequest::query()
+            ->where('user_id', Auth::id())
+            ->whereNull('status_remarks')
+            ->latest('id')
+            ->first();
+    }
+
+    private function getOrCreateDraftCashRequest(?string $natureOfRequest): CashRequest
+    {
+        $cashRequest = $this->getDraftCashRequest();
+
+        if ($cashRequest) {
+            return $cashRequest;
+        }
+
+        return CashRequest::create([
+            'user_id'           => Auth::id(),
+            'nature_of_request' => $natureOfRequest,
+            'requesting_amount' => 0,
+            'status'            => Status::PENDING->value,
+        ]);
+    }
+
+    private function loadDraftCashRequestState(): void
+    {
+        $cashRequest = $this->getDraftCashRequest();
+
+        $this->draftCashRequestId = $cashRequest?->id;
+        $this->draftNatureOfRequest = $cashRequest?->nature_of_request;
     }
 }

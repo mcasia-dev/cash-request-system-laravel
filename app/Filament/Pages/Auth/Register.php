@@ -33,7 +33,6 @@ class Register extends BaseRegister
                 $this->getPositionFormComponent(),
                 $this->getPasswordFormComponent(),
                 $this->getPasswordConfirmationFormComponent(),
-                $this->getSignatureNumberFormComponent(),
                 $this->getTermsFormComponent(),
             ]);
     }
@@ -146,26 +145,6 @@ class Register extends BaseRegister
             ->revealable(filament()->arePasswordsRevealable())
             ->required()
             ->dehydrated(false);
-    }
-
-    private function generateAlphanumeric($length = 6)
-    {
-        $characters       = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-        $charactersLength = Str::length($characters);
-        $randomString     = '';
-
-        for ($i = 0; $i < $length; $i++) {
-            $randomString .= $characters[random_int(0, $charactersLength - 1)];
-        }
-
-        return $randomString;
-    }
-
-    protected function getSignatureNumberFormComponent()
-    {
-        return Hidden::make('signature_number')
-            ->default(fn() => $this->generateAlphanumeric(12))
-            ->required();
     }
 
     protected function getTermsFormComponent(): Component

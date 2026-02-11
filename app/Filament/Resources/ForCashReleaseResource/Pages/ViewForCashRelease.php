@@ -13,11 +13,14 @@ use App\Models\User;
 use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
+use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section;
+use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 
 class ViewForCashRelease extends ViewRecord
@@ -36,8 +39,7 @@ class ViewForCashRelease extends ViewRecord
                 ])
                 ->action(fn(ForCashRelease $record, array $data) => $this->releaseCashRequest($record, $data))
                 ->color('primary')
-                ->visible(fn($record) => $this->getStatus($record))
-                ->successRedirectUrl(route('filament.admin.resources.for-cash-releases.index')),
+                ->visible(fn($record) => $this->getStatus($record)),
 
             // REJECTION BUTTON
             Action::make('Reject')
@@ -50,10 +52,8 @@ class ViewForCashRelease extends ViewRecord
                 ])
                 ->modalHeading('Reject Cash Request')
                 ->modalSubmitActionLabel('Reject')
-                ->action(fn(CashRequest $record, array $data): Notification => $this->rejectCashRequest($record, $data))
-                ->visible(fn($record) => $this->getStatus($record))
-                ->successRedirectUrl(route('filament.admin.resources.for-approval-requests.index')),
-
+                ->action(fn(CashRequest $record, array $data) => $this->rejectCashRequest($record, $data))
+                ->visible(fn($record) => $this->getStatus($record)),
         ];
     }
 
@@ -69,7 +69,12 @@ class ViewForCashRelease extends ViewRecord
                         TextEntry::make('cashRequest.user.name')
                             ->label('Requestor'),
 
+                        TextEntry::make('cashRequest.requesting_amount')
+                            ->label('Total Requesting Amount')
+                            ->money('PHP'),
+
                         TextEntry::make('cashRequest.status')
+                            ->label('Status')
                             ->badge()
                             ->color(fn(string $state): string => match ($state) {
                                 'pending'    => 'warning',
@@ -79,57 +84,48 @@ class ViewForCashRelease extends ViewRecord
                                 'rejected'   => 'danger',
                                 default      => 'gray',
                             }),
-
-                        TextEntry::make('cashRequest.nature_of_request')
-                            ->badge(),
                     ])
-                    ->columns(2),
+                    ->columns(3),
 
                 Section::make('Activity Information')
+                    ->collapsed()
+                    ->collapsible()
                     ->schema([
-                        TextEntry::make('cashRequest.activity_name')
-                            ->label('Activity Name'),
+                        RepeatableEntry::make('cashRequest.activityLists')
+                            ->label('')
+                            ->schema([
+                                TextEntry::make('activity_name')
+                                    ->label('Activity Name'),
 
-                        TextEntry::make('cashRequest.activity_date')
-                            ->label('Activity Date')
-                            ->date(),
+                                TextEntry::make('activity_date')
+                                    ->label('Activity Date')
+                                    ->date(),
 
-                        TextEntry::make('cashRequest.activity_venue')
-                            ->label('Venue'),
+                                TextEntry::make('activity_venue')
+                                    ->label('Venue'),
 
-                        TextEntry::make('cashRequest.purpose')
-                            ->label('Purpose')
-                            ->columnSpanFull(),
-                    ])
-                    ->columns(2),
+                                TextEntry::make('purpose')
+                                    ->label('Purpose'),
 
-                Section::make('Payment Details')
-                    ->schema([
-                        TextEntry::make('cashRequest.requesting_amount')
-                            ->label('Requesting Amount')
-                            ->money('PHP'),
+                                TextEntry::make('nature_of_request')
+                                    ->label('Nature of Request')
+                                    ->badge(),
 
-                        TextEntry::make('cashRequest.nature_of_payment')
-                            ->label('Payment Type'),
+                                TextEntry::make('requesting_amount')
+                                    ->label('Requesting Amount')
+                                    ->money('PHP'),
 
-                        TextEntry::make('cashRequest.payee'),
-
-                        TextEntry::make('cashRequest.payment_to')
-                            ->label('Payment To'),
-
-                        TextEntry::make('cashRequest.bank_name')
-                            ->label('Bank'),
-
-                        TextEntry::make('cashRequest.bank_account_no')
-                            ->label('Account Number'),
-
-                        TextEntry::make('cashRequest.account_type')
-                            ->label('Account Type'),
-
-                    ])
-                    ->columns(2),
+                                SpatieMediaLibraryImageEntry::make('attachment')
+                                    ->label('Attached File/Image')
+                                    ->collection('attachments')
+                                    ->columnSpanFull(),
+                            ])
+                            ->columns(3),
+                    ]),
 
                 Section::make('Dates')
+                    ->collapsible()
+                    ->collapsed()
                     ->schema([
                         TextEntry::make('cashRequest.created_at')
                             ->label('Date Requested')
@@ -171,9 +167,8 @@ class ViewForCashRelease extends ViewRecord
      *
      * @param mixed $record
      * @param array<string, mixed> $data
-     * @return Notification
      */
-    private function releaseCashRequest($record, array $data): Notification
+    private function releaseCashRequest($record, array $data)
     {
         $user           = Auth::user();
         $status_remarks = $this->getReleasedStatusRemarks($user);
@@ -216,10 +211,12 @@ class ViewForCashRelease extends ViewRecord
         // Send an email notification
         ReleaseCashRequestByTreasuryJob::dispatch($record->cashRequest);
 
-        return Notification::make()
+        Notification::make()
             ->title('Cash Request Released!')
             ->success()
             ->send();
+
+        return redirect()->route('filament.admin.resources.for-cash-releases.index');
     }
 
     /**
@@ -227,7 +224,6 @@ class ViewForCashRelease extends ViewRecord
      *
      * @param mixed $record
      * @param array<string, mixed> $data
-     * @return Notification
      */
     private function rejectCashRequest($record, array $data)
     {
@@ -261,10 +257,12 @@ class ViewForCashRelease extends ViewRecord
         // Send an email notification
         RejectCashRequestJob::dispatch($record);
 
-        return Notification::make()
+        Notification::make()
             ->title('Cash Request Rejected!')
             ->success()
             ->send();
+
+        return redirect()->route('filament.admin.resources.for-cash-releases.index');
     }
 
     /**

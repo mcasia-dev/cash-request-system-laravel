@@ -9,7 +9,9 @@ use App\Models\CashRequest;
 use App\Services\ApprovalStatusResolver;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
+use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section;
+use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
 use Filament\Notifications\Notification;
@@ -58,8 +60,9 @@ class ViewForApprovalRequest extends ViewRecord
                         ->title('Cash Request Approved!')
                         ->success()
                         ->send();
-                })
-                ->successRedirectUrl(route('filament.admin.resources.for-approval-requests.index')),
+
+                    return redirect()->route('filament.admin.resources.for-approval-requests.index');
+                }),
 
             Action::make('Reject')
                 ->visible(fn($record) => $record->status === Status::PENDING->value)
@@ -106,9 +109,9 @@ class ViewForApprovalRequest extends ViewRecord
                         ->title('Cash Request Rejected!')
                         ->success()
                         ->send();
-                })
-                ->successRedirectUrl(route('filament.admin.resources.for-approval-requests.index')),
 
+                    return redirect()->route('filament.admin.resources.for-approval-requests.index');
+                }),
         ];
     }
 
@@ -124,6 +127,18 @@ class ViewForApprovalRequest extends ViewRecord
                         TextEntry::make('user.name')
                             ->label('Requestor'),
 
+                        TextEntry::make('nature_of_request')
+                            ->label('Nature of Request')
+                            ->badge(),
+
+                        TextEntry::make('requesting_amount')
+                            ->label('Total Requesting Amount')
+                            ->money('PHP'),
+
+                        TextEntry::make('created_at')
+                            ->label('Date Submitted')
+                            ->dateTime('F d, Y h:i A'),
+
                         TextEntry::make('status')
                             ->badge()
                             ->color(fn(string $state): string => match ($state) {
@@ -134,67 +149,40 @@ class ViewForApprovalRequest extends ViewRecord
                                 'rejected'   => 'danger',
                                 default      => 'gray',
                             }),
-
-                        TextEntry::make('nature_of_request')
-                            ->badge(),
                     ])
-                    ->columns(2),
+                    ->columns(3),
 
                 Section::make('Activity Information')
+                    ->collapsible()
+                    ->collapsed()
                     ->schema([
-                        TextEntry::make('activity_name')
-                            ->label('Activity Name'),
+                        RepeatableEntry::make('activityLists')
+                            ->label('')
+                            ->schema([
+                                TextEntry::make('activity_name')
+                                    ->label('Activity Name'),
 
-                        TextEntry::make('activity_date')
-                            ->label('Activity Date')
-                            ->date(),
+                                TextEntry::make('activity_date')
+                                    ->label('Activity Date')
+                                    ->date(),
 
-                        TextEntry::make('activity_venue')
-                            ->label('Venue'),
+                                TextEntry::make('activity_venue')
+                                    ->label('Venue'),
 
-                        TextEntry::make('purpose')
-                            ->label('Purpose')
-                            ->columnSpanFull(),
-                    ])
-                    ->columns(2),
+                                TextEntry::make('purpose')
+                                    ->label('Purpose'),
 
-                Section::make('Payment Details')
-                    ->schema([
-                        TextEntry::make('requesting_amount')
-                            ->label('Requesting Amount')
-                            ->money('PHP'),
+                                TextEntry::make('requesting_amount')
+                                    ->label('Requesting Amount')
+                                    ->money('PHP'),
 
-                        TextEntry::make('nature_of_payment')
-                            ->label('Payment Type'),
-
-                        TextEntry::make('payee'),
-
-                        TextEntry::make('payment_to')
-                            ->label('Payment To'),
-
-                        TextEntry::make('bank_name')
-                            ->label('Bank'),
-
-                        TextEntry::make('bank_account_no')
-                            ->label('Account Number'),
-
-                        TextEntry::make('account_type')
-                            ->label('Account Type'),
-
-                    ])
-                    ->columns(2),
-
-                Section::make('Additional Information')
-                    ->schema([
-                        TextEntry::make('created_at')
-                            ->label('Created At')
-                            ->dateTime('F d, Y h:i A'),
-
-                        TextEntry::make('updated_at')
-                            ->label('Last Updated')
-                            ->dateTime('F d, Y h:i A'),
-                    ])
-                    ->columns(2),
+                                SpatieMediaLibraryImageEntry::make('attachment')
+                                    ->label('Attached File/Image')
+                                    ->collection('attachments')
+                                    ->columnSpanFull(),
+                            ])
+                            ->columns(3),
+                    ]),
             ]);
     }
 }

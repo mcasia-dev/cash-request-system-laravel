@@ -40,7 +40,7 @@ class ActivityListResource extends Resource
 
                 DatePicker::make('activity_date')
                     ->label('Activity Date')
-                    ->minDate(now())
+                    ->minDate(now()->toDateString())
                     ->required(),
 
                 TextInput::make('activity_venue')

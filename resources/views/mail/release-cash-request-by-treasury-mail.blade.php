@@ -3,25 +3,19 @@
 
 Dear {{ $record->user->name }},
 
-Your cash request has been **released** by the Treasury team and is now **ready for pickup**. Please proceed with the next steps as advised by the Treasury department.
+Your cash request has been **released** and is now **ready for pickup**. Please proceed with the next steps as advised by the Treasury department.
 
 ## Request Summary
 
 **Request No.:** {{ $record->request_no }}
 
-**Activity Name:** {{ $record->activity_name }}
-
-**Activity Date:** {{ $record->activity_date->format('F d, Y') }}
-
-**Activity Venue:** {{ $record->activity_venue }}
-
-**Amount Released:** â‚±{{ number_format($record->requesting_amount, 2) }}
+**Amount Released:** {{ number_format($record->requesting_amount, 2) }}
 
 <x-mail::button :url="route('filament.admin.resources.cash-requests.track-status', ['record' => $record])">
 View Request Status
 </x-mail::button>
 
-If you have any questions, please contact the Treasury department.
+If you have any questions or need further assistance, please don't hesitate to contact us.
 
 Thank you for your cooperation.
 

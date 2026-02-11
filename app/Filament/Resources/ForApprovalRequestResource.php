@@ -7,7 +7,6 @@ use App\Models\CashRequest;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
-use Filament\Tables\Columns\SpatieMediaLibraryImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -21,6 +20,18 @@ class ForApprovalRequestResource extends Resource
     protected static ?string $label           = 'For Approval Requests';
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+
+    public static function getNavigationBadge(): ?string
+    {
+        $count = static::getModel()::where('status', Status::PENDING->value)->count();
+
+        return $count > 0 ? $count : null;
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'info';
+    }
 
     public static function getEloquentQuery(): Builder
     {
@@ -43,9 +54,6 @@ class ForApprovalRequestResource extends Resource
     {
         return $table
             ->columns([
-                SpatieMediaLibraryImageColumn::make('attachment')
-                    ->collection('attachments'),
-
                 TextColumn::make('request_no')
                     ->label('Request No.')
                     ->sortable()
@@ -56,23 +64,8 @@ class ForApprovalRequestResource extends Resource
                     ->label('Requestor')
                     ->searchable(),
 
-                TextColumn::make('activity_name')
-                    ->label('Activity Name')
-                    ->sortable()
-                    ->searchable(),
-
-                TextColumn::make('activity_date')
-                    ->label('Activity Date')
-                    ->date()
-                    ->sortable(),
-
-                TextColumn::make('nature_of_request')
-                    ->label('Nature of Request')
-                    ->sortable()
-                    ->badge(),
-
                 TextColumn::make('requesting_amount')
-                    ->label('Requesting Amount')
+                    ->label('Total Requesting Amount')
                     ->money('PHP')
                     ->sortable(),
 

@@ -4,7 +4,9 @@ namespace App\Filament\Resources\ForLiquidationResource\Pages;
 use App\Filament\Resources\ForLiquidationResource;
 use App\Models\ForLiquidation;
 use App\Models\LiquidationReceipt;
+use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section;
+use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
 use Filament\Resources\Pages\ViewRecord;
@@ -26,7 +28,12 @@ class ViewForLiquidation extends ViewRecord
                         TextEntry::make('cashRequest.user.name')
                             ->label('Requestor'),
 
+                        TextEntry::make('cashRequest.requesting_amount')
+                            ->label('Total Requesting Amount')
+                            ->money('PHP'),
+
                         TextEntry::make('cashRequest.status')
+                            ->label('Status')
                             ->badge()
                             ->color(fn(string $state): string => match ($state) {
                                 'pending'    => 'warning',
@@ -36,36 +43,49 @@ class ViewForLiquidation extends ViewRecord
                                 'rejected'   => 'danger',
                                 default      => 'gray',
                             }),
-
-                        TextEntry::make('cashRequest.nature_of_request')
-                            ->badge(),
                     ])
-                    ->columns(2),
+                    ->columns(4),
 
                 Section::make('Activity Information')
+                    ->collapsible()
+                    ->collapsed()
                     ->schema([
-                        TextEntry::make('cashRequest.activity_name')
-                            ->label('Activity Name'),
+                        RepeatableEntry::make('cashRequest.activityLists')
+                            ->label('')
+                            ->schema([
+                                TextEntry::make('activity_name')
+                                    ->label('Activity Name'),
 
-                        TextEntry::make('cashRequest.activity_date')
-                            ->label('Activity Date')
-                            ->date(),
+                                TextEntry::make('activity_date')
+                                    ->label('Activity Date')
+                                    ->date(),
 
-                        TextEntry::make('cashRequest.activity_venue')
-                            ->label('Venue'),
+                                TextEntry::make('activity_venue')
+                                    ->label('Venue'),
 
-                        TextEntry::make('cashRequest.purpose')
-                            ->label('Purpose')
-                            ->columnSpanFull(),
-                    ])
-                    ->columns(2),
+                                TextEntry::make('purpose')
+                                    ->label('Purpose'),
+
+                                TextEntry::make('nature_of_request')
+                                    ->label('Nature of Request')
+                                    ->badge(),
+
+                                TextEntry::make('requesting_amount')
+                                    ->label('Requesting Amount')
+                                    ->money('PHP'),
+
+                                SpatieMediaLibraryImageEntry::make('attachment')
+                                    ->label('Attached File/Image')
+                                    ->collection('attachments')
+                                    ->columnSpanFull(),
+                            ])
+                            ->columns(3),
+                    ]),
 
                 Section::make('Payment Details')
+                    ->collapsible()
+                    ->collapsed()
                     ->schema([
-                        TextEntry::make('cashRequest.requesting_amount')
-                            ->label('Requesting Amount')
-                            ->money('PHP'),
-
                         TextEntry::make('cashRequest.nature_of_payment')
                             ->label('Payment Type'),
 
@@ -87,6 +107,8 @@ class ViewForLiquidation extends ViewRecord
                     ->columns(2),
 
                 Section::make('Release Processing')
+                    ->collapsible()
+                    ->collapsed()
                     ->schema([
                         TextEntry::make('cashRequest.forCashRelease.processedBy.name')
                             ->label('Processed By'),
@@ -97,21 +119,23 @@ class ViewForLiquidation extends ViewRecord
                     ->columns(2),
 
                 Section::make('Liquidation Details')
+                    ->collapsible()
+                    ->collapsed()
                     ->schema([
                         TextEntry::make('receipt_amount')
                             ->label('Receipt Amount')
                             ->money('PHP'),
 
-                        TextEntry::make('total_user')
-                            ->label('Total Used')
-                            ->money('PHP'),
+                        // TextEntry::make('total_user')
+                        //     ->label('Total Used')
+                        //     ->money('PHP'),
 
-                        TextEntry::make('total_liquidated')
-                            ->label('Total Liquidated')
-                            ->money('PHP'),
+                        // TextEntry::make('total_liquidated')
+                        //     ->label('Total Liquidated')
+                        //     ->money('PHP'),
 
                         TextEntry::make('total_change')
-                            ->label('Total Change')
+                            ->label('Amount to Reimburse')
                             ->money('PHP'),
 
                         TextEntry::make('missing_amount')
@@ -125,31 +149,41 @@ class ViewForLiquidation extends ViewRecord
                             ->label('Remarks')
                             ->columnSpanFull(),
                     ])
-                    ->columns(3),
+                    ->columns(4),
 
                 Section::make('Receipt Images')
+                    ->collapsible()
+                    ->collapsed()
                     ->schema([
                         TextEntry::make('receipt_images')
                             ->label('Receipts')
                             ->state(function (ForLiquidation $record) {
-                                $urls = $this->getReceiptImageUrls($record);
+                                $receipts = $this->getReceiptEntries($record);
 
-                                if (empty($urls)) {
+                                if (empty($receipts)) {
                                     return 'No receipt images uploaded.';
                                 }
 
                                 $html = '<div style="display:flex;flex-wrap:wrap;gap:10px;">';
 
-                                foreach ($urls as $url) {
-                                    $safeUrl = e($url);
+                                foreach ($receipts as $receipt) {
+                                    $safeUrl = e($receipt['url']);
+                                    $amount = number_format((float) ($receipt['amount'] ?? 0), 2);
+                                    $remarks = filled($receipt['remarks']) ? e($receipt['remarks']) : 'N/A';
 
-                                    $html .= '<a href="'
+                                    $html .= '<div style="width:220px;border:1px solid #e5e7eb;border-radius:8px;padding:10px;background:#fff;">'
+                                        . '<a href="'
                                         . $safeUrl
                                         . '" target="_blank" rel="noopener noreferrer">'
                                         . '<img src="'
                                         . $safeUrl
-                                        . '" alt="Receipt image" style="max-width:180px;max-height:180px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;" />'
-                                        . '</a>';
+                                        . '" alt="Receipt image" style="width:100%;max-height:180px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;" />'
+                                        . '</a>'
+                                        . '<div style="margin-top:8px;font-size:12px;line-height:1.45;">'
+                                        . '<div><strong>Amount:</strong> PHP ' . $amount . '</div>'
+                                        . '<div><strong>Remarks:</strong> ' . $remarks . '</div>'
+                                        . '</div>'
+                                        . '</div>';
                                 }
 
                                 $html .= '</div>';
@@ -159,14 +193,17 @@ class ViewForLiquidation extends ViewRecord
                             ->columnSpanFull()
                             ->html(),
                     ])
-                    ->visible(fn(ForLiquidation $record) => ! empty($this->getReceiptImageUrls($record))),
+                    ->visible(fn(ForLiquidation $record) => ! empty($this->getReceiptEntries($record))),
 
                 Section::make('Dates')
+                    ->collapsible()
+                    ->collapsed()
                     ->schema([
                         TextEntry::make('cashRequest.created_at')
                             ->label('Date Requested')
                             ->date(),
-                        TextEntry::make('releasing_date')
+
+                        TextEntry::make('cashRequest.forCashRelease.releasing_date')
                             ->label('Releasing Date')
                             ->date(),
 
@@ -186,13 +223,7 @@ class ViewForLiquidation extends ViewRecord
             ]);
     }
 
-    /**
-     * Get all receipt image URLs for a liquidation record, cached by liquidation ID.
-     *
-     * @param ForLiquidation $record
-     * @return array<int, string>
-     */
-    private function getReceiptImageUrls(ForLiquidation $record): array
+    private function getReceiptEntries(ForLiquidation $record): array
     {
         static $cache = [];
 
@@ -200,8 +231,13 @@ class ViewForLiquidation extends ViewRecord
             $cache[$record->id] = LiquidationReceipt::query()
                 ->where('liquidation_id', $record->id)
                 ->get()
-                ->flatMap(fn(LiquidationReceipt $receipt) => $receipt->getMedia('liquidation-receipts'))
-                ->map(fn($media) => $media->getUrl())
+                ->flatMap(function (LiquidationReceipt $receipt) {
+                    return $receipt->getMedia('liquidation-receipts')->map(fn($media) => [
+                        'url'     => $media->getUrl(),
+                        'amount'  => $receipt->receipt_amount,
+                        'remarks' => $receipt->remarks,
+                    ]);
+                })
                 ->filter()
                 ->values()
                 ->all();

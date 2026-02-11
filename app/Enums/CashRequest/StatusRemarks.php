@@ -25,4 +25,5 @@ enum StatusRemarks: string
     case FOR_PAYMENT_PROCESSING                      = "For Payment Processing";
     case FOR_RELEASING                               = "For Releasing";
     case FOR_LIQUIDATION                             = "For Liquidation";
+    case LIQUIDATED                                  = "Liquidated";
 }

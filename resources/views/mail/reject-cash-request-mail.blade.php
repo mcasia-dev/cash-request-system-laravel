@@ -9,12 +9,6 @@ We regret to inform you that your cash request has **not been approved**.
 
 **Request No.:** {{ $record->request_no }}
 
-**Activity Name:** {{ $record->activity_name }}
-
-**Activity Date:** {{ $record->activity_date->format('F d, Y') }}
-
-**Activity Venue:** {{ $record->activity_venue }}
-
 **Amount Requested:** ₱{{ number_format($record->requesting_amount, 2) }}
 
 @if($record->reason_for_rejection)

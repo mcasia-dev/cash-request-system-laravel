@@ -15,11 +15,14 @@ use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TimePicker;
+use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section;
+use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 
 class ViewPaymentProcess extends ViewRecord
@@ -52,10 +55,9 @@ class ViewPaymentProcess extends ViewRecord
                         ->required()
                         ->default(now()),
                 ])
-                ->action(fn(CashRequest $record, array $data): Notification => $this->approveCashRequest($record, $data))
+                ->action(fn(CashRequest $record, array $data) => $this->approveCashRequest($record, $data))
                 ->color('primary')
-                ->visible(fn($record) => $this->getStatus($record))
-                ->successRedirectUrl(route('filament.admin.resources.payment-processing.index')),
+                ->visible(fn($record) => $this->getStatus($record)),
 
             // REJECTION BUTTON
             Action::make('Reject')
@@ -68,9 +70,8 @@ class ViewPaymentProcess extends ViewRecord
                 ])
                 ->modalHeading('Reject Cash Request')
                 ->modalSubmitActionLabel('Reject')
-                ->action(fn(CashRequest $record, array $data): Notification => $this->rejectCashRequest($record, $data))
-                ->visible(fn($record) => $this->getStatus($record))
-                ->successRedirectUrl(route('filament.admin.resources.for-approval-requests.index')),
+                ->action(fn(CashRequest $record, array $data) => $this->rejectCashRequest($record, $data))
+                ->visible(fn($record) => $this->getStatus($record)),
         ];
     }
 
@@ -86,6 +87,14 @@ class ViewPaymentProcess extends ViewRecord
                         TextEntry::make('user.name')
                             ->label('Requestor'),
 
+                        TextEntry::make('requesting_amount')
+                            ->label('Total Requesting Amount')
+                            ->money('PHP'),
+
+                        TextEntry::make('created_at')
+                            ->label('Date Submitted')
+                            ->dateTime('F d, Y h:i A'),
+
                         TextEntry::make('status')
                             ->badge()
                             ->color(fn(string $state): string => match ($state) {
@@ -96,66 +105,44 @@ class ViewPaymentProcess extends ViewRecord
                                 'rejected'   => 'danger',
                                 default      => 'gray',
                             }),
-
-                        TextEntry::make('nature_of_request')
-                            ->badge(),
                     ])
-                    ->columns(2),
+                    ->columns(4),
 
                 Section::make('Activity Information')
+                    ->collapsible()
+                    ->collapsed()
                     ->schema([
-                        TextEntry::make('activity_name')
-                            ->label('Activity Name'),
+                        RepeatableEntry::make('activityLists')
+                            ->label('')
+                            ->schema([
+                                TextEntry::make('activity_name')
+                                    ->label('Activity Name'),
 
-                        TextEntry::make('activity_date')
-                            ->label('Activity Date')
-                            ->date(),
+                                TextEntry::make('activity_date')
+                                    ->label('Activity Date')
+                                    ->date(),
 
-                        TextEntry::make('activity_venue')
-                            ->label('Venue'),
+                                TextEntry::make('activity_venue')
+                                    ->label('Venue'),
 
-                        TextEntry::make('purpose')
-                            ->label('Purpose')
-                            ->columnSpanFull(),
-                    ])
-                    ->columns(2),
+                                TextEntry::make('purpose')
+                                    ->label('Purpose'),
 
-                Section::make('Payment Details')
-                    ->schema([
-                        TextEntry::make('requesting_amount')
-                            ->label('Requesting Amount')
-                            ->money('PHP'),
+                                TextEntry::make('nature_of_request')
+                                    ->label('Nature of Request')
+                                    ->badge(),
 
-                        TextEntry::make('nature_of_payment')
-                            ->label('Payment Type'),
+                                TextEntry::make('requesting_amount')
+                                    ->label('Requesting Amount')
+                                    ->money('PHP'),
 
-                        TextEntry::make('payee'),
-
-                        TextEntry::make('payment_to')
-                            ->label('Payment To'),
-
-                        TextEntry::make('bank_name')
-                            ->label('Bank'),
-
-                        TextEntry::make('bank_account_no')
-                            ->label('Account Number'),
-
-                        TextEntry::make('account_type')
-                            ->label('Account Type'),
-
-                    ])
-                    ->columns(2),
-
-                Section::make('Additional Information')
-                    ->schema([
-                        TextEntry::make('created_at')
-                            ->label('Created At')
-                            ->dateTime(),
-                        TextEntry::make('updated_at')
-                            ->label('Last Updated')
-                            ->dateTime(),
-                    ])
-                    ->columns(2),
+                                SpatieMediaLibraryImageEntry::make('attachment')
+                                    ->label('Attached File/Image')
+                                    ->collection('attachments')
+                                    ->columnSpanFull(),
+                            ])
+                            ->columns(3),
+                    ]),
             ]);
     }
 
@@ -176,7 +163,6 @@ class ViewPaymentProcess extends ViewRecord
      *
      * @param mixed $record
      * @param array<string, mixed> $data
-     * @return Notification
      */
     private function approveCashRequest($record, array $data)
     {
@@ -222,10 +208,12 @@ class ViewPaymentProcess extends ViewRecord
         // Send an email notification
         ApproveCashRequestByTreasuryJob::dispatch($record);
 
-        return Notification::make()
+        Notification::make()
             ->title('Cash Request Approved!')
             ->success()
             ->send();
+
+        return redirect()->route('filament.admin.resources.payment-processing.index');
     }
 
     /**
@@ -248,7 +236,6 @@ class ViewPaymentProcess extends ViewRecord
      *
      * @param mixed $record
      * @param array<string, mixed> $data
-     * @return Notification
      */
     private function rejectCashRequest($record, array $data)
     {
@@ -281,10 +268,13 @@ class ViewPaymentProcess extends ViewRecord
         // Send an email notification
         RejectCashRequestJob::dispatch($record);
 
-        return Notification::make()
+        Notification::make()
             ->title('Cash Request Rejected!')
             ->success()
             ->send();
+
+        return redirect()->route('filament.admin.resources.payment-processing.index');
+
     }
 
     /**

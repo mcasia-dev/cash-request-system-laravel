@@ -7,7 +7,7 @@ Thank you for registering with us! We're excited to have you on board.
 
 ## Account Status
 
-Your account registration has been successfully received. Your account is currently **under review** by our administration team. We will verify your information and notify you about its status.
+Your account registration has been successfully received. Your account is currently **under review** by our department head. We will verify your information and notify you about its status.
 
 Please allow us some time to review your registration details.
 
