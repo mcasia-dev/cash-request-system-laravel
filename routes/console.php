@@ -39,18 +39,25 @@ Schedule::call(function () {
                 ->whereDate('due_date', '<', $today);
         })
         ->with('cashRequest:id,due_date')
-        ->get()
-        ->each(function (ForLiquidation $liquidation) use ($today) {
-            $dueDate = $liquidation->cashRequest?->due_date;
+        ->chunkById(200, function ($liquidations) use ($today) {
 
-            if ($dueDate === null) {
-                return;
+            foreach ($liquidations as $liquidation) {
+                $dueDate = $liquidation->cashRequest?->due_date;
+
+                if (! $dueDate) {
+                    continue;
+                }
+
+                // $agingDays = Carbon::parse($dueDate)->diffInDays($today);
+                $agingDays = $dueDate->diffInDays($today);
+
+                if ((int) $liquidation->aging !== $agingDays) {
+                    $liquidation->update(['aging' => $agingDays]);
+                }
             }
 
-            $agingDays = Carbon::parse($dueDate)->diffInDays($today);
-
-            if ($liquidation->aging !== $agingDays) {
-                $liquidation->update(['aging' => $agingDays]);
-            }
         });
-})->dailyAt('00:05')->name('update-for-liquidation-aging');
+})
+    ->timezone('Asia/Manila')
+    ->dailyAt('00:05')
+    ->name('update-for-liquidation-aging');

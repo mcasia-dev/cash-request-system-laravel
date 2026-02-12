@@ -97,6 +97,11 @@ class CashRequest extends Model implements HasMedia
         return $this->hasMany(ActivityList::class);
     }
 
+    public function cashRequestApprovals(): HasMany
+    {
+        return $this->hasMany(CashRequestApproval::class);
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()

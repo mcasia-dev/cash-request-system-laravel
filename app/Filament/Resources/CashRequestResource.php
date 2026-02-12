@@ -104,9 +104,15 @@ class CashRequestResource extends Resource
                     ->money('PHP')
                     ->sortable(),
 
-                TextColumn::make('due_date')
-                    ->label('Due Date')
-                    ->date()
+                TextColumn::make('nature_of_request')
+                    ->label('Nature of Request')
+                    ->badge()
+                    ->color(fn($state) => match ($state) {
+                        NatureOfRequestEnum::PETTY_CASH->value   => 'primary',
+                        NatureOfRequestEnum::CASH_ADVANCE->value => 'success',
+                        default                                  => 'secondary'
+                    })
+                    ->searchable()
                     ->sortable(),
 
                 TextColumn::make('date_liquidated')
@@ -116,6 +122,11 @@ class CashRequestResource extends Resource
 
                 TextColumn::make('date_released')
                     ->label('Date Released')
+                    ->date()
+                    ->sortable(),
+
+                TextColumn::make('due_date')
+                    ->label('Due Date')
                     ->date()
                     ->sortable(),
 

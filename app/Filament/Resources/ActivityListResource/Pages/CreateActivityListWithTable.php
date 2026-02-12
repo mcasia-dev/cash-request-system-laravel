@@ -7,7 +7,9 @@ use App\Enums\CashRequest\StatusRemarks;
 use App\Enums\NatureOfRequestEnum;
 use App\Filament\Resources\ActivityListResource;
 use App\Models\ActivityList;
+use App\Models\ApprovalRule;
 use App\Models\CashRequest;
+use App\Services\CashRequestApprovalFlowService;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Section;
@@ -95,10 +97,10 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
                             ->prefix('PHP ')
                             ->required()
                             ->numeric()
-                            ->maxValue(function (Get $get): ?int {
+                            ->maxValue(function (Get $get): ?float {
                                 $natureOfRequest = $this->draftNatureOfRequest ?? $get('nature_of_request');
 
-                                return $natureOfRequest === NatureOfRequestEnum::PETTY_CASH->value ? 1500 : null;
+                                return $this->getConfiguredMaxAmountForNature($natureOfRequest);
                             }),
 
                         SpatieMediaLibraryFileUpload::make('attachment')
@@ -212,7 +214,7 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
                                 ->prefix('PHP ')
                                 ->required()
                                 ->numeric()
-                                ->maxValue(fn() => $this->draftNatureOfRequest === NatureOfRequestEnum::PETTY_CASH->value ? 1500 : null),
+                                ->maxValue(fn(): ?float => $this->getConfiguredMaxAmountForNature($this->draftNatureOfRequest)),
 
                             SpatieMediaLibraryFileUpload::make('attachment')
                                 ->collection('attachments'),
@@ -226,7 +228,7 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
             ]);
     }
 
-    private function submitCashRequest(): void
+    private function submitCashRequest()
     {
         $failureMessage = 'Nothing to submit';
 
@@ -252,9 +254,10 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
             }
 
             $totalRequestingAmount = (float) $activities->sum('requesting_amount');
+            $maxAllowedAmount = $this->getConfiguredMaxAmountForNature($cashRequest->nature_of_request);
 
-            if ($totalRequestingAmount > 1500) {
-                $failureMessage = 'Total requesting amount must not be greater than PHP 1,500.';
+            if ($maxAllowedAmount !== null && $totalRequestingAmount > $maxAllowedAmount) {
+                $failureMessage = 'Total requesting amount must not be greater than PHP ' . number_format($maxAllowedAmount, 2) . '.';
 
                 return false;
             }
@@ -264,6 +267,14 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
                 'status'            => Status::PENDING->value,
                 'status_remarks'    => StatusRemarks::REQUEST_SUBMITTED->value,
             ]);
+
+            try {
+                app(CashRequestApprovalFlowService::class)->initializeApprovals($cashRequest);
+            } catch (\RuntimeException $exception) {
+                $failureMessage = $exception->getMessage();
+
+                return false;
+            }
 
             activity()
                 ->causedBy($user)
@@ -298,6 +309,8 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
             ->title('Cash request submitted')
             ->success()
             ->send();
+
+        return redirect()->route('filament.admin.resources.cash-requests.index');
     }
 
     public function getTitle(): string
@@ -336,5 +349,23 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
 
         $this->draftCashRequestId = $cashRequest?->id;
         $this->draftNatureOfRequest = $cashRequest?->nature_of_request;
+    }
+
+    private function getConfiguredMaxAmountForNature(?string $nature): ?float
+    {
+        if (blank($nature)) {
+            return null;
+        }
+
+        return ApprovalRule::query()
+            ->where('is_active', true)
+            ->where('nature', $nature)
+            ->where(function ($query) {
+                $query->whereNull('min_amount')
+                    ->orWhere('min_amount', '<=', 0);
+            })
+            ->orderByRaw('CASE WHEN max_amount IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('max_amount')
+            ->value('max_amount');
     }
 }
