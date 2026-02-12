@@ -3,6 +3,7 @@ namespace App\Services;
 
 use App\Enums\CashRequest\Status;
 use App\Enums\CashRequest\StatusRemarks;
+use App\Enums\NatureOfRequestEnum;
 use App\Models\ApprovalRule;
 use App\Models\CashRequest;
 use App\Models\CashRequestApproval;
@@ -103,13 +104,13 @@ class CashRequestApprovalFlowService
                 'acted_at'    => now(),
             ]);
 
-            $remark = $this->approvedRemarkByRole($approval->role_name);
+            $remark     = $this->approvedRemarkByRole($approval->role_name);
             $hasPending = $cashRequest->cashRequestApprovals()->where('status', 'pending')->exists();
 
             if ($hasPending) {
                 $cashRequest->update([
                     'status'         => Status::IN_PROGRESS->value,
-                    'status_remarks' => $remark,
+                    'status_remarks' => $this->resolveFinalApprovalRemark($cashRequest),
                 ]);
 
                 return [
@@ -120,11 +121,13 @@ class CashRequestApprovalFlowService
 
             $cashRequest->update([
                 'status'         => Status::IN_PROGRESS->value,
-                'status_remarks' => StatusRemarks::FOR_PAYMENT_PROCESSING->value,
+                'status_remarks' => $this->resolveFinalApprovalRemark($cashRequest),
             ]);
 
+            $cashRequest->refresh();
+
             return [
-                'status_remarks' => $remark,
+                'status_remarks' => $cashRequest->status_remarks,
                 'is_final_step'  => true,
             ];
         });
@@ -203,5 +206,13 @@ class CashRequestApprovalFlowService
     private function fallbackRemark(string $role, string $suffix): string
     {
         return Str::of($role)->replace('_', ' ')->title()->append(' ', $suffix)->toString();
+    }
+
+    private function resolveFinalApprovalRemark(CashRequest $cashRequest): string
+    {
+        return match ($cashRequest->nature_of_request) {
+            NatureOfRequestEnum::CASH_ADVANCE->value => StatusRemarks::FOR_FINANCE_VERIFICATION->value,
+            default                                  => StatusRemarks::FOR_PAYMENT_PROCESSING->value,
+        };
     }
 }

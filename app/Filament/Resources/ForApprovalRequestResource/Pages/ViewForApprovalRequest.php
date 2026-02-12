@@ -2,7 +2,10 @@
 namespace App\Filament\Resources\ForApprovalRequestResource\Pages;
 
 use App\Enums\CashRequest\Status;
+use App\Enums\CashRequest\StatusRemarks;
+use App\Filament\Resources\ForFinanceVerificationResource;
 use App\Filament\Resources\ForApprovalRequestResource;
+use App\Filament\Resources\PaymentProcessResource;
 use App\Jobs\ApproveCashRequestJob;
 use App\Jobs\RejectCashRequestJob;
 use App\Models\CashRequest;
@@ -65,11 +68,29 @@ class ViewForApprovalRequest extends ViewRecord
                         }
 
                         Notification::make()
-                            ->title($approvalResult['is_final_step'] ? 'Final approval completed. Sent to Treasury.' : 'Approval step completed.')
+                            ->title(
+                                $approvalResult['is_final_step']
+                                    ? (
+                                        $record->fresh()->status_remarks === StatusRemarks::FOR_FINANCE_VERIFICATION->value
+                                            ? 'Final approval completed. Sent to Finance Verification.'
+                                            : 'Final approval completed. Sent to Payment Processing.'
+                                    )
+                                    : 'Approval step completed.'
+                            )
                             ->success()
                             ->send();
 
-                        return redirect()->route('filament.admin.resources.for-approval-requests.index');
+                        if ($approvalResult['is_final_step'] !== true) {
+                            return redirect()->route('filament.admin.resources.for-approval-requests.index');
+                        }
+
+                        $record = $record->fresh();
+
+                        return redirect()->to(
+                            $record->status_remarks === StatusRemarks::FOR_FINANCE_VERIFICATION->value
+                                ? ForFinanceVerificationResource::getUrl('index')
+                                : PaymentProcessResource::getUrl('index')
+                        );
                     } catch (RuntimeException $exception) {
                         Notification::make()
                             ->title($exception->getMessage())

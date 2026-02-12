@@ -353,7 +353,7 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
 
     private function getConfiguredMaxAmountForNature(?string $nature): ?float
     {
-        if (blank($nature)) {
+        if (blank($nature) || $nature !== NatureOfRequestEnum::PETTY_CASH->value) {
             return null;
         }
 
