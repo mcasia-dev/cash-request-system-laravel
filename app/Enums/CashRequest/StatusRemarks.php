@@ -23,6 +23,8 @@ enum StatusRemarks: string
     case SALES_CHANNEL_MANAGER_REJECTED_REQUEST      = "Sales Channel Manager Rejected Request";
     case NATIONAL_SALES_MANAGER_APPROVED_REQUEST     = "National Sales Manager Approved Request";
     case NATIONAL_SALES_MANAGER_REJECTED_REQUEST     = "National Sales Manager Rejected Request";
+    case FINANCE_DEPARTMENT_APPROVED_REQUEST         = "Finance Department Approved Request";
+    case FINANCE_DEPARTMENT_REJECTED_REQUEST         = "Finance Department Rejected Request";
     case FOR_FINANCE_VERIFICATION                    = "For Finance Verification";
     case FOR_PAYMENT_PROCESSING                      = "For Payment Processing";
     case FOR_RELEASING                               = "For Releasing";
