@@ -23,7 +23,7 @@ class ForLiquidationResource extends Resource
         $count = ForCashRelease::whereHas('cashRequest', function ($query) {
             $query->where('status', Status::RELEASED->value);
         })->count();
-        
+
         return $count > 0 ? $count : null;
     }
 
@@ -118,7 +118,7 @@ class ForLiquidationResource extends Resource
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    // Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ]);
     }

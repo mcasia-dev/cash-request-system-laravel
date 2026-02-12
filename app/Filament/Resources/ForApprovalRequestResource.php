@@ -4,12 +4,14 @@ namespace App\Filament\Resources;
 use App\Enums\CashRequest\Status;
 use App\Filament\Resources\ForApprovalRequestResource\Pages;
 use App\Models\CashRequest;
+use App\Services\CashRequestApprovalFlowService;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 
 class ForApprovalRequestResource extends Resource
 {
@@ -23,7 +25,14 @@ class ForApprovalRequestResource extends Resource
 
     public static function getNavigationBadge(): ?string
     {
-        $count = static::getModel()::where('status', Status::PENDING->value)->count();
+        $user = Auth::user();
+
+        if (! $user) {
+            return null;
+        }
+
+        $query = app(CashRequestApprovalFlowService::class)->filterPendingForUser(static::getModel()::query(), $user);
+        $count = $query->count();
 
         return $count > 0 ? $count : null;
     }
@@ -35,11 +44,13 @@ class ForApprovalRequestResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()
-        // ->whereHas('roles', function ($query) {
-        //     $query->where('name', 'User');
-        // })
-            ->where('status', Status::PENDING->value);
+        $user = Auth::user();
+
+        if (! $user) {
+            return parent::getEloquentQuery()->whereRaw('1 = 0');
+        }
+
+        return app(CashRequestApprovalFlowService::class)->filterPendingForUser(parent::getEloquentQuery(), $user);
     }
 
     public static function form(Form $form): Form
@@ -100,7 +111,7 @@ class ForApprovalRequestResource extends Resource
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    // Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ]);
     }

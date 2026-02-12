@@ -7,6 +7,7 @@ enum StatusRemarks: string
 {
     use EnumsWithOptions;
 
+
     case REQUEST_SUBMITTED                           = "Request Submitted";
     case DEPARTMENT_HEAD_APPROVED_REQUEST            = "Department Head Approved Request";
     case DEPARTMENT_HEAD_REJECTED_REQUEST            = "Department Head Rejected Request";
@@ -22,6 +23,7 @@ enum StatusRemarks: string
     case SALES_CHANNEL_MANAGER_REJECTED_REQUEST      = "Sales Channel Manager Rejected Request";
     case NATIONAL_SALES_MANAGER_APPROVED_REQUEST     = "National Sales Manager Approved Request";
     case NATIONAL_SALES_MANAGER_REJECTED_REQUEST     = "National Sales Manager Rejected Request";
+    case FOR_FINANCE_VERIFICATION                    = "For Finance Verification";
     case FOR_PAYMENT_PROCESSING                      = "For Payment Processing";
     case FOR_RELEASING                               = "For Releasing";
     case FOR_LIQUIDATION                             = "For Liquidation";

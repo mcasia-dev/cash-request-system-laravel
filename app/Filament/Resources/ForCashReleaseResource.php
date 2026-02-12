@@ -24,7 +24,7 @@ class ForCashReleaseResource extends Resource
             $query->where('status', Status::APPROVED->value)
                 ->where('status_remarks', StatusRemarks::FOR_RELEASING->value);
         })->count();
-        
+
         return $count > 0 ? $count : null;
     }
 
@@ -104,7 +104,7 @@ class ForCashReleaseResource extends Resource
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    // Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ]);
     }
