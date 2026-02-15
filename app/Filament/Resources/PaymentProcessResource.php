@@ -5,6 +5,7 @@ use App\Enums\CashRequest\Status;
 use App\Enums\CashRequest\StatusRemarks;
 use App\Filament\Resources\PaymentProcessResource\Pages;
 use App\Models\CashRequest;
+use App\Models\PaymentProcess;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -15,7 +16,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class PaymentProcessResource extends Resource
 {
-    protected static ?string $model           = CashRequest::class;
+    protected static ?string $model           = PaymentProcess::class;
     protected static ?string $navigationGroup = 'For Approval (Treasury)';
     protected static ?string $slug            = 'payment-processing';
     protected static ?string $navigationLabel = 'Payment Processsing';
