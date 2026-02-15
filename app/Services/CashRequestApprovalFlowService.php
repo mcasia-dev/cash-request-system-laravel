@@ -64,6 +64,10 @@ class CashRequestApprovalFlowService
 
     public function filterPendingForUser(Builder $query, User $user): Builder
     {
+        if ($user->isSuperAdmin()) {
+            return $query->whereIn('status', [Status::PENDING->value, Status::IN_PROGRESS->value]);
+        }
+
         $roles = $user->roles()->pluck('name')->all();
 
         if (empty($roles)) {
@@ -83,6 +87,10 @@ class CashRequestApprovalFlowService
 
     public function userCanReview(CashRequest $cashRequest, User $user): bool
     {
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
         return $this->getPendingApprovalForUser($cashRequest, $user) !== null;
     }
 
@@ -165,6 +173,12 @@ class CashRequestApprovalFlowService
 
     private function getPendingApprovalForUser(CashRequest $cashRequest, User $user): ?CashRequestApproval
     {
+        if ($user->isSuperAdmin()) {
+            return $cashRequest->cashRequestApprovals()
+                ->where('status', 'pending')
+                ->first();
+        }
+
         $roles = $user->roles()->pluck('name')->all();
 
         if (empty($roles)) {
