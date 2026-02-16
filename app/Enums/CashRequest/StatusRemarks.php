@@ -7,8 +7,9 @@ enum StatusRemarks: string
 {
     use EnumsWithOptions;
 
-
     case REQUEST_SUBMITTED                           = "Request Submitted";
+    case SUPER_ADMIN_APPROVED_REQUEST                = "Super Admin Approved Request";
+    case SUPER_ADMIN_REJECTED_REQUEST                = "Super Admin Rejected Request";
     case DEPARTMENT_HEAD_APPROVED_REQUEST            = "Department Head Approved Request";
     case DEPARTMENT_HEAD_REJECTED_REQUEST            = "Department Head Rejected Request";
     case PRESIDENT_APPROVED_REQUEST                  = "President Approved Request";

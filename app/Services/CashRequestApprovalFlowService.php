@@ -194,6 +194,7 @@ class CashRequestApprovalFlowService
     private function approvedRemarkByRole(string $role): string
     {
         return match ($role) {
+            'super_admin'            => StatusRemarks::SUPER_ADMIN_APPROVED_REQUEST->value,
             'department_head'        => StatusRemarks::DEPARTMENT_HEAD_APPROVED_REQUEST->value,
             'president'              => StatusRemarks::PRESIDENT_APPROVED_REQUEST->value,
             'treasury_manager'       => StatusRemarks::TREASURY_MANAGER_APPROVED_REQUEST->value,
@@ -207,6 +208,7 @@ class CashRequestApprovalFlowService
     private function rejectedRemarkByRole(string $role): string
     {
         return match ($role) {
+            'super_admin'            => StatusRemarks::SUPER_ADMIN_REJECTED_REQUEST->value,
             'department_head'        => StatusRemarks::DEPARTMENT_HEAD_REJECTED_REQUEST->value,
             'president'              => StatusRemarks::PRESIDENT_REJECTED_REQUEST->value,
             'treasury_manager'       => StatusRemarks::TREASURY_MANAGER_REJECTED_REQUEST->value,
