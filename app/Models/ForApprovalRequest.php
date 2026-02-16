@@ -69,12 +69,12 @@ class ForApprovalRequest extends Model implements HasMedia
 
     public function activityLists(): HasMany
     {
-        return $this->hasMany(ActivityList::class);
+        return $this->hasMany(ActivityList::class, 'cash_request_id');
     }
 
     public function cashRequestApprovals(): HasMany
     {
-        return $this->hasMany(CashRequestApproval::class);
+        return $this->hasMany(CashRequestApproval::class, 'cash_request_id');
     }
 
     public function getActivitylogOptions(): LogOptions

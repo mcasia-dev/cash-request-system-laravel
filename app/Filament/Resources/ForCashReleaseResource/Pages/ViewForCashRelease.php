@@ -18,6 +18,7 @@ use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
+use Filament\Notifications\Actions\Action as NotificationAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Illuminate\Http\RedirectResponse;
@@ -212,6 +213,19 @@ class ViewForCashRelease extends ViewRecord
         ReleaseCashRequestByTreasuryJob::dispatch($record->cashRequest);
 
         Notification::make()
+            ->title('Cash Request Update')
+            ->body("Your cash request {$record->cashRequest->request_no} has been released.")
+            ->actions([
+                NotificationAction::make('markAsRead')
+                    ->button()
+                    ->markAsRead(),
+                NotificationAction::make('view')
+                    ->link()
+                    ->url(route('filament.admin.resources.cash-requests.track-status', ['record' => $record->cashRequest->id])),
+            ])
+            ->sendToDatabase($record->cashRequest->user);
+
+        Notification::make()
             ->title('Cash Request Released!')
             ->success()
             ->send();
@@ -256,6 +270,19 @@ class ViewForCashRelease extends ViewRecord
 
         // Send an email notification
         RejectCashRequestJob::dispatch($record);
+
+        Notification::make()
+            ->title('Cash Request Update')
+            ->body("Your cash request {$record->cashRequest->request_no} has been rejected.")
+            ->actions([
+                NotificationAction::make('markAsRead')
+                    ->button()
+                    ->markAsRead(),
+                NotificationAction::make('view')
+                    ->link()
+                    ->url(route('filament.admin.resources.cash-requests.track-status', ['record' => $record->cashRequest->id])),
+            ])
+            ->sendToDatabase($record->cashRequest->user);
 
         Notification::make()
             ->title('Cash Request Rejected!')

@@ -5,7 +5,6 @@ use App\Enums\CashRequest\Status;
 use App\Enums\CashRequest\StatusRemarks;
 use App\Enums\NatureOfRequestEnum;
 use App\Models\ApprovalRule;
-use App\Models\CashRequest;
 use App\Models\CashRequestApproval;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -15,13 +14,13 @@ use RuntimeException;
 
 class CashRequestApprovalFlowService
 {
-    public function resolveRule(CashRequest $cashRequest): ?ApprovalRule
+    public function resolveRule($record): ?ApprovalRule
     {
-        $amount = (float) $cashRequest->requesting_amount;
+        $amount = (float) $record->requesting_amount;
 
         return ApprovalRule::query()
             ->where('is_active', true)
-            ->where('nature', $cashRequest->nature_of_request)
+            ->where('nature', $record->nature_of_request)
             ->where(function (Builder $query) use ($amount) {
                 $query->whereNull('min_amount')
                     ->orWhere('min_amount', '<=', $amount);
@@ -36,13 +35,13 @@ class CashRequestApprovalFlowService
             ->first();
     }
 
-    public function initializeApprovals(CashRequest $cashRequest): void
+    public function initializeApprovals($record): void
     {
-        if ($cashRequest->cashRequestApprovals()->exists()) {
+        if ($record->cashRequestApprovals()->exists()) {
             return;
         }
 
-        $rule = $this->resolveRule($cashRequest);
+        $rule = $this->resolveRule($record);
 
         if (! $rule) {
             throw new RuntimeException('No active approval rule found for this request.');
@@ -54,7 +53,7 @@ class CashRequestApprovalFlowService
             throw new RuntimeException('The matched approval rule has no configured approver roles.');
         }
 
-        $cashRequest->cashRequestApprovals()->createMany(
+        $record->cashRequestApprovals()->createMany(
             $roles->map(fn($role) => [
                 'role_name' => $role,
                 'status'    => 'pending',
@@ -85,22 +84,22 @@ class CashRequestApprovalFlowService
             });
     }
 
-    public function userCanReview(CashRequest $cashRequest, User $user): bool
+    public function userCanReview($record, User $user): bool
     {
         if ($user->isSuperAdmin()) {
             return true;
         }
 
-        return $this->getPendingApprovalForUser($cashRequest, $user) !== null;
+        return $this->getPendingApprovalForUser($record, $user) !== null;
     }
 
-    public function applyApproval(CashRequest $cashRequest, User $user): array
+    public function applyApproval($record, User $user): array
     {
-        return DB::transaction(function () use ($cashRequest, $user): array {
-            $this->initializeApprovals($cashRequest);
+        return DB::transaction(function () use ($record, $user): array {
+            $this->initializeApprovals($record);
 
-            $cashRequest->refresh();
-            $approval = $this->getPendingApprovalForUser($cashRequest, $user);
+            $record->refresh();
+            $approval = $this->getPendingApprovalForUser($record, $user);
 
             if (! $approval) {
                 throw new RuntimeException('You are not allowed to approve this request.');
@@ -113,12 +112,12 @@ class CashRequestApprovalFlowService
             ]);
 
             $remark     = $this->approvedRemarkByRole($approval->role_name);
-            $hasPending = $cashRequest->cashRequestApprovals()->where('status', 'pending')->exists();
+            $hasPending = $record->cashRequestApprovals()->where('status', 'pending')->exists();
 
             if ($hasPending) {
-                $cashRequest->update([
+                $record->update([
                     'status'         => Status::IN_PROGRESS->value,
-                    'status_remarks' => $this->resolveFinalApprovalRemark($cashRequest),
+                    'status_remarks' => $this->resolveFinalApprovalRemark($record),
                 ]);
 
                 return [
@@ -127,27 +126,28 @@ class CashRequestApprovalFlowService
                 ];
             }
 
-            $cashRequest->update([
+            $record->update([
                 'status'         => Status::IN_PROGRESS->value,
-                'status_remarks' => $this->resolveFinalApprovalRemark($cashRequest),
+                'status_remarks' => $this->resolveFinalApprovalRemark($record),
             ]);
 
-            $cashRequest->refresh();
+            $record->refresh();
 
             return [
-                'status_remarks' => $cashRequest->status_remarks,
-                'is_final_step'  => true,
+                'status_remarks'           => $record->status_remarks,
+                'approved_remarks_by_role' => $remark,
+                'is_final_step'            => true,
             ];
         });
     }
 
-    public function applyRejection(CashRequest $cashRequest, User $user, string $reason): string
+    public function applyRejection($record, User $user, string $reason): string
     {
-        return DB::transaction(function () use ($cashRequest, $user, $reason): string {
-            $this->initializeApprovals($cashRequest);
+        return DB::transaction(function () use ($record, $user, $reason): string {
+            $this->initializeApprovals($record);
 
-            $cashRequest->refresh();
-            $approval = $this->getPendingApprovalForUser($cashRequest, $user);
+            $record->refresh();
+            $approval = $this->getPendingApprovalForUser($record, $user);
 
             if (! $approval) {
                 throw new RuntimeException('You are not allowed to reject this request.');
@@ -161,7 +161,7 @@ class CashRequestApprovalFlowService
 
             $remark = $this->rejectedRemarkByRole($approval->role_name);
 
-            $cashRequest->update([
+            $record->update([
                 'status'               => Status::REJECTED->value,
                 'status_remarks'       => $remark,
                 'reason_for_rejection' => $reason,
@@ -171,10 +171,10 @@ class CashRequestApprovalFlowService
         });
     }
 
-    private function getPendingApprovalForUser(CashRequest $cashRequest, User $user): ?CashRequestApproval
+    private function getPendingApprovalForUser($record, User $user): ?CashRequestApproval
     {
         if ($user->isSuperAdmin()) {
-            return $cashRequest->cashRequestApprovals()
+            return $record->cashRequestApprovals()
                 ->where('status', 'pending')
                 ->first();
         }
@@ -185,7 +185,7 @@ class CashRequestApprovalFlowService
             return null;
         }
 
-        return $cashRequest->cashRequestApprovals()
+        return $record->cashRequestApprovals()
             ->where('status', 'pending')
             ->whereIn('role_name', $roles)
             ->first();
@@ -222,9 +222,9 @@ class CashRequestApprovalFlowService
         return Str::of($role)->replace('_', ' ')->title()->append(' ', $suffix)->toString();
     }
 
-    private function resolveFinalApprovalRemark(CashRequest $cashRequest): string
+    private function resolveFinalApprovalRemark($record): string
     {
-        return match ($cashRequest->nature_of_request) {
+        return match ($record->nature_of_request) {
             NatureOfRequestEnum::CASH_ADVANCE->value => StatusRemarks::FOR_FINANCE_VERIFICATION->value,
             default                                  => StatusRemarks::FOR_PAYMENT_PROCESSING->value,
         };
