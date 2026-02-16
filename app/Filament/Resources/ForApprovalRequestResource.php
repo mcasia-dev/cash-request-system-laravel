@@ -72,6 +72,11 @@ class ForApprovalRequestResource extends Resource
                     ->label('Requestor')
                     ->searchable(),
 
+                TextColumn::make('nature_of_request')
+                    ->label('Nature of Request')
+                    ->searchable()
+                    ->sortable(),
+
                 TextColumn::make('requesting_amount')
                     ->label('Total Requesting Amount')
                     ->money('PHP')
