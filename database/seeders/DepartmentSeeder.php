@@ -18,8 +18,73 @@ class DepartmentSeeder extends Seeder
                 'added_by'        => null,
             ],
             [
-                'department_name' => 'HR',
+                'department_name' => 'HRAD',
                 'department_head' => 'Maria Clara',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Customer Service',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Warehouse',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Logistics',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Demand Planning',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Quality Assurance',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Sales-Retail',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Sales-FSy',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Sales-Non Food',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Sales-Beverage',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Sales-Frozen',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Accounting',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Treasury',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Credit and Collections',
+                'department_head' => 'Juan Dela Cruz',
                 'added_by'        => null,
             ],
             [
@@ -28,13 +93,33 @@ class DepartmentSeeder extends Seeder
                 'added_by'        => null,
             ],
             [
-                'department_name' => 'Marketing',
-                'department_head' => 'Ana Santos',
+                'department_name' => 'Purchasing',
+                'department_head' => 'Juan Dela Cruz',
                 'added_by'        => null,
             ],
             [
-                'department_name' => 'Operations',
-                'department_head' => 'Carlos Reyes',
+                'department_name' => 'Business Dev/Office of the President',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Culinary Solutions',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'General Admin Services & Production',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Retail-Marketing',
+                'department_head' => 'Juan Dela Cruz',
+                'added_by'        => null,
+            ],
+            [
+                'department_name' => 'Technical Services',
+                'department_head' => 'Juan Dela Cruz',
                 'added_by'        => null,
             ],
         ];

@@ -1,18 +1,20 @@
 <?php
 namespace App\Filament\Pages\Auth;
 
-use App\Models\User;
-use Filament\Forms\Form;
-use App\Models\Department;
-use Illuminate\Support\Str;
 use App\Jobs\ConfirmRegistrationJob;
-use Illuminate\Support\Facades\Hash;
-use Filament\Forms\Components\Hidden;
-use Filament\Forms\Components\Select;
+use App\Models\Department;
+use App\Models\User;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Component;
+use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Form;
+use Filament\Notifications\Actions\Action;
+use Filament\Notifications\Notification;
 use Filament\Pages\Auth\Register as BaseRegister;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password as PasswordRule;
 
 class Register extends BaseRegister
@@ -21,8 +23,6 @@ class Register extends BaseRegister
     {
         return parent::form($schema)
             ->components([
-                $this->getControlNumberFormComponent(),
-                $this->getNameFormComponent(),
                 $this->getFirstNameFormComponent(),
                 $this->getMiddleNameFormComponent(),
                 $this->getLastNameFormComponent(),
@@ -33,26 +33,8 @@ class Register extends BaseRegister
                 $this->getPositionFormComponent(),
                 $this->getPasswordFormComponent(),
                 $this->getPasswordConfirmationFormComponent(),
-                $this->getSignatureNumberFormComponent(),
                 $this->getTermsFormComponent(),
             ]);
-    }
-
-    protected function getControlNumberFormComponent()
-    {
-        $last_id     = User::latest()->first()->id ?? 0;
-        $tracking_no = 'MCA-2025-' . str_pad($last_id + 1, 4, '0', STR_PAD_LEFT);
-
-        return Hidden::make('control_no')
-            ->default($tracking_no)
-            ->required();
-    }
-
-    protected function getNameFormComponent(): Component
-    {
-        return Hidden::make('name')
-            ->default(fn() => '')
-            ->dehydrated();
     }
 
     protected function getFirstNameFormComponent(): Component
@@ -96,6 +78,7 @@ class Register extends BaseRegister
             ->label('Department')
             ->options(Department::whereNotNull('department_name')->pluck('department_name', 'id')->toArray())
             ->required()
+            ->searchable()
             ->live()
             ->afterStateUpdated(function ($state, callable $set) {
                 if ($state) {
@@ -149,7 +132,7 @@ class Register extends BaseRegister
                     ->symbols()
                     ->uncompromised(),
             ])
-            // ->showAllValidationMessages()
+        // ->showAllValidationMessages()
             ->dehydrateStateUsing(fn($state) => Hash::make($state))
             ->same('passwordConfirmation');
     }
@@ -162,26 +145,6 @@ class Register extends BaseRegister
             ->revealable(filament()->arePasswordsRevealable())
             ->required()
             ->dehydrated(false);
-    }
-
-    private function generateAlphanumeric($length = 6)
-    {
-        $characters       = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-        $charactersLength = Str::length($characters);
-        $randomString     = '';
-
-        for ($i = 0; $i < $length; $i++) {
-            $randomString .= $characters[random_int(0, $charactersLength - 1)];
-        }
-
-        return $randomString;
-    }
-
-    protected function getSignatureNumberFormComponent()
-    {
-        return Hidden::make('signature_number')
-            ->default(fn() => $this->generateAlphanumeric(12))
-            ->required();
     }
 
     protected function getTermsFormComponent(): Component
@@ -205,11 +168,6 @@ class Register extends BaseRegister
         // Remove terms field as it's only for validation
         unset($data['terms']);
 
-        // Concatenate first_name and last_name into name field
-        $firstName    = $data['first_name'] ?? '';
-        $lastName     = $data['last_name'] ?? '';
-        $data['name'] = trim("{$firstName} {$lastName}");
-
         return $data;
     }
 
@@ -225,12 +183,33 @@ class Register extends BaseRegister
     protected function afterRegister(): void
     {
         // This hook is called after registration
-        // You can access the registered user via the form model
-        // Example: $user = $this->form->getRecord();
+        $user = $this->form->getRecord();
 
-        ConfirmRegistrationJob::dispatch($this->form->getRecord());
+        ConfirmRegistrationJob::dispatch($user);
 
-        // Example: You could assign a default role here
+        $departmentHeads = User::query()
+            ->role('department_head')
+            ->where('department_id', $user->department_id)
+            ->get();
+
+        if ($departmentHeads->isNotEmpty()) {
+            Notification::make()
+                ->title('New User Registration')
+                ->body("{$user->name} has registered and is waiting for your approval.")
+                ->actions([
+                    Action::make('markAsRead')
+                        ->button()
+                        ->markAsRead(),
+
+                    Action::make('view')
+                        ->link()
+                        ->url(route('filament.admin.resources.user-request-approval.view', ['record' => $user->id])),
+
+                ])
+                ->sendToDatabase($departmentHeads)
+                ->toDatabase();
+        }
+
         // $user->assignRole('user');
     }
 }

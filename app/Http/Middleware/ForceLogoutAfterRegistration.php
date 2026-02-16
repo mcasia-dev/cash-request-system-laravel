@@ -10,9 +10,14 @@ use Symfony\Component\HttpFoundation\Response;
 class ForceLogoutAfterRegistration
 {
     /**
-     * Handle an incoming request.
+     * Handle an incoming request by forcing logout for unapproved users.
      *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     * If the authenticated user's status is not approved, they are logged out
+     * and redirected to the Filament login page with an error message.
+     *
+     * @param Request $request The incoming HTTP request.
+     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next The next middleware handler.
+     * @return Response
      */
     public function handle(Request $request, Closure $next): Response
     {

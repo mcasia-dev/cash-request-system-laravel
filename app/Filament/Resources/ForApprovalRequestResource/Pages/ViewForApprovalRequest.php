@@ -1,19 +1,25 @@
 <?php
 namespace App\Filament\Resources\ForApprovalRequestResource\Pages;
 
-use App\Models\CashRequest;
-use Filament\Actions\Action;
-use Filament\Infolists\Infolist;
 use App\Enums\CashRequest\Status;
-use App\Jobs\RejectCashRequestJob;
+use App\Enums\CashRequest\StatusRemarks;
+use App\Filament\Resources\ForApprovalRequestResource;
 use App\Jobs\ApproveCashRequestJob;
-use Illuminate\Support\Facades\Auth;
+use App\Jobs\RejectCashRequestJob;
+use App\Models\User;
+use App\Services\CashRequestApprovalFlowService;
+use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
+use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Infolists\Components\Section;
+use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Infolist;
+use Filament\Notifications\Actions\Action as NotificationAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
-use Filament\Infolists\Components\Section;
-use Filament\Infolists\Components\TextEntry;
-use App\Filament\Resources\ForApprovalRequestResource;
+use Illuminate\Support\Facades\Auth;
+use RuntimeException;
 
 class ViewForApprovalRequest extends ViewRecord
 {
@@ -23,37 +29,95 @@ class ViewForApprovalRequest extends ViewRecord
     {
         return [
             Action::make('Approve')
-                ->requiresConfirmation()
-                ->action(function (CashRequest $record) {
-                    // Update the record status
-                    $record->update(['status' => Status::APPROVED->value]);
+                ->visible(function ($record): bool {
+                    $user = Auth::user();
 
-                    // Log activity
-                    activity()
-                        ->causedBy(Auth::user())
-                        ->performedOn($record)
-                        ->event('approved')
-                        ->withProperties([
-                            'request_no'        => $record->request_no,
-                            'activity_name'     => $record->activity_name,
-                            'requesting_amount' => $record->requesting_amount,
-                            'previous_status'   => 'pending',
-                            'new_status'        => 'approved',
-                        ])
-                        ->log("Cash request {$record->request_no} was approved by " . Auth::user()->name);
+                    if (! $user) {
+                        return false;
+                    }
 
-                    // Send an email notification
-                    ApproveCashRequestJob::dispatch($record);
-
-                    Notification::make()
-                        ->title('Cash Request Approved!')
-                        ->success()
-                        ->send();
+                    return app(CashRequestApprovalFlowService::class)->userCanReview($record, $user);
                 })
-                ->successRedirectUrl(route('filament.admin.resources.for-approval-requests.index')),
+                ->requiresConfirmation()
+                ->action(function ($record) {
+                    try {
+                        $user                     = Auth::user();
+                        $previousStatus           = $record->status;
+                        $approvalResult           = app(CashRequestApprovalFlowService::class)->applyApproval($record, $user);
+                        $approved_remarks_by_role = $approvalResult['approved_remarks_by_role'] ?? $approvalResult['status_remarks'];
+                        $newStatus                = Status::IN_PROGRESS->value;
+
+                        // Log activity
+                        activity()
+                            ->causedBy(Auth::user())
+                            ->performedOn($record)
+                            ->event('approved')
+                            ->withProperties([
+                                'request_no'        => $record->request_no,
+                                'activity_name'     => $record->activity_name,
+                                'requesting_amount' => $record->requesting_amount,
+                                'previous_status'   => $previousStatus,
+                                'new_status'        => $newStatus,
+                                'status_remarks'    => $approved_remarks_by_role,
+                            ])
+                            ->log("Cash request {$record->request_no} approval step was completed by {$user->name} ({$user->position})");
+
+                        if ($approvalResult['is_final_step'] === true) {
+                            ApproveCashRequestJob::dispatch($record->fresh());
+
+                            $newRecord = $record->fresh();
+
+                            if ($newRecord->status_remarks === StatusRemarks::FOR_PAYMENT_PROCESSING->value) {
+                                $this->notifyPaymentProcessApprovers($newRecord);
+                            }
+                        }
+
+                        Notification::make()
+                            ->title('Cash Request Update')
+                            ->body("Your cash request {$record->request_no} has been approved.")
+                            ->actions([
+                                NotificationAction::make('markAsRead')
+                                    ->button()
+                                    ->markAsRead(),
+                                NotificationAction::make('view')
+                                    ->link()
+                                    ->url(route('filament.admin.resources.cash-requests.track-status', ['record' => $record->id])),
+                            ])
+                            ->sendToDatabase($record->user);
+
+                        Notification::make()
+                            ->title(
+                                $approvalResult['is_final_step']
+                                    ? (
+                                    $record->fresh()->status_remarks === StatusRemarks::FOR_FINANCE_VERIFICATION->value
+                                        ? 'Final approval completed. Sent to Finance Verification.'
+                                        : 'Final approval completed. Sent to Payment Processing.'
+                                )
+                                    : 'Approval step completed.'
+                            )
+                            ->success()
+                            ->send();
+
+                        return redirect()->route('filament.admin.resources.for-approval-requests.index');
+                    } catch (RuntimeException $exception) {
+                        Notification::make()
+                            ->title($exception->getMessage())
+                            ->danger()
+                            ->send();
+                    }
+                }),
 
             Action::make('Reject')
-                ->color('danger')
+                ->visible(function ($record): bool {
+                    $user = Auth::user();
+
+                    if (! $user) {
+                        return false;
+                    }
+
+                    return app(CashRequestApprovalFlowService::class)->userCanReview($record, $user);
+                })
+                ->color('secondary')
                 ->form([
                     Textarea::make('rejection_reason')
                         ->label('Reason for Rejection')
@@ -62,38 +126,59 @@ class ViewForApprovalRequest extends ViewRecord
                 ])
                 ->modalHeading('Reject Cash Request')
                 ->modalSubmitActionLabel('Reject')
-                ->action(function (CashRequest $record, array $data) {
-                    // Update the record status and save rejection reason
-                    $record->update([
-                        'status' => Status::REJECTED->value,
-                        'reason_for_rejection' => $data['rejection_reason'],
-                    ]);
+                ->action(function ($record, array $data) {
+                    try {
+                        $user           = Auth::user();
+                        $previousStatus = $record->status;
+                        $status_remarks = app(CashRequestApprovalFlowService::class)->applyRejection($record, $user, $data['rejection_reason']);
+                        $newStatus      = Status::REJECTED->value;
 
-                    // Log activity
-                    activity()
-                        ->causedBy(Auth::user())
-                        ->performedOn($record)
-                        ->event('rejected')
-                        ->withProperties([
-                            'request_no'         => $record->request_no,
-                            'activity_name'      => $record->activity_name,
-                            'requesting_amount'  => $record->requesting_amount,
-                            'previous_status'    => 'pending',
-                            'new_status'         => 'rejected',
-                            'reason_for_rejection' => $data['rejection_reason'],
-                        ])
-                        ->log("Cash request {$record->request_no} was rejected by " . Auth::user()->name);
+                        // Log activity
+                        activity()
+                            ->causedBy($user)
+                            ->performedOn($record)
+                            ->event('rejected')
+                            ->withProperties([
+                                'request_no'           => $record->request_no,
+                                'activity_name'        => $record->activity_name,
+                                'requesting_amount'    => $record->requesting_amount,
+                                'previous_status'      => $previousStatus,
+                                'new_status'           => $newStatus,
+                                'status_remarks'       => $status_remarks,
+                                'reason_for_rejection' => $data['rejection_reason'],
+                            ])
+                            ->log("Cash request {$record->request_no} was rejected by {$user->name} ({$user->position})");
 
-                    // Send an email notification
-                    RejectCashRequestJob::dispatch($record);
+                        // Send an email notification
+                        RejectCashRequestJob::dispatch($record->fresh());
 
-                    Notification::make()
-                        ->title('Cash Request Rejected!')
-                        ->success()
-                        ->send();
-                })
-                ->successRedirectUrl(route('filament.admin.resources.for-approval-requests.index')),
+                        Notification::make()
+                            ->title('Cash Request Update')
+                            ->body("Your cash request {$record->request_no} has been rejected.")
+                            ->actions([
+                                NotificationAction::make('markAsRead')
+                                    ->button()
+                                    ->markAsRead(),
 
+                                NotificationAction::make('view')
+                                    ->link()
+                                    ->url(route('filament.admin.resources.cash-requests.track-status', ['record' => $record->id])),
+                            ])
+                            ->sendToDatabase($record->user);
+
+                        Notification::make()
+                            ->title('Cash Request Rejected!')
+                            ->success()
+                            ->send();
+
+                        return redirect()->route('filament.admin.resources.for-approval-requests.index');
+                    } catch (RuntimeException $exception) {
+                        Notification::make()
+                            ->title($exception->getMessage())
+                            ->danger()
+                            ->send();
+                    }
+                }),
         ];
     }
 
@@ -105,8 +190,22 @@ class ViewForApprovalRequest extends ViewRecord
                     ->schema([
                         TextEntry::make('request_no')
                             ->label('Request No.'),
+
                         TextEntry::make('user.name')
                             ->label('Requestor'),
+
+                        TextEntry::make('nature_of_request')
+                            ->label('Nature of Request')
+                            ->badge(),
+
+                        TextEntry::make('requesting_amount')
+                            ->label('Total Requesting Amount')
+                            ->money('PHP'),
+
+                        TextEntry::make('created_at')
+                            ->label('Date Submitted')
+                            ->dateTime('F d, Y h:i A'),
+
                         TextEntry::make('status')
                             ->badge()
                             ->color(fn(string $state): string => match ($state) {
@@ -117,69 +216,66 @@ class ViewForApprovalRequest extends ViewRecord
                                 'rejected'   => 'danger',
                                 default      => 'gray',
                             }),
-                        TextEntry::make('nature_of_request')
-                            ->badge(),
-                    ])
-                    ->columns(2),
-
-                Section::make('Activity Information')
-                    ->schema([
-                        TextEntry::make('activity_name')
-                            ->label('Activity Name'),
-                        TextEntry::make('activity_date')
-                            ->label('Activity Date')
-                            ->date(),
-                        TextEntry::make('activity_venue')
-                            ->label('Venue'),
-                        TextEntry::make('purpose')
-                            ->label('Purpose')
-                            ->columnSpanFull(),
-                    ])
-                    ->columns(2),
-
-                Section::make('Payment Details')
-                    ->schema([
-                        TextEntry::make('requesting_amount')
-                            ->label('Requesting Amount')
-                            ->money('PHP'),
-                        TextEntry::make('nature_of_payment')
-                            ->label('Payment Type'),
-                        TextEntry::make('payee'),
-                        TextEntry::make('payment_to')
-                            ->label('Payment To'),
-                        TextEntry::make('bank_name')
-                            ->label('Bank'),
-                        TextEntry::make('bank_account_no')
-                            ->label('Account Number'),
-                        TextEntry::make('account_type')
-                            ->label('Account Type'),
-                    ])
-                    ->columns(2),
-
-                Section::make('Dates')
-                    ->schema([
-                        TextEntry::make('due_date')
-                            ->label('Due Date')
-                            ->date(),
-                        TextEntry::make('date_released')
-                            ->label('Date Released')
-                            ->date(),
-                        TextEntry::make('date_liquidated')
-                            ->label('Date Liquidated')
-                            ->date(),
                     ])
                     ->columns(3),
 
-                Section::make('Additional Information')
+                Section::make('Activity Information')
+                    ->collapsible()
+                    ->collapsed()
                     ->schema([
-                        TextEntry::make('created_at')
-                            ->label('Created At')
-                            ->dateTime(),
-                        TextEntry::make('updated_at')
-                            ->label('Last Updated')
-                            ->dateTime(),
-                    ])
-                    ->columns(2),
+                        RepeatableEntry::make('activityLists')
+                            ->label('')
+                            ->schema([
+                                TextEntry::make('activity_name')
+                                    ->label('Activity Name'),
+
+                                TextEntry::make('activity_date')
+                                    ->label('Activity Date')
+                                    ->date(),
+
+                                TextEntry::make('activity_venue')
+                                    ->label('Venue'),
+
+                                TextEntry::make('purpose')
+                                    ->label('Purpose'),
+
+                                TextEntry::make('requesting_amount')
+                                    ->label('Requesting Amount')
+                                    ->money('PHP'),
+
+                                SpatieMediaLibraryImageEntry::make('attachment')
+                                    ->label('Attached File/Image')
+                                    ->collection('attachments')
+                                    ->columnSpanFull(),
+                            ])
+                            ->columns(3),
+                    ]),
             ]);
+    }
+
+    private function notifyPaymentProcessApprovers($record): void
+    {
+        $approvers = User::query()
+            ->whereHas('roles', function ($query) {
+                $query->whereIn('name', ['treasury_manager', 'treasury_supervisor']);
+            })
+            ->get();
+
+        if ($approvers->isEmpty()) {
+            return;
+        }
+
+        Notification::make()
+            ->title('Cash Request For Payment Processing')
+            ->body("{$record->request_no} is ready for payment processing.")
+            ->actions([
+                NotificationAction::make('markAsRead')
+                    ->button()
+                    ->markAsRead(),
+                NotificationAction::make('view')
+                    ->link()
+                    ->url(route('filament.admin.resources.payment-processing.view', ['record' => $record->id])),
+            ])
+            ->sendToDatabase($approvers);
     }
 }

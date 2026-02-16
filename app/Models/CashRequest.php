@@ -1,16 +1,17 @@
 <?php
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Spatie\Activitylog\LogOptions;
-use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\MediaLibrary\HasMedia;
+use Spatie\Activitylog\LogOptions;
+use Illuminate\Database\Eloquent\Model;
 use Spatie\MediaLibrary\InteractsWithMedia;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CashRequest extends Model implements HasMedia
 {
-    use InteractsWithMedia, LogsActivity;
+    use InteractsWithMedia;
 
     protected $fillable = [
         'request_no',
@@ -23,8 +24,10 @@ class CashRequest extends Model implements HasMedia
         'requesting_amount',
         'nature_of_payment',
         'reason_for_rejection',
+        'reason_for_cancelling',
         'payee',
         'payment_to',
+        'voucher_no',
         'bank_account_no',
         'bank_name',
         'account_type',
@@ -36,17 +39,26 @@ class CashRequest extends Model implements HasMedia
         'date_released',
         'due_date',
         'status',
+        'status_remarks',
     ];
 
     protected $casts = [
         'activity_date'   => 'date',
         'due_date'        => 'date',
-        'date_liquidated' => 'date',
-        'date_released'   => 'date',
+        'date_liquidated' => 'datetime',
+        'date_released'   => 'datetime',
     ];
 
     protected static function booted()
     {
+        /**
+         * Auto-generate a yearly sequential request number before creation.
+         *
+         * Format: REQ-YYYY-####, where the sequence resets each year.
+         *
+         * @param self $cashRequest
+         * @return void
+         */
         static::creating(function ($cashRequest) {
             $year = now()->year;
 
@@ -73,6 +85,21 @@ class CashRequest extends Model implements HasMedia
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function forCashRelease(): HasOne
+    {
+        return $this->hasOne(ForCashRelease::class);
+    }
+
+    public function activityLists(): HasMany
+    {
+        return $this->hasMany(ActivityList::class);
+    }
+
+    public function cashRequestApprovals(): HasMany
+    {
+        return $this->hasMany(CashRequestApproval::class);
     }
 
     public function getActivitylogOptions(): LogOptions

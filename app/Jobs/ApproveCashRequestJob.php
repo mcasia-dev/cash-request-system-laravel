@@ -1,10 +1,9 @@
 <?php
-
 namespace App\Jobs;
 
 use App\Mail\ApproveCashRequestMail;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Foundation\Queue\Queueable; 
 use Illuminate\Contracts\Queue\ShouldQueue;
 
 class ApproveCashRequestJob implements ShouldQueue

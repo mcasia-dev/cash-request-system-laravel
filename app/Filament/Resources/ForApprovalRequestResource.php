@@ -4,30 +4,50 @@ namespace App\Filament\Resources;
 use App\Enums\CashRequest\Status;
 use App\Filament\Resources\ForApprovalRequestResource\Pages;
 use App\Models\CashRequest;
+use App\Models\ForApprovalRequest;
+use App\Services\CashRequestApprovalFlowService;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 
 class ForApprovalRequestResource extends Resource
 {
-    protected static ?string $model           = CashRequest::class;
-    protected static ?string $navigationGroup = 'Administrator';
-    protected static ?string $slug            = 'for-approval-requests';
-    protected static ?string $navigationLabel = 'For Approval Requests';
-    protected static ?string $label           = 'For Approval Requests';
-
+    protected static ?string $model           = ForApprovalRequest::class;
+    protected static ?string $navigationGroup = 'Cash Requests';
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+
+    public static function getNavigationBadge(): ?string
+    {
+        $user = Auth::user();
+
+        if (! $user) {
+            return null;
+        }
+
+        $query = app(CashRequestApprovalFlowService::class)->filterPendingForUser(static::getModel()::query(), $user);
+        $count = $query->count();
+
+        return $count > 0 ? $count : null;
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'info';
+    }
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()
-        // ->whereHas('roles', function ($query) {
-        //     $query->where('name', 'User');
-        // })
-            ->where('status', Status::PENDING->value);
+        $user = Auth::user();
+
+        if (! $user) {
+            return parent::getEloquentQuery()->whereRaw('1 = 0');
+        }
+
+        return app(CashRequestApprovalFlowService::class)->filterPendingForUser(parent::getEloquentQuery(), $user);
     }
 
     public static function form(Form $form): Form
@@ -52,40 +72,29 @@ class ForApprovalRequestResource extends Resource
                     ->label('Requestor')
                     ->searchable(),
 
-                TextColumn::make('activity_name')
-                    ->label('Activity Name')
-                    ->sortable()
-                    ->searchable(),
-
-                TextColumn::make('activity_date')
-                    ->label('Activity Date')
-                    ->date()
-                    ->sortable(),
-
-                TextColumn::make('nature_of_request')
-                    ->label('Nature of Request')
-                    ->sortable()
-                    ->badge(),
-
                 TextColumn::make('requesting_amount')
-                    ->label('Requesting Amount')
+                    ->label('Total Requesting Amount')
                     ->money('PHP')
-                    ->numeric()
-                    ->sortable(),
-
-                TextColumn::make('due_date')
-                    ->label('Due Date')
-                    ->date()
                     ->sortable(),
 
                 TextColumn::make('status')
                     ->badge()
+                    ->color(fn(string $state): string => match ($state) {
+                        Status::PENDING->value    => 'warning',
+                        Status::APPROVED->value   => 'success',
+                        Status::REJECTED->value   => 'danger',
+                        Status::CANCELLED->value  => 'gray',
+                        Status::LIQUIDATED->value => 'info',
+                        Status::RELEASED->value   => 'primary',
+                        default                   => 'secondary',
+                    })
                     ->searchable(),
 
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+
                 TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()
@@ -99,7 +108,7 @@ class ForApprovalRequestResource extends Resource
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    // Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ]);
     }
@@ -119,5 +128,10 @@ class ForApprovalRequestResource extends Resource
             'edit'   => Pages\EditForApprovalRequest::route('/{record}/edit'),
             'view'   => Pages\ViewForApprovalRequest::route('/{record}/view'),
         ];
+    }
+
+    public static function canCreate(): bool
+    {
+        return false;
     }
 }

@@ -9,12 +9,6 @@ We regret to inform you that your cash request has **not been approved**.
 
 **Request No.:** {{ $record->request_no }}
 
-**Activity Name:** {{ $record->activity_name }}
-
-**Activity Date:** {{ $record->activity_date->format('F d, Y') }}
-
-**Activity Venue:** {{ $record->activity_venue }}
-
 **Amount Requested:** ₱{{ number_format($record->requesting_amount, 2) }}
 
 @if($record->reason_for_rejection)
@@ -25,7 +19,7 @@ We regret to inform you that your cash request has **not been approved**.
 
 ## Next Steps
 
-If you believe this decision was made in error, please contact your department head to discuss further. You may also submit a new cash request with updated information if needed.
+If you believe this decision was made in error, please contact us to discuss further. You may also submit a new cash request with updated information if needed.
 
 <x-mail::button :url="route('filament.admin.resources.cash-requests.index')">
 Submit New Request
