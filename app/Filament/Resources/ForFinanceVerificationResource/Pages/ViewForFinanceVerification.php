@@ -1,24 +1,22 @@
 <?php
 namespace App\Filament\Resources\ForFinanceVerificationResource\Pages;
 
-use App\Models\User;
-use App\Models\CashRequest;
-use Filament\Actions\Action;
-use Filament\Infolists\Infolist;
 use App\Enums\CashRequest\Status;
-use App\Jobs\RejectCashRequestJob;
-use App\Jobs\ApproveCashRequestJob;
-use Illuminate\Support\Facades\Auth;
-use Filament\Forms\Components\Textarea;
 use App\Enums\CashRequest\StatusRemarks;
+use App\Filament\Resources\ForFinanceVerificationResource;
+use App\Jobs\RejectCashRequestJob;
+use App\Models\User;
+use Filament\Actions\Action;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Infolists\Components\Section;
+use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Infolist;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
-use Filament\Infolists\Components\Section;
-use Filament\Infolists\Components\TextEntry;
-use Filament\Infolists\Components\RepeatableEntry;
-use App\Filament\Resources\ForFinanceVerificationResource;
-use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
+use Illuminate\Support\Facades\Auth;
 
 class ViewForFinanceVerification extends ViewRecord
 {
@@ -35,7 +33,7 @@ class ViewForFinanceVerification extends ViewRecord
                         ->label('Voucher No.')
                         ->required(),
                 ])
-                ->action(fn(CashRequest $record, array $data) => $this->approveRequest($record, $data))
+                ->action(fn($record, array $data) => $this->approveRequest($record, $data))
                 ->color('primary')
                 ->visible(fn($record) => $this->getStatus($record)),
 
@@ -50,7 +48,7 @@ class ViewForFinanceVerification extends ViewRecord
                 ])
                 ->modalHeading('Reject Cash Request')
                 ->modalSubmitActionLabel('Reject')
-                ->action(fn(CashRequest $record, array $data) => $this->rejectRequest($record, $data))
+                ->action(fn($record, array $data) => $this->rejectRequest($record, $data))
                 ->visible(fn($record) => $this->getStatus($record)),
         ];
     }

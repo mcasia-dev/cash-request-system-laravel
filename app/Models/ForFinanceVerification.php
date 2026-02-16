@@ -67,7 +67,7 @@ class ForFinanceVerification extends Model implements HasMedia
 
     public function activityLists(): HasMany
     {
-        return $this->hasMany(ActivityList::class);
+        return $this->hasMany(ActivityList::class, 'cash_request_id');
     }
 
     public function cashRequestApprovals(): HasMany
