@@ -87,6 +87,9 @@ class ForLiquidationResource extends Resource
                     ->sortable(),
 
                 TextColumn::make('aging')
+                    ->formatStateUsing(fn ($state): string => "{$state} day(s)")
+                    ->badge()
+                    ->color('primary')
                     ->sortable()
                     ->searchable(),
 

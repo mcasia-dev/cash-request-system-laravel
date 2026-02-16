@@ -141,11 +141,10 @@ class TrackRequestStatus extends ViewRecord
     /**
      * @param array<int, string> $remarks
      */
-    private function getLatestActivityByRemarks(CashRequest $record, array $remarks): ?Activity
+    private function getLatestActivityByRemarks($record, array $remarks): ?Activity
     {
         foreach ($remarks as $remark) {
             $activity = Activity::query()
-                ->where('subject_type', CashRequest::class)
                 ->where('subject_id', $record->id)
                 ->where('properties->status_remarks', $remark)
                 ->latest('created_at')

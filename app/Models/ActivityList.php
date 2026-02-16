@@ -41,4 +41,9 @@ class ActivityList extends Model implements HasMedia
     {
         return $this->belongsTo(CashRequest::class);
     }
+
+    public function forApprovalRequest(): BelongsTo
+    {
+        return $this->belongsTo(CashRequest::class, 'cash_request_id');
+    }
 }

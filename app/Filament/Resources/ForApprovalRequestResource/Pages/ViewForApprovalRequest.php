@@ -3,12 +3,10 @@ namespace App\Filament\Resources\ForApprovalRequestResource\Pages;
 
 use App\Enums\CashRequest\Status;
 use App\Enums\CashRequest\StatusRemarks;
-use App\Filament\Resources\ForFinanceVerificationResource;
 use App\Filament\Resources\ForApprovalRequestResource;
-use App\Filament\Resources\PaymentProcessResource;
 use App\Jobs\ApproveCashRequestJob;
 use App\Jobs\RejectCashRequestJob;
-use App\Models\CashRequest;
+use App\Models\User;
 use App\Services\CashRequestApprovalFlowService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
@@ -17,6 +15,7 @@ use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
+use Filament\Notifications\Actions\Action as NotificationAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Illuminate\Support\Facades\Auth;
@@ -30,7 +29,7 @@ class ViewForApprovalRequest extends ViewRecord
     {
         return [
             Action::make('Approve')
-                ->visible(function (CashRequest $record): bool {
+                ->visible(function ($record): bool {
                     $user = Auth::user();
 
                     if (! $user) {
@@ -40,13 +39,13 @@ class ViewForApprovalRequest extends ViewRecord
                     return app(CashRequestApprovalFlowService::class)->userCanReview($record, $user);
                 })
                 ->requiresConfirmation()
-                ->action(function (CashRequest $record) {
+                ->action(function ($record) {
                     try {
-                        $user           = Auth::user();
-                        $previousStatus = $record->status;
-                        $approvalResult = app(CashRequestApprovalFlowService::class)->applyApproval($record, $user);
-                        $status_remarks = $approvalResult['status_remarks'];
-                        $newStatus      = Status::IN_PROGRESS->value;
+                        $user                     = Auth::user();
+                        $previousStatus           = $record->status;
+                        $approvalResult           = app(CashRequestApprovalFlowService::class)->applyApproval($record, $user);
+                        $approved_remarks_by_role = $approvalResult['approved_remarks_by_role'] ?? $approvalResult['status_remarks'];
+                        $newStatus                = Status::IN_PROGRESS->value;
 
                         // Log activity
                         activity()
@@ -59,38 +58,47 @@ class ViewForApprovalRequest extends ViewRecord
                                 'requesting_amount' => $record->requesting_amount,
                                 'previous_status'   => $previousStatus,
                                 'new_status'        => $newStatus,
-                                'status_remarks'    => $status_remarks,
+                                'status_remarks'    => $approved_remarks_by_role,
                             ])
                             ->log("Cash request {$record->request_no} approval step was completed by {$user->name} ({$user->position})");
 
                         if ($approvalResult['is_final_step'] === true) {
                             ApproveCashRequestJob::dispatch($record->fresh());
+
+                            $newRecord = $record->fresh();
+
+                            if ($newRecord->status_remarks === StatusRemarks::FOR_PAYMENT_PROCESSING->value) {
+                                $this->notifyPaymentProcessApprovers($newRecord);
+                            }
                         }
+
+                        Notification::make()
+                            ->title('Cash Request Update')
+                            ->body("Your cash request {$record->request_no} has been approved.")
+                            ->actions([
+                                NotificationAction::make('markAsRead')
+                                    ->button()
+                                    ->markAsRead(),
+                                NotificationAction::make('view')
+                                    ->link()
+                                    ->url(route('filament.admin.resources.cash-requests.track-status', ['record' => $record->id])),
+                            ])
+                            ->sendToDatabase($record->user);
 
                         Notification::make()
                             ->title(
                                 $approvalResult['is_final_step']
                                     ? (
-                                        $record->fresh()->status_remarks === StatusRemarks::FOR_FINANCE_VERIFICATION->value
-                                            ? 'Final approval completed. Sent to Finance Verification.'
-                                            : 'Final approval completed. Sent to Payment Processing.'
-                                    )
+                                    $record->fresh()->status_remarks === StatusRemarks::FOR_FINANCE_VERIFICATION->value
+                                        ? 'Final approval completed. Sent to Finance Verification.'
+                                        : 'Final approval completed. Sent to Payment Processing.'
+                                )
                                     : 'Approval step completed.'
                             )
                             ->success()
                             ->send();
 
-                        if ($approvalResult['is_final_step'] !== true) {
-                            return redirect()->route('filament.admin.resources.for-approval-requests.index');
-                        }
-
-                        $record = $record->fresh();
-
-                        return redirect()->to(
-                            $record->status_remarks === StatusRemarks::FOR_FINANCE_VERIFICATION->value
-                                ? ForFinanceVerificationResource::getUrl('index')
-                                : PaymentProcessResource::getUrl('index')
-                        );
+                        return redirect()->route('filament.admin.resources.for-approval-requests.index');
                     } catch (RuntimeException $exception) {
                         Notification::make()
                             ->title($exception->getMessage())
@@ -100,7 +108,7 @@ class ViewForApprovalRequest extends ViewRecord
                 }),
 
             Action::make('Reject')
-                ->visible(function (CashRequest $record): bool {
+                ->visible(function ($record): bool {
                     $user = Auth::user();
 
                     if (! $user) {
@@ -118,7 +126,7 @@ class ViewForApprovalRequest extends ViewRecord
                 ])
                 ->modalHeading('Reject Cash Request')
                 ->modalSubmitActionLabel('Reject')
-                ->action(function (CashRequest $record, array $data) {
+                ->action(function ($record, array $data) {
                     try {
                         $user           = Auth::user();
                         $previousStatus = $record->status;
@@ -139,10 +147,24 @@ class ViewForApprovalRequest extends ViewRecord
                                 'status_remarks'       => $status_remarks,
                                 'reason_for_rejection' => $data['rejection_reason'],
                             ])
-                            ->log("Cash request {$record->request_no} was rejected at an approval step by {$user->name} ({$user->position})");
+                            ->log("Cash request {$record->request_no} was rejected by {$user->name} ({$user->position})");
 
                         // Send an email notification
                         RejectCashRequestJob::dispatch($record->fresh());
+
+                        Notification::make()
+                            ->title('Cash Request Update')
+                            ->body("Your cash request {$record->request_no} has been rejected.")
+                            ->actions([
+                                NotificationAction::make('markAsRead')
+                                    ->button()
+                                    ->markAsRead(),
+
+                                NotificationAction::make('view')
+                                    ->link()
+                                    ->url(route('filament.admin.resources.cash-requests.track-status', ['record' => $record->id])),
+                            ])
+                            ->sendToDatabase($record->user);
 
                         Notification::make()
                             ->title('Cash Request Rejected!')
@@ -229,5 +251,31 @@ class ViewForApprovalRequest extends ViewRecord
                             ->columns(3),
                     ]),
             ]);
+    }
+
+    private function notifyPaymentProcessApprovers($record): void
+    {
+        $approvers = User::query()
+            ->whereHas('roles', function ($query) {
+                $query->whereIn('name', ['treasury_manager', 'treasury_supervisor']);
+            })
+            ->get();
+
+        if ($approvers->isEmpty()) {
+            return;
+        }
+
+        Notification::make()
+            ->title('Cash Request For Payment Processing')
+            ->body("{$record->request_no} is ready for payment processing.")
+            ->actions([
+                NotificationAction::make('markAsRead')
+                    ->button()
+                    ->markAsRead(),
+                NotificationAction::make('view')
+                    ->link()
+                    ->url(route('filament.admin.resources.payment-processing.view', ['record' => $record->id])),
+            ])
+            ->sendToDatabase($approvers);
     }
 }

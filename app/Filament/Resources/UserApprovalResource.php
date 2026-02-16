@@ -32,9 +32,14 @@ class UserApprovalResource extends Resource
 
     public static function getNavigationBadge(): ?string
     {
-        $count = static::getModel()::where('department_id', Auth::user()->department_id)
-            ->where('status', Status::PENDING->value)
-            ->count();
+        $query = static::getModel()::query()
+            ->where('status', Status::PENDING->value);
+
+        if (! Auth::user()->hasAnyRole(['super_admin', 'Super Admin'])) {
+            $query->where('department_id', Auth::user()->department_id);
+        }
+
+        $count = $query->count();
 
         return $count > 0 ? $count : null;
     }
@@ -46,9 +51,14 @@ class UserApprovalResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()
-            ->where('department_id', Auth::user()->department_id)
+        $query = parent::getEloquentQuery()
             ->where('status', Status::PENDING->value);
+
+        if (! Auth::user()->hasAnyRole(['super_admin', 'Super Admin'])) {
+            $query->where('department_id', Auth::user()->department_id);
+        }
+        
+        return $query;
     }
 
     public static function form(Form $form): Form

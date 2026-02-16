@@ -3,25 +3,25 @@
 namespace App\Policies;
 
 use Illuminate\Auth\Access\Response;
-use App\Models\ActivityList;
+use App\Models\Role;
 use App\Models\User;
 
-class ActivityListPolicy
+class RolePolicy
 {
     /**
      * Determine whether the user can view any models.
      */
     public function viewAny(User $user): bool
     {
-        return true;
+        return $user->checkPermissionTo('view-any Role');
     }
 
     /**
      * Determine whether the user can view the model.
      */
-    public function view(User $user, ActivityList $activitylist): bool
+    public function view(User $user, Role $role): bool
     {
-        return true;
+        return $user->checkPermissionTo('view Role');
     }
 
     /**
@@ -29,23 +29,23 @@ class ActivityListPolicy
      */
     public function create(User $user): bool
     {
-        return true;
+        return $user->checkPermissionTo('create Role');
     }
 
     /**
      * Determine whether the user can update the model.
      */
-    public function update(User $user, ActivityList $activitylist): bool
+    public function update(User $user, Role $role): bool
     {
-        return true;
+        return $user->checkPermissionTo('update Role');
     }
 
     /**
      * Determine whether the user can delete the model.
      */
-    public function delete(User $user, ActivityList $activitylist): bool
+    public function delete(User $user, Role $role): bool
     {
-        return true;
+        return $user->checkPermissionTo('delete Role');
     }
 
     /**
@@ -53,15 +53,15 @@ class ActivityListPolicy
      */
     public function deleteAny(User $user): bool
     {
-        return true;
+        return $user->checkPermissionTo('delete-any Role');
     }
 
     /**
      * Determine whether the user can restore the model.
      */
-    public function restore(User $user, ActivityList $activitylist): bool
+    public function restore(User $user, Role $role): bool
     {
-        return true;
+        return $user->checkPermissionTo('restore Role');
     }
 
     /**
@@ -69,15 +69,15 @@ class ActivityListPolicy
      */
     public function restoreAny(User $user): bool
     {
-        return true;
+        return $user->checkPermissionTo('restore-any Role');
     }
 
     /**
      * Determine whether the user can replicate the model.
      */
-    public function replicate(User $user, ActivityList $activitylist): bool
+    public function replicate(User $user, Role $role): bool
     {
-        return true;
+        return $user->checkPermissionTo('replicate Role');
     }
 
     /**
@@ -85,15 +85,15 @@ class ActivityListPolicy
      */
     public function reorder(User $user): bool
     {
-        return true;
+        return $user->checkPermissionTo('reorder Role');
     }
 
     /**
      * Determine whether the user can permanently delete the model.
      */
-    public function forceDelete(User $user, ActivityList $activitylist): bool
+    public function forceDelete(User $user, Role $role): bool
     {
-        return true;
+        return $user->checkPermissionTo('force-delete Role');
     }
 
     /**
@@ -101,6 +101,6 @@ class ActivityListPolicy
      */
     public function forceDeleteAny(User $user): bool
     {
-        return true;
+        return $user->checkPermissionTo('force-delete-any Role');
     }
 }

@@ -9,7 +9,9 @@ use App\Filament\Resources\ActivityListResource;
 use App\Models\ActivityList;
 use App\Models\ApprovalRule;
 use App\Models\CashRequest;
+use App\Models\User;
 use App\Services\CashRequestApprovalFlowService;
+use Filament\Notifications\Actions\Action as NotificationAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Section;
@@ -231,8 +233,10 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
     private function submitCashRequest()
     {
         $failureMessage = 'Nothing to submit';
+        $submittedCashRequest = null;
+        $submittedBy = null;
 
-        $submitted = DB::transaction(function () use (&$failureMessage): bool {
+        $submitted = DB::transaction(function () use (&$failureMessage, &$submittedCashRequest, &$submittedBy): bool {
             $user = Auth::user();
             $cashRequest = $this->getDraftCashRequest();
 
@@ -289,6 +293,9 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
                 ])
                 ->log("Cash request {$cashRequest->request_no} was submitted by {$user->name} ({$user->position})");
 
+            $submittedCashRequest = $cashRequest->fresh();
+            $submittedBy = $user;
+
             return true;
         });
 
@@ -299,6 +306,10 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
                 ->send();
 
             return;
+        }
+
+        if ($submittedCashRequest && $submittedBy) {
+            $this->notifyApprovers($submittedCashRequest, $submittedBy);
         }
 
         $this->loadDraftCashRequestState();
@@ -367,5 +378,39 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
             ->orderByRaw('CASE WHEN max_amount IS NULL THEN 1 ELSE 0 END')
             ->orderBy('max_amount')
             ->value('max_amount');
+    }
+
+    private function notifyApprovers(CashRequest $cashRequest, User $requestor): void
+    {
+        $departmentHeads = User::query()
+            ->role('department_head')
+            ->where('department_id', $requestor->department_id)
+            ->get();
+
+        $superAdmins = User::query()
+            ->role('super_admin')
+            ->get();
+
+        $recipients = $departmentHeads
+            ->merge($superAdmins)
+            ->unique('id')
+            ->values();
+
+        if ($recipients->isEmpty()) {
+            return;
+        }
+
+        Notification::make()
+            ->title('New Cash Request Submitted')
+            ->body("{$requestor->name} submitted {$cashRequest->request_no} for approval.")
+            ->actions([
+                NotificationAction::make('markAsRead')
+                    ->button()
+                    ->markAsRead(),
+                NotificationAction::make('view')
+                    ->link()
+                    ->url(route('filament.admin.resources.for-approval-requests.view', ['record' => $cashRequest->id])),
+            ])
+            ->sendToDatabase($recipients);
     }
 }

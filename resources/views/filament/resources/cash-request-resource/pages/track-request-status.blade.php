@@ -110,14 +110,14 @@
             <div class="text-sm text-slate-700">
                 <span class="font-semibold">Nature of Request:</span> {{ $this->getRecord()->nature_of_request }}
             </div>
-            <div class="mt-3">
+            {{-- <div class="mt-3">
                 <a
                     href="{{ route('filament.admin.resources.cash-requests.track-status-text', ['record' => $this->getRecord()]) }}"
                     class="inline-flex items-center rounded-lg bg-slate-700 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
                 >
                     Open Text Tracker
                 </a>
-            </div>
+            </div> --}}
         </div>
 
         @if (! $this->isPettyCash())

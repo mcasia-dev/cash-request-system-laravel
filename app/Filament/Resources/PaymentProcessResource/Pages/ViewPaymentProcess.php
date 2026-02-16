@@ -20,6 +20,7 @@ use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
+use Filament\Notifications\Actions\Action as NotificationAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Illuminate\Http\RedirectResponse;
@@ -55,7 +56,7 @@ class ViewPaymentProcess extends ViewRecord
                         ->required()
                         ->default(now()),
                 ])
-                ->action(fn(CashRequest $record, array $data) => $this->approveCashRequest($record, $data))
+                ->action(fn($record, array $data) => $this->approveCashRequest($record, $data))
                 ->color('primary')
                 ->visible(fn($record) => $this->getStatus($record)),
 
@@ -70,7 +71,7 @@ class ViewPaymentProcess extends ViewRecord
                 ])
                 ->modalHeading('Reject Cash Request')
                 ->modalSubmitActionLabel('Reject')
-                ->action(fn(CashRequest $record, array $data) => $this->rejectCashRequest($record, $data))
+                ->action(fn($record, array $data) => $this->rejectCashRequest($record, $data))
                 ->visible(fn($record) => $this->getStatus($record)),
         ];
     }
@@ -124,11 +125,12 @@ class ViewPaymentProcess extends ViewRecord
 
                                 TextEntry::make('activity_venue')
                                     ->label('Venue'),
+                                    
 
                                 TextEntry::make('purpose')
                                     ->label('Purpose'),
 
-                                TextEntry::make('nature_of_request')
+                                TextEntry::make('cashRequest.nature_of_request')
                                     ->label('Nature of Request')
                                     ->badge(),
 
@@ -209,6 +211,19 @@ class ViewPaymentProcess extends ViewRecord
         ApproveCashRequestByTreasuryJob::dispatch($record);
 
         Notification::make()
+            ->title('Cash Request Update')
+            ->body("Your cash request {$record->request_no} has been approved for releasing.")
+            ->actions([
+                NotificationAction::make('markAsRead')
+                    ->button()
+                    ->markAsRead(),
+                NotificationAction::make('view')
+                    ->link()
+                    ->url(route('filament.admin.resources.cash-requests.track-status', ['record' => $record->id])),
+            ])
+            ->sendToDatabase($record->user);
+
+        Notification::make()
             ->title('Cash Request Approved!')
             ->success()
             ->send();
@@ -267,6 +282,19 @@ class ViewPaymentProcess extends ViewRecord
 
         // Send an email notification
         RejectCashRequestJob::dispatch($record);
+
+        Notification::make()
+            ->title('Cash Request Update')
+            ->body("Your cash request {$record->request_no} has been rejected.")
+            ->actions([
+                NotificationAction::make('markAsRead')
+                    ->button()
+                    ->markAsRead(),
+                NotificationAction::make('view')
+                    ->link()
+                    ->url(route('filament.admin.resources.cash-requests.track-status', ['record' => $record->id])),
+            ])
+            ->sendToDatabase($record->user);
 
         Notification::make()
             ->title('Cash Request Rejected!')
