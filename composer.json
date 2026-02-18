@@ -13,7 +13,9 @@
         "jaocero/activity-timeline": "^1.2",
         "laravel/framework": "^11.31",
         "laravel/tinker": "^2.9",
-        "spatie/laravel-activitylog": "^4.10"
+        "spatie/laravel-activitylog": "^4.10",
+        "tomatophp/filament-alerts": "^2.2",
+        "tomatophp/filament-notes": "^1.0"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
