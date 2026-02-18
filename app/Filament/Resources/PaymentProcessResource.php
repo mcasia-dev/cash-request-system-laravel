@@ -17,12 +17,12 @@ use Illuminate\Database\Eloquent\Model;
 class PaymentProcessResource extends Resource
 {
     protected static ?string $model           = PaymentProcess::class;
-    protected static ?string $navigationGroup = 'For Approval (Treasury)';
+    protected static ?string $navigationGroup = 'For Approval';
     protected static ?string $slug            = 'payment-processing';
     protected static ?string $navigationLabel = 'Payment Processsing';
     protected static ?string $label           = 'Payment Processsing';
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationIcon = 'heroicon-o-credit-card';
 
     public static function getNavigationBadge(): ?string
     {

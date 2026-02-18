@@ -110,21 +110,7 @@
             <div class="text-sm text-slate-700">
                 <span class="font-semibold">Nature of Request:</span> {{ $this->getRecord()->nature_of_request }}
             </div>
-            {{-- <div class="mt-3">
-                <a
-                    href="{{ route('filament.admin.resources.cash-requests.track-status-text', ['record' => $this->getRecord()]) }}"
-                    class="inline-flex items-center rounded-lg bg-slate-700 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
-                >
-                    Open Text Tracker
-                </a>
-            </div> --}}
         </div>
-
-        @if (! $this->isPettyCash())
-            <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-800">
-                This tracker currently shows the petty cash flow only.
-            </div>
-        @endif
 
         <div class="tracker-shell relative">
             <div class="tracker-line"></div>
@@ -142,7 +128,7 @@
                 <div class="tracker-step {{ $isRight ? 'tracker-step--right' : 'tracker-step--left' }}">
                     <div class="tracker-dot-wrap">
                         <div class="tracker-dot" style="background: {{ $dotColor }};">
-                            {{ $step['status'] === 'approved' ? '✓' : ($step['status'] === 'rejected' ? '✕' : '!') }}
+                            {{ $step['status'] === 'approved' ? '✓' : ($step['status'] === 'rejected' ? 'X' : '!') }}
                         </div>
                     </div>
 

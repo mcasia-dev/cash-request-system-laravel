@@ -41,12 +41,11 @@ class CashRequestResource extends Resource
 {
     protected static ?string $model           = CashRequest::class;
     protected static ?string $navigationGroup = 'Cash Requests';
-    protected static ?string $navigationIcon  = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationIcon  = 'heroicon-o-document-text';
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()
-            ->where('user_id', Auth::id());
+        return parent::getEloquentQuery()->where('user_id', Auth::id());
     }
 
     public static function form(Form $form): Form
@@ -94,6 +93,9 @@ class CashRequestResource extends Resource
     {
         return $table
             ->columns([
+                TextColumn::make('user.name')
+                    ->label('Requestor'),
+
                 TextColumn::make('request_no')
                     ->label('Request No.')
                     ->sortable()

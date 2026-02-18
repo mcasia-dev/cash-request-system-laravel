@@ -25,16 +25,32 @@ class TrackRequestStatus extends ViewRecord
     {
         $record = $this->getRecord();
 
+        if ($this->isCashAdvance()) {
+            return array_merge(
+                [$this->buildSubmittedStep($record)],
+                $this->buildCashAdvanceApprovalSteps($record),
+                [
+                    $this->buildFinanceStep($record),
+                    $this->buildCashAdvanceTreasuryStep($record),
+                ]
+            );
+        }
+
         return [
             $this->buildSubmittedStep($record),
             $this->buildDepartmentHeadStep($record),
-            $this->buildTreasuryStep($record),
+            $this->buildPettyCashTreasuryStep($record),
         ];
     }
 
     public function isPettyCash(): bool
     {
         return $this->getRecord()->nature_of_request === NatureOfRequestEnum::PETTY_CASH->value;
+    }
+
+    public function isCashAdvance(): bool
+    {
+        return $this->getRecord()->nature_of_request === NatureOfRequestEnum::CASH_ADVANCE->value;
     }
 
     /**
@@ -88,7 +104,7 @@ class TrackRequestStatus extends ViewRecord
     /**
      * @return array<string, mixed>
      */
-    private function buildTreasuryStep(CashRequest $record): array
+    private function buildPettyCashTreasuryStep(CashRequest $record): array
     {
         $deptHeadRejected = $this->getLatestActivityByRemarks($record, [
             StatusRemarks::DEPARTMENT_HEAD_REJECTED_REQUEST->value,
@@ -139,24 +155,184 @@ class TrackRequestStatus extends ViewRecord
     }
 
     /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildCashAdvanceApprovalSteps(CashRequest $record): array
+    {
+        $approvals = $record->cashRequestApprovals()
+            ->orderBy('id')
+            ->get();
+
+        if ($approvals->isEmpty()) {
+            return [[
+                'title'       => 'Approval',
+                'status'      => $record->status === 'rejected' ? 'rejected' : 'pending',
+                'statusLabel' => $record->status === 'rejected' ? 'Rejected' : 'Pending',
+                'remarks'     => $record->status === 'rejected'
+                    ? ($record->reason_for_rejection ?: 'Rejected during approval')
+                    : 'Waiting for approver decision',
+                'by'          => 'N/A',
+                'date'        => 'N/A',
+            ]];
+        }
+
+        return $approvals
+            ->map(function ($approval) use ($record): array {
+                $title = 'Approval - ' . str($approval->role_name)->replace('_', ' ')->title()->toString();
+
+                if ($approval->status === 'approved') {
+                    return [
+                        'title'       => $title,
+                        'status'      => 'approved',
+                        'statusLabel' => 'Approved',
+                        'remarks'     => $this->approvedRemarkByRole($approval->role_name),
+                        'by'          => $this->resolveApproverName($approval->approved_by),
+                        'date'        => $approval->acted_at?->format('F d, Y h:i A') ?? 'N/A',
+                    ];
+                }
+
+                if ($approval->status === 'declined') {
+                    return [
+                        'title'       => $title,
+                        'status'      => 'rejected',
+                        'statusLabel' => 'Rejected',
+                        'remarks'     => $record->reason_for_rejection ?: $this->rejectedRemarkByRole($approval->role_name),
+                        'by'          => $this->resolveApproverName($approval->approved_by),
+                        'date'        => $approval->acted_at?->format('F d, Y h:i A') ?? 'N/A',
+                    ];
+                }
+
+                return [
+                    'title'       => $title,
+                    'status'      => 'pending',
+                    'statusLabel' => 'Pending',
+                    'remarks'     => 'Waiting for review',
+                    'by'          => 'N/A',
+                    'date'        => 'N/A',
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildFinanceStep(CashRequest $record): array
+    {
+        if ($record->status === 'rejected') {
+            $approvalRejected = $record->cashRequestApprovals()->where('status', 'declined')->exists();
+
+            if ($approvalRejected) {
+                return [
+                    'title'       => 'Finance',
+                    'status'      => 'stopped',
+                    'statusLabel' => 'Stopped',
+                    'remarks'     => 'Process stopped due to approval rejection',
+                    'by'          => 'N/A',
+                    'date'        => 'N/A',
+                ];
+            }
+        }
+
+        $approved = $this->getLatestActivityByRemarks($record, [
+            StatusRemarks::FINANCE_DEPARTMENT_APPROVED_REQUEST->value,
+        ]);
+
+        $rejected = $this->getLatestActivityByRemarks($record, [
+            StatusRemarks::FINANCE_DEPARTMENT_REJECTED_REQUEST->value,
+        ]);
+
+        if ($rejected) {
+            return $this->makeStep('Finance', 'rejected', 'Rejected', $rejected);
+        }
+
+        if ($approved) {
+            return $this->makeStep('Finance', 'approved', 'Approved', $approved);
+        }
+
+        $isInQueue = in_array($record->status_remarks, [
+            StatusRemarks::FOR_FINANCE_VERIFICATION->value,
+        ], true);
+
+        return [
+            'title'       => 'Finance',
+            'status'      => $isInQueue ? 'pending' : 'upcoming',
+            'statusLabel' => $isInQueue ? 'Pending' : 'Not yet started',
+            'remarks'     => $isInQueue ? 'In finance verification queue' : 'Waiting for approval completion',
+            'by'          => 'N/A',
+            'date'        => 'N/A',
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildCashAdvanceTreasuryStep(CashRequest $record): array
+    {
+        if ($record->status === 'rejected') {
+            $financeRejected = $this->getLatestActivityByRemarks($record, [
+                StatusRemarks::FINANCE_DEPARTMENT_REJECTED_REQUEST->value,
+            ]);
+
+            if ($financeRejected) {
+                return [
+                    'title'       => 'Treasury',
+                    'status'      => 'stopped',
+                    'statusLabel' => 'Stopped',
+                    'remarks'     => 'Process stopped due to finance rejection',
+                    'by'          => 'N/A',
+                    'date'        => 'N/A',
+                ];
+            }
+        }
+
+        $approved = $this->getLatestActivityByRemarks($record, [
+            StatusRemarks::TREASURY_MANAGER_APPROVED_REQUEST->value,
+            StatusRemarks::TREASURY_SUPERVISOR_APPROVED_REQUEST->value,
+            StatusRemarks::TREASURY_MANAGER_RELEASED_CASH_REQUESTED->value,
+            StatusRemarks::TREASURY_SUPERVISOR_RELEASED_CASH_REQUESTED->value,
+        ]);
+
+        $rejected = $this->getLatestActivityByRemarks($record, [
+            StatusRemarks::TREASURY_MANAGER_REJECTED_REQUEST->value,
+            StatusRemarks::TREASURY_SUPERVISOR_REJECTED_REQUEST->value,
+        ]);
+
+        if ($rejected) {
+            return $this->makeStep('Treasury', 'rejected', 'Rejected', $rejected);
+        }
+
+        if ($approved) {
+            return $this->makeStep('Treasury', 'approved', 'Approved', $approved);
+        }
+
+        $isInQueue = in_array($record->status_remarks, [
+            StatusRemarks::FOR_PAYMENT_PROCESSING->value,
+            StatusRemarks::FOR_RELEASING->value,
+        ], true);
+
+        return [
+            'title'       => 'Treasury',
+            'status'      => $isInQueue ? 'pending' : 'upcoming',
+            'statusLabel' => $isInQueue ? 'Pending' : 'Not yet started',
+            'remarks'     => $isInQueue ? 'In treasury queue for processing/releasing' : 'Waiting for finance approval',
+            'by'          => 'N/A',
+            'date'        => 'N/A',
+        ];
+    }
+
+    /**
      * @param array<int, string> $remarks
      */
     private function getLatestActivityByRemarks($record, array $remarks): ?Activity
     {
-        foreach ($remarks as $remark) {
-            $activity = Activity::query()
-                ->where('subject_id', $record->id)
-                ->where('properties->status_remarks', $remark)
-                ->latest('created_at')
-                ->with('causer')
-                ->first();
-
-            if ($activity) {
-                return $activity;
-            }
-        }
-
-        return null;
+        return Activity::query()
+            ->where('subject_id', $record->id)
+            ->whereIn('properties->status_remarks', $remarks)
+            ->latest('created_at')
+            ->with('causer')
+            ->first();
     }
 
     private function makeStep(string $title, string $status, string $statusLabel, Activity $activity): array
@@ -195,5 +371,42 @@ class TrackRequestStatus extends ViewRecord
                 'badge' => 'bg-slate-300 text-slate-700',
             ],
         };
+    }
+
+    private function approvedRemarkByRole(string $role): string
+    {
+        return match ($role) {
+            'super_admin'            => StatusRemarks::SUPER_ADMIN_APPROVED_REQUEST->value,
+            'department_head'        => StatusRemarks::DEPARTMENT_HEAD_APPROVED_REQUEST->value,
+            'president'              => StatusRemarks::PRESIDENT_APPROVED_REQUEST->value,
+            'treasury_manager'       => StatusRemarks::TREASURY_MANAGER_APPROVED_REQUEST->value,
+            'treasury_supervisor'    => StatusRemarks::TREASURY_SUPERVISOR_APPROVED_REQUEST->value,
+            'sales_channel_manager'  => StatusRemarks::SALES_CHANNEL_MANAGER_APPROVED_REQUEST->value,
+            'national_sales_manager' => StatusRemarks::NATIONAL_SALES_MANAGER_APPROVED_REQUEST->value,
+            default                  => str($role)->replace('_', ' ')->title()->append(' Approved Request')->toString(),
+        };
+    }
+
+    private function rejectedRemarkByRole(string $role): string
+    {
+        return match ($role) {
+            'super_admin'            => StatusRemarks::SUPER_ADMIN_REJECTED_REQUEST->value,
+            'department_head'        => StatusRemarks::DEPARTMENT_HEAD_REJECTED_REQUEST->value,
+            'president'              => StatusRemarks::PRESIDENT_REJECTED_REQUEST->value,
+            'treasury_manager'       => StatusRemarks::TREASURY_MANAGER_REJECTED_REQUEST->value,
+            'treasury_supervisor'    => StatusRemarks::TREASURY_SUPERVISOR_REJECTED_REQUEST->value,
+            'sales_channel_manager'  => StatusRemarks::SALES_CHANNEL_MANAGER_REJECTED_REQUEST->value,
+            'national_sales_manager' => StatusRemarks::NATIONAL_SALES_MANAGER_REJECTED_REQUEST->value,
+            default                  => str($role)->replace('_', ' ')->title()->append(' Rejected Request')->toString(),
+        };
+    }
+
+    private function resolveApproverName(?string $userId): string
+    {
+        if (! $userId) {
+            return 'N/A';
+        }
+
+        return \App\Models\User::query()->find($userId)?->name ?? 'N/A';
     }
 }

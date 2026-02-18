@@ -137,14 +137,14 @@ class ViewForFinanceVerification extends ViewRecord
 
     private function approveRequest($record, array $data)
     {
-        $user           = Auth::user();
-        $status_remarks = $this->getApprovedStatusRemarks($user);
+        $user                     = Auth::user();
+        $approved_remarks_by_role = $this->getApprovedStatusRemarks($user);
 
         // Update the record status
         $record->update([
             'voucher_no'     => $data['voucher_no'],
             'status'         => Status::IN_PROGRESS->value,
-            'status_remarks' => $status_remarks,
+            'status_remarks' => StatusRemarks::FOR_PAYMENT_PROCESSING->value,
         ]);
 
         // Log activity
@@ -158,7 +158,7 @@ class ViewForFinanceVerification extends ViewRecord
                 'requesting_amount' => $record->requesting_amount,
                 'previous_status'   => Status::IN_PROGRESS->value,
                 'new_status'        => Status::IN_PROGRESS->value,
-                'status_remarks'    => $status_remarks,
+                'status_remarks'    => $approved_remarks_by_role,
             ])
             ->log("Cash request {$record->request_no} was verified and approved by {$user->name} ({$user->position})");
 

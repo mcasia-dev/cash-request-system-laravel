@@ -3,7 +3,6 @@ namespace App\Filament\Resources;
 
 use App\Enums\CashRequest\Status;
 use App\Filament\Resources\ForApprovalRequestResource\Pages;
-use App\Models\CashRequest;
 use App\Models\ForApprovalRequest;
 use App\Services\CashRequestApprovalFlowService;
 use Filament\Forms\Form;
@@ -18,7 +17,7 @@ class ForApprovalRequestResource extends Resource
 {
     protected static ?string $model           = ForApprovalRequest::class;
     protected static ?string $navigationGroup = 'Cash Requests';
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationIcon  = 'heroicon-o-document-check';
 
     public static function getNavigationBadge(): ?string
     {

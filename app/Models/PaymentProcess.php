@@ -42,11 +42,20 @@ class PaymentProcess extends Model implements HasMedia
         'due_date',
         'status',
         'status_remarks',
+        'disbursement_type',
+        'check_branch_name',
+        'check_no',
+        'cut_off_date',
+        'payroll_date',
+        'payroll_credit',
+        'disbursement_added_by',
     ];
 
     protected $casts = [
         'activity_date'   => 'date',
         'due_date'        => 'date',
+        'cut_off_date'    => 'date',
+        'payroll_date'    => 'date',
         'date_liquidated' => 'datetime',
         'date_released'   => 'datetime',
     ];
@@ -74,6 +83,11 @@ class PaymentProcess extends Model implements HasMedia
     public function cashRequestApprovals(): HasMany
     {
         return $this->hasMany(CashRequestApproval::class, 'cash_request_id');
+    }
+
+    public function disbursementAddedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'disbursement_added_by');
     }
 
     public function getActivitylogOptions(): LogOptions

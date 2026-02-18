@@ -1,13 +1,13 @@
 <?php
 namespace App\Models;
 
-use Spatie\MediaLibrary\HasMedia;
-use Spatie\Activitylog\LogOptions;
 use Illuminate\Database\Eloquent\Model;
-use Spatie\MediaLibrary\InteractsWithMedia;
-use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Spatie\Activitylog\LogOptions;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 
 class CashRequest extends Model implements HasMedia
 {
@@ -40,11 +40,20 @@ class CashRequest extends Model implements HasMedia
         'due_date',
         'status',
         'status_remarks',
+        'disbursement_type',
+        'check_branch_name',
+        'check_no',
+        'cut_off_date',
+        'payroll_date',
+        'payroll_credit',
+        'disbursement_added_by',
     ];
 
     protected $casts = [
         'activity_date'   => 'date',
         'due_date'        => 'date',
+        'cut_off_date'    => 'date',
+        'payroll_date'    => 'date',
         'date_liquidated' => 'datetime',
         'date_released'   => 'datetime',
     ];

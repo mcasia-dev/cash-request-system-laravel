@@ -20,7 +20,7 @@ class ActivityListResource extends Resource
 {
     protected static ?string $model         = ActivityList::class;
     protected static bool $shouldRegisterNavigation = false;
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
 
     public static function form(Form $form): Form
     {

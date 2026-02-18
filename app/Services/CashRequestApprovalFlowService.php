@@ -64,7 +64,7 @@ class CashRequestApprovalFlowService
     public function filterPendingForUser(Builder $query, User $user): Builder
     {
         if ($user->isSuperAdmin()) {
-            return $query->whereIn('status', [Status::PENDING->value, Status::IN_PROGRESS->value]);
+            return $query->where('status', Status::PENDING->value);
         }
 
         $roles = $user->roles()->pluck('name')->all();
@@ -74,7 +74,7 @@ class CashRequestApprovalFlowService
         }
 
         return $query
-            ->whereIn('status', [Status::PENDING->value, Status::IN_PROGRESS->value])
+            ->where('status', Status::PENDING->value)
             ->whereExists(function ($subquery) use ($roles) {
                 $subquery->selectRaw('1')
                     ->from('cash_request_approvals as cra')
