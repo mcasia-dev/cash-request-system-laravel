@@ -1,20 +1,23 @@
 <?php
 namespace App\Filament\Resources\PaymentProcessResource\Pages;
 
+use App\Enums\CashRequest\DisbursementType;
 use App\Enums\CashRequest\Status;
 use App\Enums\CashRequest\StatusRemarks;
 use App\Enums\NatureOfRequestEnum;
 use App\Filament\Resources\PaymentProcessResource;
 use App\Jobs\ApproveCashRequestByTreasuryJob;
 use App\Jobs\RejectCashRequestJob;
-use App\Models\CashRequest;
 use App\Models\ForCashRelease;
 use App\Models\User;
 use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\TimePicker;
+use Filament\Forms\Get;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
@@ -23,7 +26,6 @@ use Filament\Infolists\Infolist;
 use Filament\Notifications\Actions\Action as NotificationAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 
 class ViewPaymentProcess extends ViewRecord
@@ -33,31 +35,20 @@ class ViewPaymentProcess extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('set_disbursement')
+                ->label('Set Disbursement')
+                ->hidden(fn($record) => $record->nature_of_request === NatureOfRequestEnum::CASH_ADVANCE->value && $record->disbursement_type != null)
+                ->color('gray')
+                ->form($this->getDisbursementTypeFormSchema())
+                ->action(fn($record, array $data) => $this->saveDisbursementType($record, $data)),
+
             // APPROVED BUTTON
             Action::make('Approve')
                 ->requiresConfirmation()
-                ->form(fn($record) => [
-                    Textarea::make('remarks')
-                        ->required(),
-
-                    DatePicker::make('releasing_date')
-                        ->label('Releasing Date')
-                        ->required()
-                        ->default(now())
-                        ->minDate(now()->toDateString()),
-
-                    TimePicker::make('releasing_time_from')
-                        ->label('Releasing Time From')
-                        ->required()
-                        ->default(now()),
-
-                    TimePicker::make('releasing_time_to')
-                        ->label('Releasing Time To')
-                        ->required()
-                        ->default(now()),
-                ])
+                ->form(fn($record) => $this->getApproveFormSchema($record))
                 ->action(fn($record, array $data) => $this->approveCashRequest($record, $data))
                 ->color('primary')
+                ->hidden(fn($record) => $record->nature_of_request === NatureOfRequestEnum::CASH_ADVANCE->value && $record->disbursement_type == null)
                 ->visible(fn($record) => $this->getStatus($record)),
 
             // REJECTION BUTTON
@@ -106,6 +97,9 @@ class ViewPaymentProcess extends ViewRecord
                                 'rejected'   => 'danger',
                                 default      => 'gray',
                             }),
+
+                        TextEntry::make('status_remarks')
+                            ->badge(),
                     ])
                     ->columns(4),
 
@@ -125,7 +119,6 @@ class ViewPaymentProcess extends ViewRecord
 
                                 TextEntry::make('activity_venue')
                                     ->label('Venue'),
-                                    
 
                                 TextEntry::make('purpose')
                                     ->label('Purpose'),
@@ -144,7 +137,99 @@ class ViewPaymentProcess extends ViewRecord
                                     ->columnSpanFull(),
                             ])
                             ->columns(3),
+
+                        Section::make('Disbursement Method')
+                            ->collapsible()
+                            ->collapsed()
+                            ->schema([
+                                TextEntry::make('disbursement_type')
+                                    ->label('Disbursement Type')
+                                    ->badge()
+                                    ->placeholder('Not yet set'),
+
+                                TextEntry::make('requesting_amount')
+                                    ->label('Amount')
+                                    ->money('PHP'),
+
+                                TextEntry::make('check_branch_name')
+                                    ->label('Check Branch Name')
+                                    ->visible(fn($record) => $record->disbursement_type === DisbursementType::CHECK->value)
+                                    ->placeholder('-'),
+
+                                TextEntry::make('check_no')
+                                    ->label('Check No.')
+                                    ->visible(fn($record) => $record->disbursement_type === DisbursementType::CHECK->value)
+                                    ->placeholder('-'),
+
+                                TextEntry::make('voucher_no')
+                                    ->label('Voucher No.')
+                                    ->visible(fn($record) => $record->disbursement_type === DisbursementType::CHECK->value)
+                                    ->placeholder('-'),
+
+                                TextEntry::make('cut_off_date')
+                                    ->label('Cut-off Date')
+                                    ->date()
+                                    ->visible(fn($record) => $record->disbursement_type === DisbursementType::PAYROLL->value)
+                                    ->placeholder('-'),
+
+                                TextEntry::make('payroll_credit')
+                                    ->label('Payroll Credit')
+                                    ->money('PHP')
+                                    ->visible(fn($record) => $record->disbursement_type === DisbursementType::PAYROLL->value)
+                                    ->placeholder('-'),
+
+                                TextEntry::make('disbursementAddedBy.name')
+                                    ->label('Added By'),
+                            ])
+                            ->columns(3)
+                            ->visible(fn($record) => $record->disbursement_type != null),
                     ]),
+
+                Section::make('Disbursement Method')
+                    ->collapsible()
+                    ->collapsed()
+                    ->schema([
+                        TextEntry::make('disbursement_type')
+                            ->label('Disbursement Type')
+                            ->badge()
+                            ->placeholder('Not yet set'),
+
+                        TextEntry::make('requesting_amount')
+                            ->label('Amount')
+                            ->money('PHP'),
+
+                        TextEntry::make('check_branch_name')
+                            ->label('Check Branch Name')
+                            ->visible(fn($record) => $record->disbursement_type === DisbursementType::CHECK->value)
+                            ->placeholder('-'),
+
+                        TextEntry::make('check_no')
+                            ->label('Check No.')
+                            ->visible(fn($record) => $record->disbursement_type === DisbursementType::CHECK->value)
+                            ->placeholder('-'),
+
+                        TextEntry::make('voucher_no')
+                            ->label('Voucher No.')
+                            ->visible(fn($record) => $record->disbursement_type === DisbursementType::CHECK->value)
+                            ->placeholder('-'),
+
+                        TextEntry::make('cut_off_date')
+                            ->label('Cut-off Date')
+                            ->date()
+                            ->visible(fn($record) => $record->disbursement_type === DisbursementType::PAYROLL->value)
+                            ->placeholder('-'),
+
+                        TextEntry::make('payroll_credit')
+                            ->label('Payroll Credit')
+                            ->money('PHP')
+                            ->visible(fn($record) => $record->disbursement_type === DisbursementType::PAYROLL->value)
+                            ->placeholder('-'),
+
+                        TextEntry::make('disbursementAddedBy.name')
+                            ->label('Added By'),
+                    ])
+                    ->columns(3)
+                    ->visible(fn($record) => $record->disbursement_type != null),
             ]);
     }
 
@@ -170,20 +255,25 @@ class ViewPaymentProcess extends ViewRecord
     {
         $user           = Auth::user();
         $status_remarks = $this->getApprovedStatusRemarks($user);
+        $releasingDate  = $data['releasing_date'] ?? $data['payroll_date'] ?? null;
+        $timeFrom       = $data['releasing_time_from'] ?? null;
+        $timeTo         = $data['releasing_time_to'] ?? null;
 
         // Insert the "For Releasing" Data
         ForCashRelease::create([
             'cash_request_id'     => $record->id,
             'processed_by'        => $user->id,
             'remarks'             => $data['remarks'],
-            'releasing_date'      => $data['releasing_date'],
-            'releasing_time_from' => $data['releasing_time_from'],
-            'releasing_time_to'   => $data['releasing_time_to'],
+            'releasing_date'      => $releasingDate,
+            'releasing_time_from' => $timeFrom,
+            'releasing_time_to'   => $timeTo,
             'date_processed'      => Carbon::now(),
         ]);
 
         // If the nature of request is "PETTY CASH", the due date will be 3 days after the releasing date. Else, return null (for the mean time).
-        $due_date = $record->nature_of_request == NatureOfRequestEnum::PETTY_CASH->value ? Carbon::parse($data['releasing_date'])->addDays(3) : null;
+        $due_date = $record->nature_of_request == NatureOfRequestEnum::PETTY_CASH->value && $releasingDate
+            ? Carbon::parse($releasingDate)->addDays(3)
+            : null;
 
         // Update the record status
         $record->update([
@@ -318,5 +408,151 @@ class ViewPaymentProcess extends ViewRecord
             $user->can('can-reject-as-treasury-supervisor') => StatusRemarks::TREASURY_SUPERVISOR_REJECTED_REQUEST->value,
             default                                         => 'Rejected'
         };
+    }
+
+    private function getApproveFormSchema($record): array
+    {
+        if (
+            $record->nature_of_request === NatureOfRequestEnum::CASH_ADVANCE->value
+            && $record->disbursement_type === DisbursementType::PAYROLL->value
+        ) {
+            return $this->getPayrollApproveFormSchema();
+        }
+
+        return $this->getStandardApproveFormSchema();
+    }
+
+    private function getStandardApproveFormSchema(): array
+    {
+        return [
+            Textarea::make('remarks')
+                ->required(),
+
+            DatePicker::make('releasing_date')
+                ->label('Releasing Date')
+                ->required()
+                ->default(now())
+                ->minDate(now()->toDateString()),
+
+            TimePicker::make('releasing_time_from')
+                ->label('Releasing Time From')
+                ->required()
+                ->default(now()),
+
+            TimePicker::make('releasing_time_to')
+                ->label('Releasing Time To')
+                ->required()
+                ->default(now()),
+        ];
+    }
+
+    private function getPayrollApproveFormSchema(): array
+    {
+        return [
+            Textarea::make('remarks')
+                ->required(),
+
+            DatePicker::make('payroll_date')
+                ->label('Payroll Date')
+                ->required()
+                ->default(now())
+                ->minDate(now()->toDateString()),
+        ];
+    }
+
+    private function getDisbursementTypeFormSchema(): array
+    {
+        return array_merge(
+            [
+                Select::make('disbursement_type')
+                    ->label('Disbursement Type')
+                    ->options(DisbursementType::filamentOptions())
+                    ->required()
+                    ->rules('required')
+                    ->live(),
+
+                TextInput::make('amount')
+                    ->label('Amount')
+                    ->numeric()
+                    ->readonly()
+                    ->default(fn($record) => $record->requesting_amount),
+            ],
+            $this->getCheckDisbursementTypeSchema(),
+            $this->getPayrollDisbursementTypeSchema()
+        );
+    }
+
+    private function getCheckDisbursementTypeSchema(): array
+    {
+        return [
+            TextInput::make('check_branch_name')
+                ->label('Check Branch Name')
+                ->visible(fn(Get $get) => $get('disbursement_type') === DisbursementType::CHECK->value)
+                ->required(fn(Get $get) => $get('disbursement_type') === DisbursementType::CHECK->value),
+
+            TextInput::make('check_no')
+                ->label('Check No.')
+                ->visible(fn(Get $get) => $get('disbursement_type') === DisbursementType::CHECK->value)
+                ->required(fn(Get $get) => $get('disbursement_type') === DisbursementType::CHECK->value),
+
+            TextInput::make('voucher_no')
+                ->label('Voucher No.')
+                ->default(fn($record) => $record->voucher_no)
+                ->readonly()
+                ->visible(fn(Get $get) => $get('disbursement_type') === DisbursementType::CHECK->value)
+                ->required(fn(Get $get) => $get('disbursement_type') === DisbursementType::CHECK->value),
+        ];
+    }
+
+    private function getPayrollDisbursementTypeSchema(): array
+    {
+        return [
+            DatePicker::make('cut_off_date')
+                ->label('Cut-off Date')
+                ->visible(fn(Get $get) => $get('disbursement_type') === DisbursementType::PAYROLL->value)
+                ->required(fn(Get $get) => $get('disbursement_type') === DisbursementType::PAYROLL->value),
+
+            TextInput::make('payroll_credit')
+                ->label('Payroll Credit')
+                ->visible(fn(Get $get) => $get('disbursement_type') === DisbursementType::PAYROLL->value)
+                ->required(fn(Get $get) => $get('disbursement_type') === DisbursementType::PAYROLL->value),
+        ];
+    }
+
+    private function saveDisbursementType($record, array $data): void
+    {
+        $basePayload = [
+            'disbursement_type'     => $data['disbursement_type'],
+            'disbursement_added_by' => Auth::id(),
+        ];
+
+        $typePayload = match ($data['disbursement_type']) {
+            DisbursementType::CHECK->value   => $this->getCheckDisbursementPayload($data),
+            DisbursementType::PAYROLL->value => $this->getPayrollDisbursementPayload($data),
+            default                          => [],
+        };
+
+        $record->update(array_merge($basePayload, $typePayload));
+
+        Notification::make()
+            ->title('Disbursement details saved.')
+            ->success()
+            ->send();
+    }
+
+    private function getCheckDisbursementPayload(array $data): array
+    {
+        return [
+            'check_branch_name' => $data['check_branch_name'] ?? null,
+            'check_no'          => $data['check_no'] ?? null,
+        ];
+    }
+
+    private function getPayrollDisbursementPayload(array $data): array
+    {
+        return [
+            'cut_off_date'   => $data['cut_off_date'],
+            'payroll_credit' => $data['payroll_credit'],
+        ];
     }
 }

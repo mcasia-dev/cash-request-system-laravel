@@ -1,6 +1,7 @@
 <?php
 namespace App\Filament\Resources\ForLiquidationResource\Pages;
 
+use App\Enums\CashRequest\DisbursementType;
 use App\Filament\Resources\ForLiquidationResource;
 use App\Models\ForLiquidation;
 use App\Models\LiquidationReceipt;
@@ -168,7 +169,7 @@ class ViewForLiquidation extends ViewRecord
 
                                 foreach ($receipts as $receipt) {
                                     $safeUrl = e($receipt['url']);
-                                    $amount = number_format((float) ($receipt['amount'] ?? 0), 2);
+                                    $amount  = number_format((float) ($receipt['amount'] ?? 0), 2);
                                     $remarks = filled($receipt['remarks']) ? e($receipt['remarks']) : 'N/A';
 
                                     $html .= '<div style="width:220px;border:1px solid #e5e7eb;border-radius:8px;padding:10px;background:#fff;">'
@@ -194,6 +195,52 @@ class ViewForLiquidation extends ViewRecord
                             ->html(),
                     ])
                     ->visible(fn(ForLiquidation $record) => ! empty($this->getReceiptEntries($record))),
+
+                Section::make('Disbursement Method')
+                    ->collapsible()
+                    ->collapsed()
+                    ->schema([
+                        TextEntry::make('disbursement_type')
+                            ->label('Disbursement Type')
+                            ->badge()
+                            ->placeholder('Not yet set'),
+
+                        TextEntry::make('requesting_amount')
+                            ->label('Amount')
+                            ->money('PHP'),
+
+                        TextEntry::make('check_branch_name')
+                            ->label('Check Branch Name')
+                            ->visible(fn($record) => $record->disbursement_type === DisbursementType::CHECK->value)
+                            ->placeholder('-'),
+
+                        TextEntry::make('check_no')
+                            ->label('Check No.')
+                            ->visible(fn($record) => $record->disbursement_type === DisbursementType::CHECK->value)
+                            ->placeholder('-'),
+
+                        TextEntry::make('voucher_no')
+                            ->label('Voucher No.')
+                            ->visible(fn($record) => $record->disbursement_type === DisbursementType::CHECK->value)
+                            ->placeholder('-'),
+
+                        TextEntry::make('cut_off_date')
+                            ->label('Cut-off Date')
+                            ->date()
+                            ->visible(fn($record) => $record->disbursement_type === DisbursementType::PAYROLL->value)
+                            ->placeholder('-'),
+
+                        TextEntry::make('payroll_credit')
+                            ->label('Payroll Credit')
+                            ->money('PHP')
+                            ->visible(fn($record) => $record->disbursement_type === DisbursementType::PAYROLL->value)
+                            ->placeholder('-'),
+
+                        TextEntry::make('disbursementAddedBy.name')
+                            ->label('Added By'),
+                    ])
+                    ->columns(3)
+                    ->visible(fn($record) => $record->disbursement_type != null),
 
                 Section::make('Dates')
                     ->collapsible()

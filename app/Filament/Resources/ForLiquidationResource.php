@@ -16,7 +16,7 @@ class ForLiquidationResource extends Resource
 {
     protected static ?string $model           = ForLiquidation::class;
     protected static ?string $navigationGroup = 'Cash Requests';
-    protected static ?string $navigationIcon  = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationIcon  = 'heroicon-o-receipt-percent';
 
     public static function getNavigationBadge(): ?string
     {

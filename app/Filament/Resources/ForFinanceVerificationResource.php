@@ -4,7 +4,6 @@ namespace App\Filament\Resources;
 use App\Enums\CashRequest\Status;
 use App\Enums\CashRequest\StatusRemarks;
 use App\Filament\Resources\ForFinanceVerificationResource\Pages;
-use App\Models\CashRequest;
 use App\Models\ForFinanceVerification;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -12,6 +11,7 @@ use Filament\Tables;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 
 class ForFinanceVerificationResource extends Resource
 {
@@ -21,7 +21,7 @@ class ForFinanceVerificationResource extends Resource
     protected static ?string $navigationLabel = 'For Verification';
     protected static ?string $label           = 'For Verification';
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-check';
 
     public static function getNavigationBadge(): ?string
     {
@@ -105,7 +105,7 @@ class ForFinanceVerificationResource extends Resource
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    // Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ]);
     }
@@ -125,5 +125,20 @@ class ForFinanceVerificationResource extends Resource
             'edit'   => Pages\EditForFinanceVerification::route('/{record}/edit'),
             'view'   => Pages\ViewForFinanceVerification::route('/{record}/view'),
         ];
+    }
+
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function canEdit(Model $model): bool
+    {
+        return false;
+    }
+
+    public static function canDelete(Model $model): bool
+    {
+        return false;
     }
 }

@@ -28,7 +28,7 @@ class UserApprovalResource extends Resource
     protected static ?string $slug            = 'user-request-approval';
     protected static ?string $navigationLabel = 'User Request (For Approval)';
     protected static ?string $label           = 'User Request (For Approval)';
-    protected static ?string $navigationIcon  = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationIcon  = 'heroicon-o-shield-check';
 
     public static function getNavigationBadge(): ?string
     {

@@ -3,6 +3,13 @@ namespace App\Filament\Resources\CashRequestResource\Pages;
 
 use App\Enums\CashRequest\Status;
 use App\Filament\Resources\CashRequestResource;
+use App\Models\CashRequest;
+use App\Models\ForApprovalRequest;
+use App\Models\ForCashRelease;
+use App\Models\ForFinanceVerification;
+use App\Models\ForLiquidation;
+use App\Models\PaymentProcess;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\HtmlString;
 use JaOcero\ActivityTimeline\Pages\ActivityTimelinePage;
 
@@ -10,6 +17,58 @@ class TrackRequestStatusText extends ActivityTimelinePage
 {
     protected static string $resource = CashRequestResource::class;
     protected static ?string $title   = "Track Request Status";
+
+    public function getHeading(): string
+    {
+        return 'Track Request Status - ' . $this->getRecord()->request_no;
+    }
+
+    protected function getActivites(): EloquentCollection
+    {
+        $activityModelClass = config('activitylog.activity_model');
+        $activityModel      = new $activityModelClass;
+        $record             = $this->getRecord();
+
+        $sameIdSubjectTypes = [
+            CashRequest::class,
+            ForApprovalRequest::class,
+            ForFinanceVerification::class,
+            PaymentProcess::class,
+        ];
+
+        $cashReleaseIds = ForCashRelease::query()
+            ->where('cash_request_id', $record->id)
+            ->pluck('id');
+
+        $liquidationIds = ForLiquidation::query()
+            ->where('cash_request_id', $record->id)
+            ->pluck('id');
+
+        return $activityModel::query()
+            ->with(['causer', 'subject'])
+            ->where(function ($query) use ($record, $sameIdSubjectTypes, $cashReleaseIds, $liquidationIds) {
+                $query->where(function ($baseQuery) use ($record, $sameIdSubjectTypes) {
+                    $baseQuery->where('subject_id', $record->id)
+                        ->whereIn('subject_type', $sameIdSubjectTypes);
+                });
+
+                if ($cashReleaseIds->isNotEmpty()) {
+                    $query->orWhere(function ($releaseQuery) use ($cashReleaseIds) {
+                        $releaseQuery->where('subject_type', ForCashRelease::class)
+                            ->whereIn('subject_id', $cashReleaseIds);
+                    });
+                }
+
+                if ($liquidationIds->isNotEmpty()) {
+                    $query->orWhere(function ($liquidationQuery) use ($liquidationIds) {
+                        $liquidationQuery->where('subject_type', ForLiquidation::class)
+                            ->whereIn('subject_id', $liquidationIds);
+                    });
+                }
+            })
+            ->orderBy('created_at', 'desc')
+            ->get();
+    }
 
     /**
      * @return array<string, mixed>

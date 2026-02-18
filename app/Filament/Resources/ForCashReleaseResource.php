@@ -9,14 +9,15 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
 
 class ForCashReleaseResource extends Resource
 {
     protected static ?string $model           = ForCashRelease::class;
-    protected static ?string $navigationGroup = 'For Approval (Treasury)';
-    protected static ?string $navigationIcon  = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationGroup = 'For Approval';
+    protected static ?string $navigationIcon  = 'heroicon-o-banknotes';
 
     public static function getNavigationBadge(): ?string
     {
@@ -32,14 +33,6 @@ class ForCashReleaseResource extends Resource
     {
         return 'info';
     }
-
-    // public static function getEloquentQuery(): Builder
-    // {
-    //     return parent::getEloquentQuery()
-    //         ->whereHas('roles', function ($query) {
-    //             $query->where('name', 'User');
-    //         });
-    // }
 
     public static function form(Form $form): Form
     {
@@ -97,7 +90,20 @@ class ForCashReleaseResource extends Resource
                     ->searchable(),
             ])
             ->filters([
-                //
+                SelectFilter::make('status')
+                    ->label('Status')
+                    ->options(Status::filamentOptions())
+                    ->query(function ($query, array $data) {
+                        $value = $data['value'] ?? null;
+
+                        if (! $value) {
+                            return $query;
+                        }
+
+                        return $query->whereHas('cashRequest', function ($cashRequestQuery) use ($value) {
+                            $cashRequestQuery->where('status', $value);
+                        });
+                    }),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),
