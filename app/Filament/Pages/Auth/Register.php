@@ -9,6 +9,7 @@ use Filament\Forms\Components\Component;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Grid;
 use Filament\Forms\Form;
 use Filament\Notifications\Actions\Action;
 use Filament\Notifications\Notification;
@@ -19,20 +20,27 @@ use Illuminate\Validation\Rules\Password as PasswordRule;
 
 class Register extends BaseRegister
 {
+    protected ?string $maxWidth = '4xl';
+
     public function form(Form $schema): Form
     {
         return parent::form($schema)
             ->components([
-                $this->getFirstNameFormComponent(),
-                $this->getMiddleNameFormComponent(),
-                $this->getLastNameFormComponent(),
-                $this->getEmailFormComponent(),
-                $this->getDepartmentFormComponent(),
-                $this->getDepartmentHeadFormComponent(),
-                $this->getPhoneFormComponent(),
-                $this->getPositionFormComponent(),
-                $this->getPasswordFormComponent(),
-                $this->getPasswordConfirmationFormComponent(),
+                Grid::make([
+                    'default' => 1,
+                    'md' => 2,
+                ])->schema([
+                    $this->getFirstNameFormComponent(),
+                    $this->getMiddleNameFormComponent(),
+                    $this->getLastNameFormComponent(),
+                    $this->getEmailFormComponent(),
+                    $this->getDepartmentFormComponent(),
+                    $this->getDepartmentHeadFormComponent(),
+                    $this->getPhoneFormComponent(),
+                    $this->getPositionFormComponent(),
+                    $this->getPasswordFormComponent(),
+                    $this->getPasswordConfirmationFormComponent(),
+                ]),
                 $this->getTermsFormComponent(),
             ]);
     }
@@ -77,6 +85,7 @@ class Register extends BaseRegister
         return Select::make('department_id')
             ->label('Department')
             ->options(Department::whereNotNull('department_name')->pluck('department_name', 'id')->toArray())
+            ->placeholder('Select department')
             ->required()
             ->searchable()
             ->live()
@@ -100,9 +109,8 @@ class Register extends BaseRegister
     protected function getPhoneFormComponent(): Component
     {
         return TextInput::make('contact_number')
-            ->label('Mobile Number')
+            ->label('Mobile Number (+63)')
             ->tel()
-            ->prefix('+63')
             ->rules(['required'])
             ->placeholder('9123456789')
             ->maxLength(10)
@@ -153,6 +161,7 @@ class Register extends BaseRegister
             ->label('I agree to the terms and conditions')
             ->required()
             ->accepted()
+            ->columnSpanFull()
             ->dehydrated(false);
     }
 
