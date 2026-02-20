@@ -22,6 +22,9 @@ class ViewForFinanceVerification extends ViewRecord
 {
     protected static string $resource = ForFinanceVerificationResource::class;
 
+    /**
+     * Define the header actions for approving or rejecting a request in finance verification.
+     */
     protected function getHeaderActions(): array
     {
         return [
@@ -53,6 +56,9 @@ class ViewForFinanceVerification extends ViewRecord
         ];
     }
 
+    /**
+     * Build the request detail infolist shown on the view page.
+     */
     public function infolist(Infolist $infolist): Infolist
     {
         return $infolist
@@ -135,6 +141,9 @@ class ViewForFinanceVerification extends ViewRecord
         return $record->status === Status::IN_PROGRESS->value && $record->status_remarks === StatusRemarks::FOR_FINANCE_VERIFICATION->value;
     }
 
+    /**
+     * Apply finance verification approval, log activity, and notify the user.
+     */
     private function approveRequest($record, array $data)
     {
         $user                     = Auth::user();
@@ -173,6 +182,9 @@ class ViewForFinanceVerification extends ViewRecord
         return redirect()->route('filament.admin.resources.for-verification.index');
     }
 
+    /**
+     * Apply finance verification rejection, log activity, and notify the user.
+     */
     private function rejectRequest($record, array $data)
     {
         $user           = Auth::user();

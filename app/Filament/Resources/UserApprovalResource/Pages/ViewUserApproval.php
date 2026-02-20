@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Filament\Resources\UserApprovalResource\Pages;
 
 use App\Models\User;
@@ -20,6 +21,9 @@ class ViewUserApproval extends ViewRecord
 {
     protected static string $resource = UserApprovalResource::class;
 
+    /**
+     * Define the header actions for approving or rejecting a pending user.
+     */
     protected function getHeaderActions(): array
     {
         return [
@@ -28,34 +32,7 @@ class ViewUserApproval extends ViewRecord
                 ->icon('heroicon-o-check-circle')
                 ->color('primary')
                 ->requiresConfirmation()
-                ->action(function (User $record) {
-                    $approver       = Auth::user();
-                    $previousStatus = $record->status;
-
-                    $record->update([
-                        'status'    => Status::APPROVED->value,
-                        'review_by' => $approver->id,
-                        'review_at' => now(),
-                    ]);
-
-                    activity()
-                        ->causedBy($approver)
-                        ->performedOn($record)
-                        ->event('approved')
-                        ->withProperties([
-                            'previous_status' => $previousStatus,
-                            'new_status'      => Status::APPROVED->value,
-                            'review_by'       => $approver->id,
-                        ])
-                        ->log("User {$record->name} was approved by {$approver->name} ({$approver->position})");
-
-                    ApproveUserRegistrationJob::dispatch($record);
-
-                    Notification::make()
-                        ->title('User Approved!')
-                        ->success()
-                        ->send();
-                })
+                ->action($this->getApproveAction())
                 ->successRedirectUrl(route('filament.admin.resources.user-request-approval.index')),
 
             Action::make('Reject')
@@ -69,40 +46,14 @@ class ViewUserApproval extends ViewRecord
                         ->required()
                         ->maxLength(65535),
                 ])
-                ->action(function (User $record, array $data) {
-                    $approver       = Auth::user();
-                    $previousStatus = $record->status;
-
-                    $record->update([
-                        'status'               => Status::DISAPPROVED->value,
-                        'review_by'            => $approver->id,
-                        'review_at'            => now(),
-                        'reason_for_rejection' => $data['reason_for_rejection'],
-                    ]);
-
-                    activity()
-                        ->causedBy($approver)
-                        ->performedOn($record)
-                        ->event('disapproved')
-                        ->withProperties([
-                            'previous_status' => $previousStatus,
-                            'new_status'      => Status::DISAPPROVED->value,
-                            'review_by'       => $approver->id,
-                            'reason'          => $data['reason_for_rejection'],
-                        ])
-                        ->log("User {$record->name} was disapproved by {$approver->name} ({$approver->position})");
-
-                    RejectUserRegistrationJob::dispatch($record);
-
-                    Notification::make()
-                        ->title('User Rejected!')
-                        ->danger()
-                        ->send();
-                })
+                ->action($this->getRejectAction())
                 ->successRedirectUrl(route('filament.admin.resources.user-request-approval.index')),
         ];
     }
 
+    /**
+     * Build the user approval infolist for the view page.
+     */
     public function infolist(Infolist $infolist): Infolist
     {
         return $infolist
@@ -145,10 +96,10 @@ class ViewUserApproval extends ViewRecord
                             ->label('Approval Status')
                             ->badge()
                             ->color(fn(string $state): string => match ($state) {
-                                Status::PENDING->value     => 'warning',
-                                Status::APPROVED->value    => 'success',
+                                Status::PENDING->value => 'warning',
+                                Status::APPROVED->value => 'success',
                                 Status::DISAPPROVED->value => 'danger',
-                                default                    => 'secondary',
+                                default => 'secondary',
                             }),
 
                         TextEntry::make('account_status')
@@ -156,9 +107,9 @@ class ViewUserApproval extends ViewRecord
                             ->badge()
                             ->color(fn(string $state): string => match ($state) {
                                 AccountStatus::SUSPENDED->value => 'warning',
-                                AccountStatus::ACTIVE->value    => 'success',
-                                AccountStatus::BLOCKED->value   => 'danger',
-                                default                         => 'secondary',
+                                AccountStatus::ACTIVE->value => 'success',
+                                AccountStatus::BLOCKED->value => 'danger',
+                                default => 'secondary',
                             }),
 
                         TextEntry::make('reviewer_name')
@@ -190,5 +141,79 @@ class ViewUserApproval extends ViewRecord
                     ])
                     ->columns(2),
             ]);
+    }
+
+    /**
+     * Build the approval action closure for approving a user registration.
+     * @return \Closure
+     */
+    public function getApproveAction(): \Closure
+    {
+        return function (User $record) {
+            $approver = Auth::user();
+            $previousStatus = $record->status;
+
+            $record->update([
+                'status' => Status::APPROVED->value,
+                'review_by' => $approver->id,
+                'review_at' => now(),
+            ]);
+
+            activity()
+                ->causedBy($approver)
+                ->performedOn($record)
+                ->event('approved')
+                ->withProperties([
+                    'previous_status' => $previousStatus,
+                    'new_status' => Status::APPROVED->value,
+                    'review_by' => $approver->id,
+                ])
+                ->log("User {$record->name} was approved by {$approver->name} ({$approver->position})");
+
+            ApproveUserRegistrationJob::dispatch($record);
+
+            Notification::make()
+                ->title('User Approved!')
+                ->success()
+                ->send();
+        };
+    }
+
+    /**
+     * Build the rejection action closure for disapproving a user registration.
+     * @return \Closure
+     */
+    public function getRejectAction(): \Closure
+    {
+        return function (User $record, array $data) {
+            $approver = Auth::user();
+            $previousStatus = $record->status;
+
+            $record->update([
+                'status' => Status::DISAPPROVED->value,
+                'review_by' => $approver->id,
+                'review_at' => now(),
+                'reason_for_rejection' => $data['reason_for_rejection'],
+            ]);
+
+            activity()
+                ->causedBy($approver)
+                ->performedOn($record)
+                ->event('disapproved')
+                ->withProperties([
+                    'previous_status' => $previousStatus,
+                    'new_status' => Status::DISAPPROVED->value,
+                    'review_by' => $approver->id,
+                    'reason' => $data['reason_for_rejection'],
+                ])
+                ->log("User {$record->name} was disapproved by {$approver->name} ({$approver->position})");
+
+            RejectUserRegistrationJob::dispatch($record);
+
+            Notification::make()
+                ->title('User Rejected!')
+                ->danger()
+                ->send();
+        };
     }
 }
