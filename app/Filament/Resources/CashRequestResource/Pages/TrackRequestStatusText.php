@@ -18,11 +18,17 @@ class TrackRequestStatusText extends ActivityTimelinePage
     protected static string $resource = CashRequestResource::class;
     protected static ?string $title   = "Track Request Status";
 
+    /**
+     * Provide the page heading including the request number.
+     */
     public function getHeading(): string
     {
         return 'Track Request Status - ' . $this->getRecord()->request_no;
     }
 
+    /**
+     * Load the activity timeline entries related to the request and its child records.
+     */
     protected function getActivites(): EloquentCollection
     {
         $activityModelClass = config('activitylog.activity_model');
@@ -71,6 +77,7 @@ class TrackRequestStatusText extends ActivityTimelinePage
     }
 
     /**
+     * Define timeline UI configuration and activity formatting callbacks.
      * @return array<string, mixed>
      */
     protected function configuration(): array

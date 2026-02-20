@@ -17,6 +17,9 @@ class ViewForLiquidation extends ViewRecord
 {
     protected static string $resource = ForLiquidationResource::class;
 
+    /**
+     * Build the liquidation view infolist with request, payment, and receipt details.
+     */
     public function infolist(Infolist $infolist): Infolist
     {
         return $infolist
@@ -158,39 +161,7 @@ class ViewForLiquidation extends ViewRecord
                     ->schema([
                         TextEntry::make('receipt_images')
                             ->label('Receipts')
-                            ->state(function (ForLiquidation $record) {
-                                $receipts = $this->getReceiptEntries($record);
-
-                                if (empty($receipts)) {
-                                    return 'No receipt images uploaded.';
-                                }
-
-                                $html = '<div style="display:flex;flex-wrap:wrap;gap:10px;">';
-
-                                foreach ($receipts as $receipt) {
-                                    $safeUrl = e($receipt['url']);
-                                    $amount  = number_format((float) ($receipt['amount'] ?? 0), 2);
-                                    $remarks = filled($receipt['remarks']) ? e($receipt['remarks']) : 'N/A';
-
-                                    $html .= '<div style="width:220px;border:1px solid #e5e7eb;border-radius:8px;padding:10px;background:#fff;">'
-                                        . '<a href="'
-                                        . $safeUrl
-                                        . '" target="_blank" rel="noopener noreferrer">'
-                                        . '<img src="'
-                                        . $safeUrl
-                                        . '" alt="Receipt image" style="width:100%;max-height:180px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;" />'
-                                        . '</a>'
-                                        . '<div style="margin-top:8px;font-size:12px;line-height:1.45;">'
-                                        . '<div><strong>Amount:</strong> PHP ' . $amount . '</div>'
-                                        . '<div><strong>Remarks:</strong> ' . $remarks . '</div>'
-                                        . '</div>'
-                                        . '</div>';
-                                }
-
-                                $html .= '</div>';
-
-                                return new HtmlString($html);
-                            })
+                            ->state($this->getReceiptImageState())
                             ->columnSpanFull()
                             ->html(),
                     ])
@@ -270,6 +241,9 @@ class ViewForLiquidation extends ViewRecord
             ]);
     }
 
+    /**
+     * Load receipt media entries for the liquidation, with per-record caching.
+     */
     private function getReceiptEntries(ForLiquidation $record): array
     {
         static $cache = [];
@@ -291,5 +265,46 @@ class ViewForLiquidation extends ViewRecord
         }
 
         return $cache[$record->id];
+    }
+
+    /**
+     * Build a closure that renders receipt images and details as HTML.
+     * @return \Closure
+     */
+    public function getReceiptImageState(): \Closure
+    {
+        return function (ForLiquidation $record) {
+            $receipts = $this->getReceiptEntries($record);
+
+            if (empty($receipts)) {
+                return 'No receipt images uploaded.';
+            }
+
+            $html = '<div style="display:flex;flex-wrap:wrap;gap:10px;">';
+
+            foreach ($receipts as $receipt) {
+                $safeUrl = e($receipt['url']);
+                $amount = number_format((float)($receipt['amount'] ?? 0), 2);
+                $remarks = filled($receipt['remarks']) ? e($receipt['remarks']) : 'N/A';
+
+                $html .= '<div style="width:220px;border:1px solid #e5e7eb;border-radius:8px;padding:10px;background:#fff;">'
+                    . '<a href="'
+                    . $safeUrl
+                    . '" target="_blank" rel="noopener noreferrer">'
+                    . '<img src="'
+                    . $safeUrl
+                    . '" alt="Receipt image" style="width:100%;max-height:180px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;" />'
+                    . '</a>'
+                    . '<div style="margin-top:8px;font-size:12px;line-height:1.45;">'
+                    . '<div><strong>Amount:</strong> PHP ' . $amount . '</div>'
+                    . '<div><strong>Remarks:</strong> ' . $remarks . '</div>'
+                    . '</div>'
+                    . '</div>';
+            }
+
+            $html .= '</div>';
+
+            return new HtmlString($html);
+        };
     }
 }

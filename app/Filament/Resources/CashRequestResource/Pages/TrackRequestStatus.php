@@ -8,17 +8,24 @@ use App\Models\CashRequest;
 use Filament\Resources\Pages\ViewRecord;
 use Spatie\Activitylog\Models\Activity;
 
+/**
+ *
+ */
 class TrackRequestStatus extends ViewRecord
 {
     protected static string $resource = CashRequestResource::class;
     protected static string $view     = 'filament.resources.cash-request-resource.pages.track-request-status';
 
+    /**
+     * Provide the page heading for the request status tracker.
+     */
     public function getHeading(): string
     {
         return 'Request Status Tracker';
     }
 
     /**
+     * Build the ordered tracker steps based on the request type.
      * @return array<int, array<string, mixed>>
      */
     public function getTrackerSteps(): array
@@ -43,20 +50,30 @@ class TrackRequestStatus extends ViewRecord
         ];
     }
 
+    /**
+     * Check if the nature of request is petty cash.
+     * @return bool
+     */
     public function isPettyCash(): bool
     {
         return $this->getRecord()->nature_of_request === NatureOfRequestEnum::PETTY_CASH->value;
     }
 
+
+    /**
+     * Check if the nature of request is cash advance.
+     * @return bool
+     */
     public function isCashAdvance(): bool
     {
         return $this->getRecord()->nature_of_request === NatureOfRequestEnum::CASH_ADVANCE->value;
     }
 
     /**
+     * Build the initial submitted step for the tracker.
      * @return array<string, mixed>
      */
-    private function buildSubmittedStep(CashRequest $record): array
+    private function buildSubmittedStep($record): array
     {
         $submittedAt = $record->created_at;
 
@@ -71,9 +88,10 @@ class TrackRequestStatus extends ViewRecord
     }
 
     /**
+     * Build the Department Head decision step using latest approval or rejection activity.
      * @return array<string, mixed>
      */
-    private function buildDepartmentHeadStep(CashRequest $record): array
+    private function buildDepartmentHeadStep($record): array
     {
         $approved = $this->getLatestActivityByRemarks($record, [
             StatusRemarks::DEPARTMENT_HEAD_APPROVED_REQUEST->value,
@@ -102,9 +120,10 @@ class TrackRequestStatus extends ViewRecord
     }
 
     /**
+     * Build the petty cash Treasury step, accounting for Department Head outcome and treasury queue state.
      * @return array<string, mixed>
      */
-    private function buildPettyCashTreasuryStep(CashRequest $record): array
+    private function buildPettyCashTreasuryStep($record): array
     {
         $deptHeadRejected = $this->getLatestActivityByRemarks($record, [
             StatusRemarks::DEPARTMENT_HEAD_REJECTED_REQUEST->value,
@@ -155,9 +174,10 @@ class TrackRequestStatus extends ViewRecord
     }
 
     /**
+     * Build the approval chain steps for cash advance requests.
      * @return array<int, array<string, mixed>>
      */
-    private function buildCashAdvanceApprovalSteps(CashRequest $record): array
+    private function buildCashAdvanceApprovalSteps($record): array
     {
         $approvals = $record->cashRequestApprovals()
             ->orderBy('id')
@@ -216,9 +236,10 @@ class TrackRequestStatus extends ViewRecord
     }
 
     /**
+     * Build the finance review step for cash advance requests.
      * @return array<string, mixed>
      */
-    private function buildFinanceStep(CashRequest $record): array
+    private function buildFinanceStep($record): array
     {
         if ($record->status === 'rejected') {
             $approvalRejected = $record->cashRequestApprovals()->where('status', 'declined')->exists();
@@ -266,9 +287,10 @@ class TrackRequestStatus extends ViewRecord
     }
 
     /**
+     * Build the treasury processing step for cash advance requests.
      * @return array<string, mixed>
      */
-    private function buildCashAdvanceTreasuryStep(CashRequest $record): array
+    private function buildCashAdvanceTreasuryStep($record): array
     {
         if ($record->status === 'rejected') {
             $financeRejected = $this->getLatestActivityByRemarks($record, [
@@ -323,6 +345,7 @@ class TrackRequestStatus extends ViewRecord
     }
 
     /**
+     * Fetch the most recent activity for the given remarks on the request.
      * @param array<int, string> $remarks
      */
     private function getLatestActivityByRemarks($record, array $remarks): ?Activity
@@ -335,6 +358,9 @@ class TrackRequestStatus extends ViewRecord
             ->first();
     }
 
+    /**
+     * Convert an activity record into a standardized tracker step array.
+     */
     private function makeStep(string $title, string $status, string $statusLabel, Activity $activity): array
     {
         return [
@@ -347,6 +373,9 @@ class TrackRequestStatus extends ViewRecord
         ];
     }
 
+    /**
+     * Map a tracker state to its CSS class set.
+     */
     public function getStateStyles(string $state): array
     {
         return match ($state) {
@@ -373,6 +402,9 @@ class TrackRequestStatus extends ViewRecord
         };
     }
 
+    /**
+     * Resolve the approved status remark string based on approver role.
+     */
     private function approvedRemarkByRole(string $role): string
     {
         return match ($role) {
@@ -387,6 +419,9 @@ class TrackRequestStatus extends ViewRecord
         };
     }
 
+    /**
+     * Resolve the rejected status remark string based on approver role.
+     */
     private function rejectedRemarkByRole(string $role): string
     {
         return match ($role) {
@@ -401,6 +436,9 @@ class TrackRequestStatus extends ViewRecord
         };
     }
 
+    /**
+     * Look up the approver name by user id, returning N/A when missing.
+     */
     private function resolveApproverName(?string $userId): string
     {
         if (! $userId) {

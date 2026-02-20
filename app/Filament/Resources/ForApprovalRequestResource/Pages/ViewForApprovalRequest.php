@@ -31,32 +31,36 @@ class ViewForApprovalRequest extends ViewRecord
 {
     protected static string $resource = ForApprovalRequestResource::class;
 
+    /**
+     * Determine if the approve/reject actions should be visible for the current user.
+     * @return \Closure
+     */
+    public function isVisible(): \Closure
+    {
+        return function ($record): bool {
+            $user = Auth::user();
+
+            if (!$user) {
+                return false;
+            }
+
+            return app(CashRequestApprovalFlowService::class)->userCanReview($record, $user);
+        };
+    }
+
+    /**
+     * Define the header actions for approving or rejecting a request.
+     */
     protected function getHeaderActions(): array
     {
         return [
             Action::make('Approve')
-                ->visible(function ($record): bool {
-                    $user = Auth::user();
-
-                    if (! $user) {
-                        return false;
-                    }
-
-                    return app(CashRequestApprovalFlowService::class)->userCanReview($record, $user);
-                })
+                ->visible($this->isVisible())
                 ->requiresConfirmation()
                 ->action(fn($record) => $this->approveForApprovalRequest($record)),
 
             Action::make('Reject')
-                ->visible(function ($record): bool {
-                    $user = Auth::user();
-
-                    if (! $user) {
-                        return false;
-                    }
-
-                    return app(CashRequestApprovalFlowService::class)->userCanReview($record, $user);
-                })
+                ->visible($this->isVisible())
                 ->color('secondary')
                 ->form([
                     Textarea::make('rejection_reason')
@@ -70,6 +74,9 @@ class ViewForApprovalRequest extends ViewRecord
         ];
     }
 
+    /**
+     * Build the request detail infolist shown on the view page.
+     */
     public function infolist(Infolist $infolist): Infolist
     {
         return $infolist
@@ -144,6 +151,9 @@ class ViewForApprovalRequest extends ViewRecord
             ]);
     }
 
+    /**
+     * Apply an approval step, log activity, and dispatch notifications/jobs.
+     */
     private function approveForApprovalRequest($record)
     {
         try {
@@ -215,6 +225,9 @@ class ViewForApprovalRequest extends ViewRecord
         }
     }
 
+    /**
+     * Apply a rejection, log activity, and dispatch notifications/jobs.
+     */
     private function rejectForApprovalRequest($record, array $data)
     {
         try {
@@ -270,6 +283,9 @@ class ViewForApprovalRequest extends ViewRecord
         }
     }
 
+    /**
+     * Notify treasury approvers that the request is ready for payment processing.
+     */
     private function notifyPaymentProcessApprovers($record): void
     {
         $approvers = User::query()

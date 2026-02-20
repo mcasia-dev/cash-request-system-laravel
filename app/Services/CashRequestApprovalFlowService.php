@@ -14,6 +14,9 @@ use RuntimeException;
 
 class CashRequestApprovalFlowService
 {
+    /**
+     * Resolve the applicable approval rule for the request based on nature and amount.
+     */
     public function resolveRule($record): ?ApprovalRule
     {
         $amount = (float) $record->requesting_amount;
@@ -35,6 +38,9 @@ class CashRequestApprovalFlowService
             ->first();
     }
 
+    /**
+     * Initialize approval records for the request based on the matched rule.
+     */
     public function initializeApprovals($record): void
     {
         if ($record->cashRequestApprovals()->exists()) {
@@ -61,6 +67,9 @@ class CashRequestApprovalFlowService
         );
     }
 
+    /**
+     * Constrain the pending approvals list to those the given user can act on.
+     */
     public function filterPendingForUser(Builder $query, User $user): Builder
     {
         if ($user->isSuperAdmin()) {
@@ -84,6 +93,9 @@ class CashRequestApprovalFlowService
             });
     }
 
+    /**
+     * Determine whether the user can review the given request.
+     */
     public function userCanReview($record, User $user): bool
     {
         if ($user->isSuperAdmin()) {
@@ -93,6 +105,9 @@ class CashRequestApprovalFlowService
         return $this->getPendingApprovalForUser($record, $user) !== null;
     }
 
+    /**
+     * Apply an approval for the user and update request status and remarks.
+     */
     public function applyApproval($record, User $user): array
     {
         return DB::transaction(function () use ($record, $user): array {
@@ -141,6 +156,9 @@ class CashRequestApprovalFlowService
         });
     }
 
+    /**
+     * Apply a rejection for the user and mark the request as rejected.
+     */
     public function applyRejection($record, User $user, string $reason): string
     {
         return DB::transaction(function () use ($record, $user, $reason): string {
@@ -171,6 +189,9 @@ class CashRequestApprovalFlowService
         });
     }
 
+    /**
+     * Get the pending approval row for the user based on their roles.
+     */
     private function getPendingApprovalForUser($record, User $user): ?CashRequestApproval
     {
         if ($user->isSuperAdmin()) {
@@ -191,6 +212,9 @@ class CashRequestApprovalFlowService
             ->first();
     }
 
+    /**
+     * Resolve the approved status remark string for the given role.
+     */
     private function approvedRemarkByRole(string $role): string
     {
         return match ($role) {
@@ -205,6 +229,9 @@ class CashRequestApprovalFlowService
         };
     }
 
+    /**
+     * Resolve the rejected status remark string for the given role.
+     */
     private function rejectedRemarkByRole(string $role): string
     {
         return match ($role) {
@@ -219,11 +246,17 @@ class CashRequestApprovalFlowService
         };
     }
 
+    /**
+     * Build a readable fallback remark for a role when no explicit mapping exists.
+     */
     private function fallbackRemark(string $role, string $suffix): string
     {
         return Str::of($role)->replace('_', ' ')->title()->append(' ', $suffix)->toString();
     }
 
+    /**
+     * Resolve the next status remark after final approval based on request type.
+     */
     private function resolveFinalApprovalRemark($record): string
     {
         return match ($record->nature_of_request) {

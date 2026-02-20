@@ -178,153 +178,9 @@ class CashRequestResource extends Resource
                     Action::make('liquidate')
                         ->icon('heroicon-o-banknotes')
                         ->color('info')
-                        ->form(fn($record) => [
-                            Repeater::make('liquidation_items')
-                                ->label('Liquidation Receipts')
-                                ->addActionLabel('Add another receipt')
-                                ->minItems(1)
-                                ->reactive()
-                                ->schema([
-                                    FileUpload::make('receipt')
-                                        ->label('Upload Receipt')
-                                        ->disk('public')
-                                        ->directory('liquidation-receipts')
-                                        ->preserveFilenames()
-                                        ->required(),
-
-                                    TextInput::make('amount')
-                                        ->numeric()
-                                        ->required(),
-
-                                    Textarea::make('remarks')
-                                        ->nullable()
-                                        ->columnSpanFull(),
-                                ])
-                                ->columns(2),
-
-                            Placeholder::make('total_receipts')
-                                ->label('Total Receipt Amount')
-                                ->content(function (Get $get) {
-                                    $total = collect($get('liquidation_items'))
-                                        ->sum(fn($item) => (float) ($item['amount'] ?? 0));
-
-                                    return number_format($total, 2, '.', ',');
-                                }),
-
-                            Placeholder::make('amount_to_liquidate')
-                                ->label('Amount to Liquidate'),
-
-                            Placeholder::make('amount_to_reimburse')
-                                ->label('Amount to Reimburse')
-                                ->visible(function (Get $get) use ($record): bool {
-                                    $total = collect($get('liquidation_items'))
-                                        ->sum(fn($item) => (float) ($item['amount'] ?? 0));
-
-                                    return $total > (float) $record->requesting_amount;
-                                })
-                                ->content(function (Get $get) use ($record) {
-                                    $total = collect($get('liquidation_items'))
-                                        ->sum(fn($item) => (float) ($item['amount'] ?? 0));
-
-                                    $reimburse = $total - (float) $record->requesting_amount;
-
-                                    $formatted = number_format($reimburse, 2, '.', ',');
-
-                                    return new HtmlString("<span style=\"color:#16a34a;font-weight:600;\">{$formatted}</span>");
-                                }),
-
-                            Placeholder::make('missing_amount')
-                                ->label('Missing Amount')
-                                ->visible(function (Get $get) use ($record): bool {
-                                    $total = collect($get('liquidation_items'))
-                                        ->sum(fn($item) => (float) ($item['amount'] ?? 0));
-
-                                    return $total < (float) $record->requesting_amount;
-                                })
-                                ->content(function (Get $get) use ($record) {
-                                    $total = collect($get('liquidation_items'))
-                                        ->sum(fn($item) => (float) ($item['amount'] ?? 0));
-
-                                    $missing = (float) $record->requesting_amount - $total;
-
-                                    $formatted = number_format($missing, 2, '.', ',');
-
-                                    return new HtmlString("<span style=\"color:#dc2626;font-weight:600;\">{$formatted}</span>");
-                                }),
-                        ])
+                        ->form(self::getLiquidateForm())
                         ->modalSubmitActionLabel('Submit')
-                        ->action(function ($record, array $data) {
-                            $user           = Auth::user();
-                            $previousStatus = $record->status;
-
-                            $totalReceipts = collect($data['liquidation_items'] ?? [])
-                                ->sum(fn($item) => (float) ($item['amount'] ?? 0));
-
-                            $requestingAmount  = (float) $record->requesting_amount;
-                            $amountToReimburse = $totalReceipts > $requestingAmount
-                                ? $totalReceipts - $requestingAmount
-                                : 0.0;
-                            $missingAmount = $totalReceipts < $requestingAmount
-                                ? $requestingAmount - $totalReceipts
-                                : 0.0;
-
-                            $liquidation = ForLiquidation::firstOrCreate([
-                                'cash_request_id' => $record->id,
-                            ], [
-                                'total_liquidated' => $totalReceipts,
-                                'total_change'     => $amountToReimburse,
-                                'missing_amount'   => $missingAmount,
-                            ]);
-
-                            if (! $liquidation->wasRecentlyCreated) {
-                                $liquidation->update([
-                                    'total_change'   => $amountToReimburse,
-                                    'missing_amount' => $missingAmount,
-                                    'receipt_amount' => $totalReceipts,
-                                ]);
-                            }
-
-                            foreach ($data['liquidation_items'] as $item) {
-                                $receipt = LiquidationReceipt::create([
-                                    'liquidation_id' => $liquidation->id,
-                                    'receipt_amount' => $item['amount'],
-                                    'remarks'        => $item['remarks'] ?? null,
-                                ]);
-
-                                if (! empty($item['receipt'])) {
-                                    $path = $item['receipt'];
-
-                                    $receipt
-                                        ->addMedia(Storage::disk('public')->path($path))
-                                        ->toMediaCollection('liquidation-receipts');
-                                }
-                            }
-
-                            $record->update([
-                                'status'          => Status::LIQUIDATED->value,
-                                'status_remarks'  => StatusRemarks::LIQUIDATED->value,
-                                'date_liquidated' => Carbon::now(),
-                            ]);
-
-                            activity()
-                                ->causedBy($user)
-                                ->performedOn($record)
-                                ->event('liquidated')
-                                ->withProperties([
-                                    'request_no'        => $record->request_no,
-                                    'activity_name'     => $record->activity_name,
-                                    'requesting_amount' => $record->requesting_amount,
-                                    'previous_status'   => $previousStatus,
-                                    'new_status'        => Status::LIQUIDATED->value,
-                                    'status_remarks'    => StatusRemarks::LIQUIDATED->value,
-                                ])
-                                ->log("Cash request {$record->request_no} was liquidated by {$user->name}");
-
-                            Notification::make()
-                                ->title('Cash Request Liquidated!')
-                                ->success()
-                                ->send();
-                        })
+                        ->action(self::getLiquidateAction())
                         ->visible(fn($record) => $record->status === Status::RELEASED->value),
 
                     ViewAction::make(),
@@ -346,32 +202,7 @@ class CashRequestResource extends Resource
                         ->icon('heroicon-o-x-circle')
                         ->modalHeading('Reject Cash Request')
                         ->modalSubmitActionLabel('Submit')
-                        ->action(function ($record, array $data) {
-                            $user = Auth::user();
-                            $record->update([
-                                'status'                => Status::CANCELLED->value,
-                                'reason_for_cancelling' => $data['reason_for_cancelling'],
-                            ]);
-
-                            activity()
-                                ->causedBy($user)
-                                ->performedOn($record)
-                                ->event('cancelled')
-                                ->withProperties([
-                                    'request_no'            => $record->request_no,
-                                    'activity_name'         => $record->activity_name,
-                                    'requesting_amount'     => $record->requesting_amount,
-                                    'previous_status'       => Status::PENDING->value,
-                                    'new_status'            => Status::CANCELLED->value,
-                                    'reason_for_cancelling' => $data['reason_for_cancelling'],
-                                ])
-                                ->log("Cash request {$record->request_no} was cancelled by {$user->name}");
-
-                            Notification::make()
-                                ->title('Cash Request Cancelled!')
-                                ->success()
-                                ->send();
-                        })
+                        ->action(self::getCancelAction())
                         ->visible(fn($record) => $record->status === Status::PENDING->value),
                 ]),
 
@@ -400,5 +231,201 @@ class CashRequestResource extends Resource
             'track-status'      => Pages\TrackRequestStatus::route('/{record}/track-status'),
             'track-status-text' => Pages\TrackRequestStatusText::route('/{record}/track-status-text'),
         ];
+    }
+
+    /**
+     * Build the liquidation form schema closure for collecting receipt details.
+     * @return \Closure
+     */
+    public static function getLiquidateForm(): \Closure
+    {
+        return fn($record) => [
+            Repeater::make('liquidation_items')
+                ->label('Liquidation Receipts')
+                ->addActionLabel('Add another receipt')
+                ->minItems(1)
+                ->reactive()
+                ->schema([
+                    FileUpload::make('receipt')
+                        ->label('Upload Receipt')
+                        ->disk('public')
+                        ->directory('liquidation-receipts')
+                        ->preserveFilenames()
+                        ->required(),
+
+                    TextInput::make('amount')
+                        ->numeric()
+                        ->required(),
+
+                    Textarea::make('remarks')
+                        ->nullable()
+                        ->columnSpanFull(),
+                ])
+                ->columns(2),
+
+            Placeholder::make('total_receipts')
+                ->label('Total Receipt Amount')
+                ->content(function (Get $get) {
+                    $total = collect($get('liquidation_items'))
+                        ->sum(fn($item) => (float)($item['amount'] ?? 0));
+
+                    return number_format($total, 2, '.', ',');
+                }),
+
+            Placeholder::make('amount_to_liquidate')
+                ->label('Amount to Liquidate'),
+
+            Placeholder::make('amount_to_reimburse')
+                ->label('Amount to Reimburse')
+                ->visible(function (Get $get) use ($record): bool {
+                    $total = collect($get('liquidation_items'))
+                        ->sum(fn($item) => (float)($item['amount'] ?? 0));
+
+                    return $total > (float)$record->requesting_amount;
+                })
+                ->content(function (Get $get) use ($record) {
+                    $total = collect($get('liquidation_items'))
+                        ->sum(fn($item) => (float)($item['amount'] ?? 0));
+
+                    $reimburse = $total - (float)$record->requesting_amount;
+
+                    $formatted = number_format($reimburse, 2, '.', ',');
+
+                    return new HtmlString("<span style=\"color:#16a34a;font-weight:600;\">{$formatted}</span>");
+                }),
+
+            Placeholder::make('missing_amount')
+                ->label('Missing Amount')
+                ->visible(function (Get $get) use ($record): bool {
+                    $total = collect($get('liquidation_items'))
+                        ->sum(fn($item) => (float)($item['amount'] ?? 0));
+
+                    return $total < (float)$record->requesting_amount;
+                })
+                ->content(function (Get $get) use ($record) {
+                    $total = collect($get('liquidation_items'))
+                        ->sum(fn($item) => (float)($item['amount'] ?? 0));
+
+                    $missing = (float)$record->requesting_amount - $total;
+
+                    $formatted = number_format($missing, 2, '.', ',');
+
+                    return new HtmlString("<span style=\"color:#dc2626;font-weight:600;\">{$formatted}</span>");
+                }),
+        ];
+    }
+
+    /**
+     * Build the liquidation action closure to save receipts and update status.
+     * @return \Closure
+     */
+    public static function getLiquidateAction(): \Closure
+    {
+        return function ($record, array $data) {
+            $user = Auth::user();
+            $previousStatus = $record->status;
+
+            $totalReceipts = collect($data['liquidation_items'] ?? [])
+                ->sum(fn($item) => (float)($item['amount'] ?? 0));
+
+            $requestingAmount = (float)$record->requesting_amount;
+            $amountToReimburse = $totalReceipts > $requestingAmount
+                ? $totalReceipts - $requestingAmount
+                : 0.0;
+            $missingAmount = $totalReceipts < $requestingAmount
+                ? $requestingAmount - $totalReceipts
+                : 0.0;
+
+            $liquidation = ForLiquidation::firstOrCreate([
+                'cash_request_id' => $record->id,
+            ], [
+                'total_liquidated' => $totalReceipts,
+                'total_change' => $amountToReimburse,
+                'missing_amount' => $missingAmount,
+            ]);
+
+            if (!$liquidation->wasRecentlyCreated) {
+                $liquidation->update([
+                    'total_change' => $amountToReimburse,
+                    'missing_amount' => $missingAmount,
+                    'receipt_amount' => $totalReceipts,
+                ]);
+            }
+
+            foreach ($data['liquidation_items'] as $item) {
+                $receipt = LiquidationReceipt::create([
+                    'liquidation_id' => $liquidation->id,
+                    'receipt_amount' => $item['amount'],
+                    'remarks' => $item['remarks'] ?? null,
+                ]);
+
+                if (!empty($item['receipt'])) {
+                    $path = $item['receipt'];
+
+                    $receipt
+                        ->addMedia(Storage::disk('public')->path($path))
+                        ->toMediaCollection('liquidation-receipts');
+                }
+            }
+
+            $record->update([
+                'status' => Status::LIQUIDATED->value,
+                'status_remarks' => StatusRemarks::LIQUIDATED->value,
+                'date_liquidated' => Carbon::now(),
+            ]);
+
+            activity()
+                ->causedBy($user)
+                ->performedOn($record)
+                ->event('liquidated')
+                ->withProperties([
+                    'request_no' => $record->request_no,
+                    'activity_name' => $record->activity_name,
+                    'requesting_amount' => $record->requesting_amount,
+                    'previous_status' => $previousStatus,
+                    'new_status' => Status::LIQUIDATED->value,
+                    'status_remarks' => StatusRemarks::LIQUIDATED->value,
+                ])
+                ->log("Cash request {$record->request_no} was liquidated by {$user->name}");
+
+            Notification::make()
+                ->title('Cash Request Liquidated!')
+                ->success()
+                ->send();
+        };
+    }
+
+    /**
+     * Build the cancel action closure to mark a request as cancelled.
+     * @return \Closure
+     */
+    public static function getCancelAction(): \Closure
+    {
+        return function ($record, array $data) {
+            $user = Auth::user();
+            $record->update([
+                'status' => Status::CANCELLED->value,
+                'reason_for_cancelling' => $data['reason_for_cancelling'],
+            ]);
+
+            activity()
+                ->causedBy($user)
+                ->performedOn($record)
+                ->event('cancelled')
+                ->withProperties([
+                    'request_no' => $record->request_no,
+                    'activity_name' => $record->activity_name,
+                    'requesting_amount' => $record->requesting_amount,
+                    'previous_status' => Status::PENDING->value,
+                    'new_status' => Status::CANCELLED->value,
+                    'reason_for_cancelling' => $data['reason_for_cancelling'],
+                ])
+                ->log("Cash request {$record->request_no} was cancelled by {$user->name}");
+
+            Notification::make()
+                ->title('Cash Request Cancelled!')
+                ->success()
+                ->send();
+        };
     }
 }

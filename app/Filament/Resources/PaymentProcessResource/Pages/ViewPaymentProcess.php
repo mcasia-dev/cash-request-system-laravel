@@ -32,6 +32,9 @@ class ViewPaymentProcess extends ViewRecord
 {
     protected static string $resource = PaymentProcessResource::class;
 
+    /**
+     * Define the header actions for setting disbursement, approving, or rejecting.
+     */
     protected function getHeaderActions(): array
     {
         return [
@@ -67,6 +70,9 @@ class ViewPaymentProcess extends ViewRecord
         ];
     }
 
+    /**
+     * Build the request detail infolist and activity sections for the view page.
+     */
     public function infolist(Infolist $infolist): Infolist
     {
         return $infolist
@@ -422,6 +428,9 @@ class ViewPaymentProcess extends ViewRecord
         return $this->getStandardApproveFormSchema();
     }
 
+    /**
+     * Build the standard approval form schema for releasing cash requests.
+     */
     private function getStandardApproveFormSchema(): array
     {
         return [
@@ -446,6 +455,9 @@ class ViewPaymentProcess extends ViewRecord
         ];
     }
 
+    /**
+     * Build the payroll-specific approval form schema.
+     */
     private function getPayrollApproveFormSchema(): array
     {
         return [
@@ -460,6 +472,9 @@ class ViewPaymentProcess extends ViewRecord
         ];
     }
 
+    /**
+     * Build the disbursement type selection form schema with conditional fields.
+     */
     private function getDisbursementTypeFormSchema(): array
     {
         return array_merge(
@@ -482,6 +497,9 @@ class ViewPaymentProcess extends ViewRecord
         );
     }
 
+    /**
+     * Build the check-specific disbursement fields.
+     */
     private function getCheckDisbursementTypeSchema(): array
     {
         return [
@@ -504,6 +522,9 @@ class ViewPaymentProcess extends ViewRecord
         ];
     }
 
+    /**
+     * Build the payroll-specific disbursement fields.
+     */
     private function getPayrollDisbursementTypeSchema(): array
     {
         return [
@@ -519,6 +540,9 @@ class ViewPaymentProcess extends ViewRecord
         ];
     }
 
+    /**
+     * Persist the selected disbursement type and related details.
+     */
     private function saveDisbursementType($record, array $data): void
     {
         $basePayload = [
@@ -540,6 +564,9 @@ class ViewPaymentProcess extends ViewRecord
             ->send();
     }
 
+    /**
+     * Build the payload for check disbursement fields.
+     */
     private function getCheckDisbursementPayload(array $data): array
     {
         return [
@@ -548,6 +575,9 @@ class ViewPaymentProcess extends ViewRecord
         ];
     }
 
+    /**
+     * Build the payload for payroll disbursement fields.
+     */
     private function getPayrollDisbursementPayload(array $data): array
     {
         return [
