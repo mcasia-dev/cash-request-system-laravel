@@ -106,7 +106,9 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
                             }),
 
                         SpatieMediaLibraryFileUpload::make('attachment')
-                            ->collection('attachments'),
+                            ->collection('attachments')
+                            ->multiple()
+                            ->responsiveImages(),
 
                         Textarea::make('purpose')
                             ->columnSpanFull()
@@ -118,6 +120,18 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
     public function create(): void
     {
         $formData = $this->form->getState();
+        $natureOfRequest = $formData['nature_of_request'] ?? $this->draftNatureOfRequest;
+
+        if ($this->hasActiveRequestForNature($natureOfRequest, $this->draftCashRequestId)) {
+            Notification::make()
+                ->title('Existing request found')
+                ->body('You already have a pending request with the same nature that is not yet liquidated.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
         $cashRequest = $this->getOrCreateDraftCashRequest($formData['nature_of_request'] ?? null);
 
         $activityList = ActivityList::create([
@@ -129,6 +143,7 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
             'activity_venue'    => $formData['activity_venue'],
             'requesting_amount' => $formData['requesting_amount'],
             'purpose'           => $formData['purpose'],
+            'status'            => 'pending',
         ]);
 
         $this->form->model($activityList)->saveRelationships();
@@ -219,7 +234,9 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
                                 ->maxValue(fn(): ?float => $this->getConfiguredMaxAmountForNature($this->draftNatureOfRequest)),
 
                             SpatieMediaLibraryFileUpload::make('attachment')
-                                ->collection('attachments'),
+                                ->collection('attachments')
+                                ->multiple()
+                                ->responsiveImages(),
 
                             Textarea::make('purpose')
                                 ->columnSpanFull()
@@ -262,6 +279,12 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
 
             if ($maxAllowedAmount !== null && $totalRequestingAmount > $maxAllowedAmount) {
                 $failureMessage = 'Total requesting amount must not be greater than PHP ' . number_format($maxAllowedAmount, 2) . '.';
+
+                return false;
+            }
+
+            if ($this->hasActiveRequestForNature($cashRequest->nature_of_request, $cashRequest->id)) {
+                $failureMessage = 'You already have a pending request with the same nature that is not yet liquidated.';
 
                 return false;
             }
@@ -378,6 +401,23 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
             ->orderByRaw('CASE WHEN max_amount IS NULL THEN 1 ELSE 0 END')
             ->orderBy('max_amount')
             ->value('max_amount');
+    }
+
+    private function hasActiveRequestForNature(?string $nature, ?int $excludeRequestId = null): bool
+    {
+        if (blank($nature)) {
+            return false;
+        }
+
+        return CashRequest::query()
+            ->where('user_id', Auth::id())
+            ->where('nature_of_request', $nature)
+            ->when(
+                filled($excludeRequestId),
+                fn($query) => $query->where('id', '!=', $excludeRequestId)
+            )
+            ->whereNotIn('status', [Status::LIQUIDATED->value, Status::CANCELLED->value])
+            ->exists();
     }
 
     private function notifyApprovers(CashRequest $cashRequest, User $requestor): void

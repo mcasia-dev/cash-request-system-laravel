@@ -49,9 +49,11 @@ class ForApprovalRequest extends Model implements HasMedia
         'payroll_date',
         'payroll_credit',
         'disbursement_added_by',
+        'is_override'
     ];
 
     protected $casts = [
+        'is_override'     => 'boolean',
         'activity_date'   => 'date',
         'due_date'        => 'date',
         'cut_off_date'    => 'date',

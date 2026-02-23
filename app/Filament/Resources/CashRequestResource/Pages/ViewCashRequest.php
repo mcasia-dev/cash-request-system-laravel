@@ -159,7 +159,7 @@ class ViewCashRequest extends ViewRecord
                     ->collapsed()
                     ->schema([
                         TextEntry::make('due_date')
-                            ->label('Due Date')
+                            ->label('Liquidation Due Date')
                             ->date(),
 
                         TextEntry::make('date_released')

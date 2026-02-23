@@ -71,7 +71,7 @@ class ForCashReleaseResource extends Resource
                     ->sortable(),
 
                 TextColumn::make('cashRequest.due_date')
-                    ->label('Due Date')
+                    ->label('Liquidation Due Date')
                     ->date()
                     ->sortable(),
 

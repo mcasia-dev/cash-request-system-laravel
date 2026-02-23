@@ -21,6 +21,8 @@ class ActivityList extends Model implements HasMedia
         'purpose',
         'nature_of_request',
         'requesting_amount',
+        'status',
+        'rejection_remarks',
     ];
 
     protected $casts = [

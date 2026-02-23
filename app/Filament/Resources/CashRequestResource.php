@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Filament\Resources;
 
 use App\Enums\CashRequest\Status;
@@ -35,9 +36,9 @@ use Illuminate\Support\HtmlString;
 
 class CashRequestResource extends Resource
 {
-    protected static ?string $model           = CashRequest::class;
+    protected static ?string $model = CashRequest::class;
     protected static ?string $navigationGroup = 'Cash Requests';
-    protected static ?string $navigationIcon  = 'heroicon-o-document-text';
+    protected static ?string $navigationIcon = 'heroicon-o-document-text';
 
     public static function getEloquentQuery(): Builder
     {
@@ -106,9 +107,9 @@ class CashRequestResource extends Resource
                     ->label('Nature of Request')
                     ->badge()
                     ->color(fn($state) => match ($state) {
-                        NatureOfRequestEnum::PETTY_CASH->value   => 'primary',
+                        NatureOfRequestEnum::PETTY_CASH->value => 'primary',
                         NatureOfRequestEnum::CASH_ADVANCE->value => 'success',
-                        default                                  => 'secondary'
+                        default => 'secondary'
                     })
                     ->searchable()
                     ->sortable(),
@@ -124,20 +125,20 @@ class CashRequestResource extends Resource
                     ->sortable(),
 
                 TextColumn::make('due_date')
-                    ->label('Due Date')
+                    ->label('Liquidation Due Date')
                     ->date()
                     ->sortable(),
 
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
-                        Status::PENDING->value    => 'warning',
-                        Status::APPROVED->value   => 'success',
-                        Status::REJECTED->value   => 'danger',
-                        Status::CANCELLED->value  => 'gray',
+                        Status::PENDING->value => 'warning',
+                        Status::APPROVED->value => 'success',
+                        Status::REJECTED->value => 'danger',
+                        Status::CANCELLED->value => 'gray',
                         Status::LIQUIDATED->value => 'info',
-                        Status::RELEASED->value   => 'info',
-                        default                   => 'secondary',
+                        Status::RELEASED->value => 'info',
+                        default => 'secondary',
                     })
                     ->searchable(),
 
@@ -181,9 +182,6 @@ class CashRequestResource extends Resource
 
                     ViewAction::make(),
 
-                    EditAction::make()
-                        ->visible(fn() => Status::PENDING->value),
-
                     DeleteAction::make()
                         ->visible(fn($record) => Status::PENDING->value && $record->status_remarks == null),
 
@@ -220,11 +218,11 @@ class CashRequestResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index'             => Pages\ListCashRequests::route('/'),
-            'create'            => CreateActivityListWithTable::route('/create'),
-            'edit'              => Pages\EditCashRequest::route('/{record}/edit'),
-            'view'              => Pages\ViewCashRequest::route('/{record}/view'),
-            'track-status'      => Pages\TrackRequestStatus::route('/{record}/track-status'),
+            'index' => Pages\ListCashRequests::route('/'),
+            'create' => CreateActivityListWithTable::route('/create'),
+            'edit' => Pages\EditCashRequest::route('/{record}/edit'),
+            'view' => Pages\ViewCashRequest::route('/{record}/view'),
+            'track-status' => Pages\TrackRequestStatus::route('/{record}/track-status'),
             'track-status-text' => Pages\TrackRequestStatusText::route('/{record}/track-status-text'),
         ];
     }
@@ -291,7 +289,7 @@ class CashRequestResource extends Resource
                 }),
 
             Placeholder::make('missing_amount')
-                ->label('Missing Amount')
+                ->label('Cash Return')
                 ->visible(function (Get $get) use ($record): bool {
                     $total = collect($get('liquidation_items'))
                         ->sum(fn($item) => (float)($item['amount'] ?? 0));
