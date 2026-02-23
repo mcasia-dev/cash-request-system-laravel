@@ -10,7 +10,7 @@ use App\Jobs\ReleaseCashRequestByTreasuryJob;
 use App\Models\CashRequest;
 use App\Models\ForCashRelease;
 use App\Models\ForLiquidation;
-use App\Models\User;
+use App\Services\Remarks\StatusRemarkResolver;
 use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
@@ -218,7 +218,7 @@ class ViewForCashRelease extends ViewRecord
     private function releaseCashRequest($record, array $data)
     {
         $user           = Auth::user();
-        $status_remarks = $this->getReleasedStatusRemarks($user);
+        $status_remarks = app(StatusRemarkResolver::class)->releaseByPermissions($user);
 
         // Update the released date and released_by column
         $record->update([
@@ -288,7 +288,7 @@ class ViewForCashRelease extends ViewRecord
     private function rejectCashRequest($record, array $data)
     {
         $user           = Auth::user();
-        $status_remarks = $this->getRejectedStatusRemarks($user);
+        $status_remarks = app(StatusRemarkResolver::class)->rejectByPermissions($user, 'treasury');
 
         // Update the record status and save rejection reason
         $record->cashRequest
@@ -338,33 +338,4 @@ class ViewForCashRelease extends ViewRecord
         return redirect()->route('filament.admin.resources.for-cash-releases.index');
     }
 
-    /**
-     * Resolve the released status remark based on the user's release role.
-     *
-     * @param User $user
-     * @return string
-     */
-    private function getReleasedStatusRemarks(User $user)
-    {
-        return match (true) {
-            $user->can('treasury-manager-can-release-cash-request')    => StatusRemarks::TREASURY_MANAGER_RELEASED_CASH_REQUESTED->value,
-            $user->can('treasury-supervisor-can-release-cash-request') => StatusRemarks::TREASURY_SUPERVISOR_RELEASED_CASH_REQUESTED->value,
-            default                                                    => 'Released'
-        };
-    }
-
-    /**
-     * Resolve the rejected status remark based on the user's rejection role.
-     *
-     * @param User $user
-     * @return string
-     */
-    private function getRejectedStatusRemarks(User $user)
-    {
-        return match (true) {
-            $user->can('can-reject-as-treasury-manager')    => StatusRemarks::TREASURY_MANAGER_REJECTED_REQUEST->value,
-            $user->can('can-reject-as-treasury-supervisor') => StatusRemarks::TREASURY_SUPERVISOR_REJECTED_REQUEST->value,
-            default                                         => 'Rejected'
-        };
-    }
 }

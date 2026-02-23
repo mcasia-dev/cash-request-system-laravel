@@ -2,18 +2,21 @@
 namespace App\Services;
 
 use App\Enums\CashRequest\Status;
-use App\Enums\CashRequest\StatusRemarks;
-use App\Enums\NatureOfRequestEnum;
 use App\Models\ApprovalRule;
 use App\Models\CashRequestApproval;
 use App\Models\User;
+use App\Services\Remarks\StatusRemarkResolver;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use RuntimeException;
 
 class CashRequestApprovalFlowService
 {
+    public function __construct(
+        private readonly StatusRemarkResolver $remarkResolver
+    ) {
+    }
+
     /**
      * Resolve the applicable approval rule for the request based on nature and amount.
      */
@@ -217,16 +220,7 @@ class CashRequestApprovalFlowService
      */
     private function approvedRemarkByRole(string $role): string
     {
-        return match ($role) {
-            'super_admin'            => StatusRemarks::SUPER_ADMIN_APPROVED_REQUEST->value,
-            'department_head'        => StatusRemarks::DEPARTMENT_HEAD_APPROVED_REQUEST->value,
-            'president'              => StatusRemarks::PRESIDENT_APPROVED_REQUEST->value,
-            'treasury_manager'       => StatusRemarks::TREASURY_MANAGER_APPROVED_REQUEST->value,
-            'treasury_supervisor'    => StatusRemarks::TREASURY_SUPERVISOR_APPROVED_REQUEST->value,
-            'sales_channel_manager'  => StatusRemarks::SALES_CHANNEL_MANAGER_APPROVED_REQUEST->value,
-            'national_sales_manager' => StatusRemarks::NATIONAL_SALES_MANAGER_APPROVED_REQUEST->value,
-            default                  => $this->fallbackRemark($role, 'Approved Request'),
-        };
+        return $this->remarkResolver->approveByRole($role);
     }
 
     /**
@@ -234,24 +228,7 @@ class CashRequestApprovalFlowService
      */
     private function rejectedRemarkByRole(string $role): string
     {
-        return match ($role) {
-            'super_admin'            => StatusRemarks::SUPER_ADMIN_REJECTED_REQUEST->value,
-            'department_head'        => StatusRemarks::DEPARTMENT_HEAD_REJECTED_REQUEST->value,
-            'president'              => StatusRemarks::PRESIDENT_REJECTED_REQUEST->value,
-            'treasury_manager'       => StatusRemarks::TREASURY_MANAGER_REJECTED_REQUEST->value,
-            'treasury_supervisor'    => StatusRemarks::TREASURY_SUPERVISOR_REJECTED_REQUEST->value,
-            'sales_channel_manager'  => StatusRemarks::SALES_CHANNEL_MANAGER_REJECTED_REQUEST->value,
-            'national_sales_manager' => StatusRemarks::NATIONAL_SALES_MANAGER_REJECTED_REQUEST->value,
-            default                  => $this->fallbackRemark($role, 'Rejected Request'),
-        };
-    }
-
-    /**
-     * Build a readable fallback remark for a role when no explicit mapping exists.
-     */
-    private function fallbackRemark(string $role, string $suffix): string
-    {
-        return Str::of($role)->replace('_', ' ')->title()->append(' ', $suffix)->toString();
+        return $this->remarkResolver->rejectByRole($role);
     }
 
     /**
@@ -259,9 +236,6 @@ class CashRequestApprovalFlowService
      */
     private function resolveFinalApprovalRemark($record): string
     {
-        return match ($record->nature_of_request) {
-            NatureOfRequestEnum::CASH_ADVANCE->value => StatusRemarks::FOR_FINANCE_VERIFICATION->value,
-            default                                  => StatusRemarks::FOR_PAYMENT_PROCESSING->value,
-        };
+        return $this->remarkResolver->finalRemarkForNature($record->nature_of_request);
     }
 }

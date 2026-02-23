@@ -9,7 +9,7 @@ use App\Filament\Resources\PaymentProcessResource;
 use App\Jobs\ApproveCashRequestByTreasuryJob;
 use App\Jobs\RejectCashRequestJob;
 use App\Models\ForCashRelease;
-use App\Models\User;
+use App\Services\Remarks\StatusRemarkResolver;
 use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
@@ -260,7 +260,7 @@ class ViewPaymentProcess extends ViewRecord
     private function approveCashRequest($record, array $data)
     {
         $user           = Auth::user();
-        $status_remarks = $this->getApprovedStatusRemarks($user);
+        $status_remarks = app(StatusRemarkResolver::class)->approveByPermissions($user, 'treasury');
         $releasingDate  = $data['releasing_date'] ?? $data['payroll_date'] ?? null;
         $timeFrom       = $data['releasing_time_from'] ?? null;
         $timeTo         = $data['releasing_time_to'] ?? null;
@@ -328,21 +328,6 @@ class ViewPaymentProcess extends ViewRecord
     }
 
     /**
-     * Resolve the approved status remark based on the user's approval role.
-     *
-     * @param User $user
-     * @return string
-     */
-    private function getApprovedStatusRemarks(User $user)
-    {
-        return match (true) {
-            $user->can('can-approve-as-treasury-manager')    => StatusRemarks::TREASURY_MANAGER_APPROVED_REQUEST->value,
-            $user->can('can-approve-as-treasury-supervisor') => StatusRemarks::TREASURY_SUPERVISOR_APPROVED_REQUEST->value,
-            default                                          => 'Approved'
-        };
-    }
-
-    /**
      * Reject the cash request, log the rejection, and dispatch notification.
      *
      * @param mixed $record
@@ -351,7 +336,7 @@ class ViewPaymentProcess extends ViewRecord
     private function rejectCashRequest($record, array $data)
     {
         $user           = Auth::user();
-        $status_remarks = $this->getRejectedStatusRemarks($user);
+        $status_remarks = app(StatusRemarkResolver::class)->rejectByPermissions($user, 'treasury');
 
         // Update the record status and save rejection reason
         $record->update([
@@ -399,21 +384,6 @@ class ViewPaymentProcess extends ViewRecord
 
         return redirect()->route('filament.admin.resources.payment-processing.index');
 
-    }
-
-    /**
-     * Resolve the rejected status remark based on the user's rejection role.
-     *
-     * @param User $user
-     * @return string
-     */
-    private function getRejectedStatusRemarks(User $user)
-    {
-        return match (true) {
-            $user->can('can-reject-as-treasury-manager')    => StatusRemarks::TREASURY_MANAGER_REJECTED_REQUEST->value,
-            $user->can('can-reject-as-treasury-supervisor') => StatusRemarks::TREASURY_SUPERVISOR_REJECTED_REQUEST->value,
-            default                                         => 'Rejected'
-        };
     }
 
     private function getApproveFormSchema($record): array

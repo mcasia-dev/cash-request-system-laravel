@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Filament\Resources;
 
 use App\Enums\User\AccountStatus;
@@ -17,11 +18,11 @@ use Illuminate\Support\Facades\Auth;
 
 class UserResource extends Resource
 {
-    protected static ?string $model           = User::class;
+    protected static ?string $model = User::class;
     protected static ?string $navigationGroup = 'Administrator';
-    protected static ?string $slug            = 'admin-users';
+    protected static ?string $slug = 'admin-users';
     protected static ?string $navigationLabel = 'User';
-    protected static ?string $navigationIcon  = 'heroicon-o-users';
+    protected static ?string $navigationIcon = 'heroicon-o-users';
 
     public static function form(Form $form): Form
     {
@@ -123,7 +124,8 @@ class UserResource extends Resource
                 TextColumn::make('contact_number')
                     ->label('Contact Number')
                     ->sortable()
-                    ->searchable(),
+                    ->searchable()
+                    ->prefix('+63'),
 
                 TextColumn::make('department.department_name')
                     ->searchable()
@@ -139,9 +141,9 @@ class UserResource extends Resource
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
                         AccountStatus::SUSPENDED->value => 'warning',
-                        AccountStatus::ACTIVE->value    => 'success',
-                        AccountStatus::BLOCKED->value   => 'danger',
-                        default                         => 'secondary',
+                        AccountStatus::ACTIVE->value => 'success',
+                        AccountStatus::BLOCKED->value => 'danger',
+                        default => 'secondary',
                     })
                     ->sortable(),
 
@@ -149,10 +151,10 @@ class UserResource extends Resource
                     ->label('Approval Status')
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
-                        Status::PENDING->value     => 'warning',
-                        Status::APPROVED->value    => 'success',
+                        Status::PENDING->value => 'warning',
+                        Status::APPROVED->value => 'success',
                         Status::DISAPPROVED->value => 'danger',
-                        default                    => 'secondary',
+                        default => 'secondary',
                     })
                     ->sortable(),
 
@@ -189,9 +191,9 @@ class UserResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index'  => Pages\ListUsers::route('/'),
+            'index' => Pages\ListUsers::route('/'),
             'create' => Pages\CreateUser::route('/create'),
-            'edit'   => Pages\EditUser::route('/{record}/edit'),
+            'edit' => Pages\EditUser::route('/{record}/edit'),
         ];
     }
 }
