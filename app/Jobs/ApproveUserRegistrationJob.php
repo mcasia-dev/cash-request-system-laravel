@@ -15,7 +15,6 @@ class ApproveUserRegistrationJob implements ShouldQueue
      */
     public function __construct(public $record)
     {
-        $this->record = $record;
     }
 
     /**

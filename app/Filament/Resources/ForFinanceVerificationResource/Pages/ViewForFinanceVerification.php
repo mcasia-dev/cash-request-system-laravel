@@ -5,7 +5,7 @@ use App\Enums\CashRequest\Status;
 use App\Enums\CashRequest\StatusRemarks;
 use App\Filament\Resources\ForFinanceVerificationResource;
 use App\Jobs\RejectCashRequestJob;
-use App\Models\User;
+use App\Services\Remarks\StatusRemarkResolver;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -147,7 +147,7 @@ class ViewForFinanceVerification extends ViewRecord
     private function approveRequest($record, array $data)
     {
         $user                     = Auth::user();
-        $approved_remarks_by_role = $this->getApprovedStatusRemarks($user);
+        $approved_remarks_by_role = app(StatusRemarkResolver::class)->approveByPermissions($user, 'finance');
 
         // Update the record status
         $record->update([
@@ -188,7 +188,7 @@ class ViewForFinanceVerification extends ViewRecord
     private function rejectRequest($record, array $data)
     {
         $user           = Auth::user();
-        $status_remarks = $this->getRejectedStatusRemarks($user);
+        $status_remarks = app(StatusRemarkResolver::class)->rejectByPermissions($user, 'finance');
 
         // Update the record status and save rejection reason
         $record->update([
@@ -223,34 +223,6 @@ class ViewForFinanceVerification extends ViewRecord
 
         return redirect()->route('filament.admin.resources.for-verification.index');
 
-    }
-
-    /**
-     * Resolve the approved status remark based on the user's approval role.
-     *
-     * @param User $user
-     * @return string
-     */
-    private function getApprovedStatusRemarks(User $user)
-    {
-        return match (true) {
-            $user->can('can-approve-as-finance-staff') => StatusRemarks::FINANCE_DEPARTMENT_APPROVED_REQUEST->value,
-            default                                    => 'Approved'
-        };
-    }
-
-    /**
-     * Resolve the rejected status remark based on the user's rejection role.
-     *
-     * @param User $user
-     * @return string
-     */
-    private function getRejectedStatusRemarks(User $user)
-    {
-        return match (true) {
-            $user->can('can-reject-as-finance-staff') => StatusRemarks::FINANCE_DEPARTMENT_REJECTED_REQUEST->value,
-            default                                   => 'Rejected'
-        };
     }
 
 }

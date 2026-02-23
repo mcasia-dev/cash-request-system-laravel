@@ -17,7 +17,6 @@ class ApproveCashRequestMail extends Mailable
      */
     public function __construct(public $record)
     {
-        $this->record = $record;
     }
 
     /**
