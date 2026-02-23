@@ -47,10 +47,11 @@ class ForFinanceVerification extends Model implements HasMedia
         'cut_off_date',
         'payroll_date',
         'payroll_credit',
-        'disbursement_added_by',
-    ];
+        'disbursement_added_by', 'is_override'
+     ];
 
     protected $casts = [
+        'is_override'     => 'boolean',
         'activity_date'   => 'date',
         'due_date'        => 'date',
         'cut_off_date'    => 'date',

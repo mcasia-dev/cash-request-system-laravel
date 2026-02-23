@@ -2,20 +2,54 @@
 namespace App\Filament\Resources\ForLiquidationResource\Pages;
 
 use App\Enums\CashRequest\DisbursementType;
+use App\Enums\CashRequest\Status;
+use App\Enums\CashRequest\StatusRemarks;
 use App\Filament\Resources\ForLiquidationResource;
 use App\Models\ForLiquidation;
 use App\Models\LiquidationReceipt;
+use Carbon\Carbon;
+use Filament\Actions\Action;
+use Filament\Forms\Components\Textarea;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\HtmlString;
 
 class ViewForLiquidation extends ViewRecord
 {
     protected static string $resource = ForLiquidationResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('Liquidate')
+                ->label('Liquidate')
+                ->color('primary')
+                ->requiresConfirmation()
+                ->action(fn(ForLiquidation $record) => $this->liquidateRequest($record))
+                ->visible(fn(ForLiquidation $record) => $this->canProcess($record)),
+
+            Action::make('Reject')
+                ->label('Reject')
+                ->color('secondary')
+                ->requiresConfirmation()
+                ->form([
+                    Textarea::make('rejection_remarks')
+                        ->label('Rejection Remarks')
+                        ->required()
+                        ->maxLength(65535),
+                ])
+                ->modalHeading('Reject Liquidation')
+                ->modalSubmitActionLabel('Reject')
+                ->action(fn(ForLiquidation $record, array $data) => $this->rejectLiquidation($record, $data))
+                ->visible(fn(ForLiquidation $record) => $this->canProcess($record)),
+        ];
+    }
 
     /**
      * Build the liquidation view infolist with request, payment, and receipt details.
@@ -226,7 +260,7 @@ class ViewForLiquidation extends ViewRecord
                             ->date(),
 
                         TextEntry::make('cashRequest.due_date')
-                            ->label('Due Date')
+                            ->label('Liquidation Due Date')
                             ->date(),
 
                         TextEntry::make('cashRequest.date_released')
@@ -306,5 +340,76 @@ class ViewForLiquidation extends ViewRecord
 
             return new HtmlString($html);
         };
+    }
+
+    private function canProcess(ForLiquidation $record): bool
+    {
+        return $record->cashRequest->status === Status::RELEASED->value
+            && $record->cashRequest->status_remarks === StatusRemarks::LIQUIDATION_RECEIPT_SUBMITTED->value;
+    }
+
+    private function liquidateRequest(ForLiquidation $record): void
+    {
+        $user = Auth::user();
+
+        $record->cashRequest->update([
+            'status' => Status::LIQUIDATED->value,
+            'status_remarks' => StatusRemarks::LIQUIDATED->value,
+            'date_liquidated' => Carbon::now(),
+        ]);
+
+        activity()
+            ->causedBy($user)
+            ->performedOn($record->cashRequest ?? $record)
+            ->event('liquidated')
+            ->withProperties([
+                'request_no' => $record->cashRequest->request_no,
+                'activity_name' => $record->cashRequest->activity_name,
+                'requesting_amount' => $record->cashRequest->requesting_amount,
+                'previous_status' => Status::RELEASED->value,
+                'new_status' => Status::LIQUIDATED->value,
+                'status_remarks' => StatusRemarks::LIQUIDATED->value,
+            ])
+            ->log("Cash request {$record->cashRequest->request_no} was liquidated by {$user->name} ({$user->position})");
+
+        Notification::make()
+            ->title('Liquidation approved.')
+            ->success()
+            ->send();
+    }
+
+    private function rejectLiquidation(ForLiquidation $record, array $data): void
+    {
+        $user = Auth::user();
+
+        $record->update([
+            'remarks' => $data['rejection_remarks'],
+        ]);
+
+        $record->cashRequest->update([
+            'status' => Status::RELEASED->value,
+            'status_remarks' => StatusRemarks::FOR_LIQUIDATION->value,
+            'reason_for_rejection' => $data['rejection_remarks'],
+        ]);
+
+        activity()
+            ->causedBy($user)
+            ->performedOn($record->cashRequest ?? $record)
+            ->event('rejected')
+            ->withProperties([
+                'request_no' => $record->cashRequest->request_no,
+                'activity_name' => $record->cashRequest->activity_name,
+                'requesting_amount' => $record->cashRequest->requesting_amount,
+                'previous_status' => Status::RELEASED->value,
+                'new_status' => Status::RELEASED->value,
+                'status_remarks' => StatusRemarks::FOR_LIQUIDATION->value,
+                'reason_for_rejection' => $data['rejection_remarks'],
+            ])
+            ->log("Liquidation receipts for cash request {$record->cashRequest->request_no} were rejected by {$user->name} ({$user->position})");
+
+        Notification::make()
+            ->title('Liquidation rejected.')
+            ->success()
+            ->send();
     }
 }

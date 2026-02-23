@@ -91,6 +91,9 @@ class ViewForCashRelease extends ViewRecord
                 Section::make('Activity Information')
                     ->collapsed()
                     ->collapsible()
+                    ->getStateUsing(fn($record) => $record->activityLists()
+                        ->where('status', '!=', 'rejected')
+                        ->get())
                     ->schema([
                         RepeatableEntry::make('cashRequest.activityLists')
                             ->label('')
@@ -182,7 +185,7 @@ class ViewForCashRelease extends ViewRecord
                             ->date(),
 
                         TextEntry::make('cashRequest.due_date')
-                            ->label('Due Date')
+                            ->label('Liquidation Due Date')
                             ->date(),
 
                         TextEntry::make('cashRequest.date_released')

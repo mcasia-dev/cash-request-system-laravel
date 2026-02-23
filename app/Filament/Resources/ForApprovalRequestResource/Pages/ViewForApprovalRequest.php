@@ -16,15 +16,19 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Get;
+use Filament\Infolists\Components\Actions;
+use Filament\Infolists\Components\Actions\Action as InfolistAction;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
+use Filament\Support\Enums\Alignment;
 use Filament\Notifications\Actions\Action as NotificationAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 class ViewForApprovalRequest extends ViewRecord
@@ -124,6 +128,56 @@ class ViewForApprovalRequest extends ViewRecord
                         RepeatableEntry::make('activityLists')
                             ->label('')
                             ->schema([
+                                Actions::make([
+                                    InfolistAction::make('rejectActivity')
+                                        ->icon('heroicon-o-minus')
+                                        ->iconButton()
+                                        ->tooltip('Reject activity')
+                                        ->color('danger')
+                                        ->size('xs')
+                                        ->extraAttributes([
+                                            'class' => 'border border-red-500 rounded-full text-transparent hover:bg-red-50',
+                                        ])
+                                        ->modalHeading('Reject Activity')
+                                        ->modalDescription('Are you sure you want to reject this activity?')
+                                        ->modalSubmitActionLabel('Reject')
+                                        ->form([
+                                            Textarea::make('rejection_remarks')
+                                                ->label('Rejection Remarks')
+                                                ->required()
+                                                ->maxLength(65535),
+                                        ])
+                                        ->visible(function ($record): bool {
+                                            return ($this->isVisible())($this->record)
+                                                && $record->status !== 'rejected';
+                                        })
+                                        ->action(function (array $data, $record): void {
+                                            DB::transaction(function () use ($data, $record): void {
+                                                $record->update([
+                                                    'status'            => 'rejected',
+                                                    'rejection_remarks' => $data['rejection_remarks'],
+                                                ]);
+
+                                                $cashRequest = $record->cashRequest;
+                                                $total = $cashRequest->activityLists()
+                                                    ->where('status', '!=', 'rejected')
+                                                    ->sum('requesting_amount');
+
+                                                $cashRequest->update([
+                                                    'requesting_amount' => (float) $total,
+                                                ]);
+                                            });
+
+                                            Notification::make()
+                                                ->title('Activity rejected')
+                                                ->success()
+                                                ->send();
+                                        }),
+                                ])
+                                    ->alignment(Alignment::End)
+                                    ->fullWidth()
+                                    ->columnSpanFull(),
+
                                 TextEntry::make('activity_name')
                                     ->label('Activity Name'),
 
@@ -145,6 +199,21 @@ class ViewForApprovalRequest extends ViewRecord
                                     ->label('Attached File/Image')
                                     ->collection('attachments')
                                     ->columnSpanFull(),
+
+                                TextEntry::make('status')
+                                    ->label('Activity Status')
+                                    ->badge()
+                                    ->color(fn(string $state): string => match ($state) {
+                                        'rejected' => 'danger',
+                                        'pending'  => 'warning',
+                                        default    => 'gray',
+                                    }),
+
+                                TextEntry::make('rejection_remarks')
+                                    ->label('Rejection Remarks')
+                                    ->visible(fn($record) => filled($record->rejection_remarks))
+                                    ->columnSpanFull(),
+
                             ])
                             ->columns(3),
                     ]),
