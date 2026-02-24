@@ -1,15 +1,18 @@
 <?php
+
 namespace App\Filament\Resources\ForLiquidationResource\Pages;
 
 use App\Enums\CashRequest\DisbursementType;
 use App\Enums\CashRequest\Status;
 use App\Enums\CashRequest\StatusRemarks;
 use App\Filament\Resources\ForLiquidationResource;
+use App\Filament\Resources\PaymentProcessResource\Pages\ViewPaymentProcess;
 use App\Models\ForLiquidation;
 use App\Models\LiquidationReceipt;
 use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
@@ -27,14 +30,25 @@ class ViewForLiquidation extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('Liquidate')
+            // OVERRIDE BUTTON
+            Action::make('override')
+                ->label('Override')
+                ->color('warning')
+                ->requiresConfirmation()
+                ->form(fn(ForLiquidation $record) => $this->getOverrideFormSchema($record))
+                ->action(fn(ForLiquidation $record, array $data) => $this->overrideRequest($record, $data))
+                ->visible(fn(ForLiquidation $record) => $this->canOverride($record) && $record->receipt_amount != null),
+
+            // LIQUIDATE BUTTON
+            Action::make('liquidate')
                 ->label('Liquidate')
                 ->color('primary')
                 ->requiresConfirmation()
                 ->action(fn(ForLiquidation $record) => $this->liquidateRequest($record))
-                ->visible(fn(ForLiquidation $record) => $this->canProcess($record)),
+                ->visible(fn(ForLiquidation $record) => $this->canProcess($record) && $this->isTreasuryManager()),
 
-            Action::make('Reject')
+            // REJECT BUTTON
+            Action::make('reject')
                 ->label('Reject')
                 ->color('secondary')
                 ->requiresConfirmation()
@@ -74,12 +88,12 @@ class ViewForLiquidation extends ViewRecord
                             ->label('Status')
                             ->badge()
                             ->color(fn(string $state): string => match ($state) {
-                                'pending'    => 'warning',
-                                'approved'   => 'success',
-                                'released'   => 'info',
+                                'pending' => 'warning',
+                                'approved' => 'success',
+                                'released' => 'info',
                                 'liquidated' => 'primary',
-                                'rejected'   => 'danger',
-                                default      => 'gray',
+                                'rejected' => 'danger',
+                                default => 'gray',
                             }),
                     ])
                     ->columns(4),
@@ -168,9 +182,9 @@ class ViewForLiquidation extends ViewRecord
                         //     ->label('Total Used')
                         //     ->money('PHP'),
 
-                        // TextEntry::make('total_liquidated')
-                        //     ->label('Total Liquidated')
-                        //     ->money('PHP'),
+                        TextEntry::make('total_liquidated')
+                            ->label('Total Liquidated')
+                            ->money('PHP'),
 
                         TextEntry::make('total_change')
                             ->label('Amount to Reimburse')
@@ -199,7 +213,7 @@ class ViewForLiquidation extends ViewRecord
                             ->columnSpanFull()
                             ->html(),
                     ])
-                    ->visible(fn(ForLiquidation $record) => ! empty($this->getReceiptEntries($record))),
+                    ->visible(fn(ForLiquidation $record) => !empty($this->getReceiptEntries($record))),
 
                 Section::make('Disbursement Method')
                     ->collapsible()
@@ -282,14 +296,14 @@ class ViewForLiquidation extends ViewRecord
     {
         static $cache = [];
 
-        if (! array_key_exists($record->id, $cache)) {
+        if (!array_key_exists($record->id, $cache)) {
             $cache[$record->id] = LiquidationReceipt::query()
                 ->where('liquidation_id', $record->id)
                 ->get()
                 ->flatMap(function (LiquidationReceipt $receipt) {
                     return $receipt->getMedia('liquidation-receipts')->map(fn($media) => [
-                        'url'     => $media->getUrl(),
-                        'amount'  => $receipt->receipt_amount,
+                        'url' => $media->getUrl(),
+                        'amount' => $receipt->receipt_amount,
                         'remarks' => $receipt->remarks,
                     ]);
                 })
@@ -345,7 +359,7 @@ class ViewForLiquidation extends ViewRecord
     private function canProcess(ForLiquidation $record): bool
     {
         return $record->cashRequest->status === Status::RELEASED->value
-            && $record->cashRequest->status_remarks === StatusRemarks::LIQUIDATION_RECEIPT_SUBMITTED->value;
+            && $record->cashRequest->status_remarks === StatusRemarks::LIQUIDATION_RECEIPT_SUBMITTED->value && $record->is_override;
     }
 
     private function liquidateRequest(ForLiquidation $record): void
@@ -411,5 +425,126 @@ class ViewForLiquidation extends ViewRecord
             ->title('Liquidation rejected.')
             ->success()
             ->send();
+    }
+
+    private function overrideRequest(ForLiquidation $record, array $data): void
+    {
+        $user = Auth::user();
+        [$totalReceipts, $requestingAmount, $amountToReturn, $amountToReimburse] = $this->getLiquidationTotals($record);
+
+        // Update the record status and save rejection reason
+        $record->update([
+            'is_override' => true,
+            'remarks' => $data['override_remarks'] ?? $record->remarks,
+            'receipt_amount' => $totalReceipts,
+            'total_liquidated' => $totalReceipts,
+            'missing_amount' => $amountToReturn,
+            'total_change' => $amountToReimburse,
+        ]);
+
+        // Log activity
+        activity()
+            ->causedBy($user)
+            ->performedOn($record)
+            ->event('override')
+            ->withProperties([
+                'request_no' => $record->request_no,
+                'activity_name' => $record->activity_name,
+                'requesting_amount' => $record->requesting_amount,
+                'previous_status' => Status::PENDING->value,
+                'new_status' => Status::IN_PROGRESS->value,
+                'status_remarks' => $record->status_remarks,
+            ])
+            ->log("Cash request {$record->request_no} was override by {$user->name} ({$user->position})");
+
+        Notification::make()
+            ->title('Cash Request Override!')
+            ->success()
+            ->send();
+    }
+
+    private function getOverrideFormSchema(ForLiquidation $record): array
+    {
+        [$totalReceipts, $requestingAmount, $amountToReturn, $amountToReimburse, $diff] = $this->getLiquidationTotals($record);
+
+        if (abs($diff) < 0.01) {
+            return [];
+        }
+
+        $amountField = $amountToReturn > 0
+            ? TextInput::make('amount_to_return')
+                ->label('Amount to Return')
+                ->numeric()
+                ->required()
+                ->default($amountToReturn)
+                ->readOnly()
+            : TextInput::make('amount_to_reimburse')
+                ->label('Amount to Reimburse')
+                ->numeric()
+                ->required()
+                ->default($amountToReimburse)
+                ->readOnly();
+
+        return [
+            Textarea::make('override_remarks')
+                ->label('Override Remarks')
+                ->required()
+                ->maxLength(65535),
+            $amountField,
+        ];
+    }
+
+    private function getLiquidationTotals(ForLiquidation $record): array
+    {
+        $totalReceipts = (float)LiquidationReceipt::query()
+            ->where('liquidation_id', $record->id)
+            ->sum('receipt_amount');
+        $requestingAmount = (float)($record->cashRequest?->requesting_amount ?? 0);
+        $diff = round($totalReceipts - $requestingAmount, 2);
+
+        $amountToReimburse = $diff > 0 ? $diff : 0.0;
+        $amountToReturn = $diff < 0 ? abs($diff) : 0.0;
+
+        return [$totalReceipts, $requestingAmount, $amountToReturn, $amountToReimburse, $diff];
+    }
+
+    private function canOverride(ForLiquidation $record): bool
+    {
+        if ($record->is_override) {
+            return false;
+        }
+
+        $user = Auth::user();
+
+        if (!$user) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        try {
+            return $user->hasPermissionTo('can-override-liquidation-receipt');
+        } catch (\Spatie\Permission\Exceptions\PermissionDoesNotExist $e) {
+            return false;
+        }
+    }
+
+    private function isTreasuryManager(): bool
+    {
+        $user = Auth::user();
+
+        if (!$user) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        return $user->roles()
+            ->where('name', 'treasury_manager')
+            ->exists();
     }
 }

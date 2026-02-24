@@ -22,6 +22,8 @@ use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Althinect\FilamentSpatieRolesPermissions\FilamentSpatieRolesPermissionsPlugin;
 use App\Http\Middleware\ForceLogoutAfterRegistration;
+use Joaopaulolndev\FilamentGeneralSettings\FilamentGeneralSettingsPlugin;
+use TomatoPHP\FilamentNotes\FilamentNotesPlugin;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -37,7 +39,6 @@ class AdminPanelProvider extends PanelProvider
             ->colors([
                 'primary' => Color::Red,
                 'secondary' => Color::Gray,
-                'danger' => Color::Zinc,
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
@@ -64,8 +65,15 @@ class AdminPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
             ])
-            ->plugin(FilamentSpatieRolesPermissionsPlugin::make())
-            ->plugin(\TomatoPHP\FilamentNotes\FilamentNotesPlugin::make()->useChecklist())
+            ->plugins([
+                FilamentSpatieRolesPermissionsPlugin::make(),
+                FilamentNotesPlugin::make()->useChecklist(),
+                FilamentGeneralSettingsPlugin::make()
+                    ->canAccess(fn() => auth()->user()->isSuperAdmin())
+                    ->setIcon('heroicon-o-cog')
+                    ->setNavigationGroup('Administrator')
+
+            ])
             ->viteTheme('resources/css/filament/admin/theme.css')
             ->databaseNotifications();
     }

@@ -41,9 +41,9 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
     use InteractsWithForms;
     use InteractsWithTable;
 
-    protected static string $resource        = ActivityListResource::class;
+    protected static string $resource = ActivityListResource::class;
     protected static ?string $navigationIcon = 'heroicon-o-document-text';
-    protected static string $view            = 'filament.pages.create-activity-list';
+    protected static string $view = 'filament.pages.create-activity-list';
 
     public array $data = [];
     public ?int $draftCashRequestId = null;
@@ -74,7 +74,7 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
                         Placeholder::make('selected_nature_of_request')
                             ->label('Selected Nature of Request')
                             ->visible(fn() => filled($this->draftCashRequestId))
-                            ->content(fn() => (string) $this->draftNatureOfRequest),
+                            ->content(fn() => (string)$this->draftNatureOfRequest),
                     ]),
 
                 Section::make('Activity Details')
@@ -135,15 +135,15 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
         $cashRequest = $this->getOrCreateDraftCashRequest($formData['nature_of_request'] ?? null);
 
         $activityList = ActivityList::create([
-            'user_id'           => Auth::id(),
-            'cash_request_id'   => $cashRequest->id,
-            'control_no'        => Auth::user()->control_no,
-            'activity_name'     => $formData['activity_name'],
-            'activity_date'     => $formData['activity_date'],
-            'activity_venue'    => $formData['activity_venue'],
+            'user_id' => Auth::id(),
+            'cash_request_id' => $cashRequest->id,
+            'control_no' => Auth::user()->control_no,
+            'activity_name' => $formData['activity_name'],
+            'activity_date' => $formData['activity_date'],
+            'activity_venue' => $formData['activity_venue'],
             'requesting_amount' => $formData['requesting_amount'],
-            'purpose'           => $formData['purpose'],
-            'status'            => 'pending',
+            'purpose' => $formData['purpose'],
+            'status' => 'pending',
         ]);
 
         $this->form->model($activityList)->saveRelationships();
@@ -257,7 +257,7 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
             $user = Auth::user();
             $cashRequest = $this->getDraftCashRequest();
 
-            if (! $cashRequest) {
+            if (!$cashRequest) {
                 $failureMessage = 'Nothing to submit';
 
                 return false;
@@ -274,7 +274,7 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
                 return false;
             }
 
-            $totalRequestingAmount = (float) $activities->sum('requesting_amount');
+            $totalRequestingAmount = (float)$activities->sum('requesting_amount');
             $maxAllowedAmount = $this->getConfiguredMaxAmountForNature($cashRequest->nature_of_request);
 
             if ($maxAllowedAmount !== null && $totalRequestingAmount > $maxAllowedAmount) {
@@ -291,8 +291,8 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
 
             $cashRequest->update([
                 'requesting_amount' => $totalRequestingAmount,
-                'status'            => Status::PENDING->value,
-                'status_remarks'    => StatusRemarks::REQUEST_SUBMITTED->value,
+                'status' => Status::PENDING->value,
+                'status_remarks' => StatusRemarks::REQUEST_SUBMITTED->value,
             ]);
 
             try {
@@ -308,11 +308,11 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
                 ->performedOn($cashRequest)
                 ->event('created')
                 ->withProperties([
-                    'request_no'        => $cashRequest->request_no,
-                    'activity_name'     => $cashRequest->activity_name,
+                    'request_no' => $cashRequest->request_no,
+                    'activity_name' => $cashRequest->activity_name,
                     'requesting_amount' => $cashRequest->requesting_amount,
-                    'status'            => Status::PENDING->value,
-                    'status_remarks'    => StatusRemarks::REQUEST_SUBMITTED->value,
+                    'status' => Status::PENDING->value,
+                    'status_remarks' => StatusRemarks::REQUEST_SUBMITTED->value,
                 ])
                 ->log("Cash request {$cashRequest->request_no} was submitted by {$user->name} ({$user->position})");
 
@@ -322,7 +322,7 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
             return true;
         });
 
-        if (! $submitted) {
+        if (!$submitted) {
             Notification::make()
                 ->title($failureMessage)
                 ->warning()
@@ -370,10 +370,10 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
         }
 
         return CashRequest::create([
-            'user_id'           => Auth::id(),
+            'user_id' => Auth::id(),
             'nature_of_request' => $natureOfRequest,
             'requesting_amount' => 0,
-            'status'            => Status::PENDING->value,
+            'status' => Status::PENDING->value,
         ]);
     }
 
@@ -416,7 +416,7 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
                 filled($excludeRequestId),
                 fn($query) => $query->where('id', '!=', $excludeRequestId)
             )
-            ->whereNotIn('status', [Status::LIQUIDATED->value, Status::CANCELLED->value])
+            ->whereNotIn('status', [Status::LIQUIDATED->value, Status::CANCELLED->value, Status::REJECTED->value])
             ->exists();
     }
 

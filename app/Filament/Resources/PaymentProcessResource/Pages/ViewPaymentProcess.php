@@ -10,6 +10,7 @@ use App\Filament\Resources\PaymentProcessResource;
 use App\Jobs\ApproveCashRequestByTreasuryJob;
 use App\Jobs\RejectCashRequestJob;
 use App\Models\ForCashRelease;
+use App\Models\ForLiquidation;
 use App\Models\User;
 use App\Services\Remarks\StatusRemarkResolver;
 use Carbon\Carbon;
@@ -29,6 +30,7 @@ use Filament\Notifications\Actions\Action as NotificationAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Illuminate\Support\Facades\Auth;
+use Joaopaulolndev\FilamentGeneralSettings\Services\GeneralSettingsService;
 
 class ViewPaymentProcess extends ViewRecord
 {
@@ -36,6 +38,8 @@ class ViewPaymentProcess extends ViewRecord
 
     /**
      * Define the header actions for setting disbursement, approving, or rejecting.
+     *
+     * @return array
      */
     protected function getHeaderActions(): array
     {
@@ -43,7 +47,7 @@ class ViewPaymentProcess extends ViewRecord
             // SET DISBURSEMENT BUTTON
             Action::make('set_disbursement')
                 ->label('Set Disbursement')
-                ->visible(fn($record) => $record->nature_of_request === NatureOfRequestEnum::CASH_ADVANCE->value && $record->disbursement_type != null)
+                ->visible(fn($record) => $record->nature_of_request === NatureOfRequestEnum::CASH_ADVANCE->value && $record->disbursement_added_by == null)
                 ->color('gray')
                 ->form($this->getDisbursementTypeFormSchema())
                 ->action(fn($record, array $data) => $this->saveDisbursementType($record, $data)),
@@ -54,16 +58,15 @@ class ViewPaymentProcess extends ViewRecord
                 ->color('warning')
                 ->requiresConfirmation()
                 ->action(fn($record) => $this->overrideRequest($record))
-                ->visible(fn($record) => Auth::user()->hasPermissionTo('can-override-payment-process-request') && !$record->is_override),
+                ->visible(fn($record) => $this->canOverride($record)),
 
             // APPROVED BUTTON
             Action::make('Approve')
+                ->color('primary')
                 ->requiresConfirmation()
                 ->form(fn($record) => $this->getApproveFormSchema($record))
                 ->action(fn($record, array $data) => $this->approveCashRequest($record, $data))
-                ->color('primary')
-                ->hidden(fn($record) => $record->nature_of_request === NatureOfRequestEnum::CASH_ADVANCE->value && $record->disbursement_type == null)
-                ->visible(fn($record) => $this->getStatus($record) && $this->isTreasuryManager() && $record->is_override),
+                ->visible(fn($record) => $this->canApprove($record)),
 
             // REJECTION BUTTON
             Action::make('Reject')
@@ -83,6 +86,9 @@ class ViewPaymentProcess extends ViewRecord
 
     /**
      * Build the request detail infolist and activity sections for the view page.
+     *
+     * @param Infolist $infolist
+     * @return Infolist
      */
     public function infolist(Infolist $infolist): Infolist
     {
@@ -270,6 +276,19 @@ class ViewPaymentProcess extends ViewRecord
         return $record->status === Status::IN_PROGRESS->value && $record->status_remarks === StatusRemarks::FOR_PAYMENT_PROCESSING->value;
     }
 
+    private function canApprove(mixed $record): bool
+    {
+        if (!($this->getStatus($record) && $this->isTreasuryManager() && $record->is_override)) {
+            return false;
+        }
+
+        if ($record->nature_of_request === NatureOfRequestEnum::CASH_ADVANCE->value) {
+            return $record->disbursement_type !== null;
+        }
+
+        return true;
+    }
+
     /**
      * Approve the cash request, create the release record, set due date (if applicable),
      * log activity, and dispatch the approval notification.
@@ -296,10 +315,8 @@ class ViewPaymentProcess extends ViewRecord
             'date_processed' => Carbon::now(),
         ]);
 
-        // If the nature of request is "PETTY CASH", the due date will be 3 days after the releasing date. Else, return null (for the mean time).
-        $due_date = $record->nature_of_request == NatureOfRequestEnum::PETTY_CASH->value && $releasingDate
-            ? Carbon::parse($releasingDate)->addDays(3)
-            : null;
+        $agingDays = $this->getAgingDaysFromSettings();
+        $due_date = Carbon::parse($releasingDate)->addDays($agingDays);
 
         // Update the record status
         $record->update([
@@ -519,12 +536,7 @@ class ViewPaymentProcess extends ViewRecord
     {
         return [
             DatePicker::make('cut_off_date')
-                ->label('Cut-off Date')
-                ->visible(fn(Get $get) => $get('disbursement_type') === DisbursementType::PAYROLL->value)
-                ->required(fn(Get $get) => $get('disbursement_type') === DisbursementType::PAYROLL->value),
-
-            TextInput::make('payroll_credit')
-                ->label('Payroll Credit')
+                ->label('Payroll Credit Date')
                 ->visible(fn(Get $get) => $get('disbursement_type') === DisbursementType::PAYROLL->value)
                 ->required(fn(Get $get) => $get('disbursement_type') === DisbursementType::PAYROLL->value),
         ];
@@ -661,4 +673,40 @@ class ViewPaymentProcess extends ViewRecord
             ])
             ->sendToDatabase($treasuryManagers);
     }
+
+    private function canOverride($record): bool
+    {
+        if ($record->is_override) {
+            return false;
+        }
+
+        $user = Auth::user();
+
+        if (!$user) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        try {
+            return $user->hasPermissionTo('can-override-payment-process-request');
+        } catch (\Spatie\Permission\Exceptions\PermissionDoesNotExist $e) {
+            return false;
+        }
+    }
+
+    private function getAgingDaysFromSettings(): int
+    {
+        $settings = app(GeneralSettingsService::class)->get();
+        $value = $settings?->more_configs['aging_field'] ?? null;
+
+        $agingDays = filter_var($value, FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 1],
+        ]);
+
+        return $agingDays !== false ? (int)$agingDays : 3;
+    }
+
 }

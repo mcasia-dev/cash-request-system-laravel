@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Filament\Resources\ForCashReleaseResource\Pages;
 
 use App\Enums\CashRequest\DisbursementType;
@@ -78,13 +79,21 @@ class ViewForCashRelease extends ViewRecord
                             ->label('Status')
                             ->badge()
                             ->color(fn(string $state): string => match ($state) {
-                                'pending'    => 'warning',
-                                'approved'   => 'success',
-                                'released'   => 'info',
+                                'pending' => 'warning',
+                                'approved' => 'success',
+                                'released' => 'info',
                                 'liquidated' => 'primary',
-                                'rejected'   => 'danger',
-                                default      => 'gray',
+                                'rejected' => 'danger',
+                                default => 'gray',
                             }),
+
+                        TextEntry::make('cashRequest.reason_for_rejection')
+                            ->label('Reason for Rejection')
+                            ->visible(fn($record) => $record->cashRequest?->status === Status::REJECTED->value),
+
+                        TextEntry::make('cashRequest.reason_for_cancelling')
+                            ->label('Reason for Cancelling')
+                            ->visible(fn($record) => $record->cashRequest?->status === Status::CANCELLED->value),
                     ])
                     ->columns(3),
 
@@ -220,27 +229,27 @@ class ViewForCashRelease extends ViewRecord
      */
     private function releaseCashRequest($record, array $data)
     {
-        $user           = Auth::user();
+        $user = Auth::user();
         $status_remarks = app(StatusRemarkResolver::class)->releaseByPermissions($user);
 
         // Update the released date and released_by column
         $record->update([
-            'released_by'   => $user->id,
+            'released_by' => $user->id,
             'date_released' => Carbon::now(),
         ]);
 
         // Update the cash request record status
         $record->cashRequest
             ->update([
-                'status'         => Status::RELEASED->value,
+                'status' => Status::RELEASED->value,
                 'status_remarks' => $status_remarks,
-                'date_released'  => Carbon::now(),
+                'date_released' => Carbon::now(),
             ]);
 
         // Create data for "for_liquidations" table
         ForLiquidation::create([
             'cash_request_id' => $record->cash_request_id,
-            'remarks'         => $data['remarks'],
+            'remarks' => $data['remarks'],
         ]);
 
         // Log activity
@@ -249,12 +258,12 @@ class ViewForCashRelease extends ViewRecord
             ->performedOn($record->cashRequest ?? $record)
             ->event('released')
             ->withProperties([
-                'request_no'        => $record->request_no,
-                'activity_name'     => $record->activity_name,
+                'request_no' => $record->request_no,
+                'activity_name' => $record->activity_name,
                 'requesting_amount' => $record->requesting_amount,
-                'previous_status'   => Status::APPROVED->value,
-                'new_status'        => Status::RELEASED->value,
-                'status_remarks'    => $status_remarks,
+                'previous_status' => Status::APPROVED->value,
+                'new_status' => Status::RELEASED->value,
+                'status_remarks' => $status_remarks,
             ])
             ->log("Cash request {$record->request_no} is released and now ready.");
 
@@ -290,14 +299,14 @@ class ViewForCashRelease extends ViewRecord
      */
     private function rejectCashRequest($record, array $data)
     {
-        $user           = Auth::user();
+        $user = Auth::user();
         $status_remarks = app(StatusRemarkResolver::class)->rejectByPermissions($user, 'treasury');
 
         // Update the record status and save rejection reason
         $record->cashRequest
             ->update([
-                'status'               => Status::REJECTED->value,
-                'status_remarks'       => $status_remarks,
+                'status' => Status::REJECTED->value,
+                'status_remarks' => $status_remarks,
                 'reason_for_rejection' => $data['rejection_reason'],
             ]);
 
@@ -307,12 +316,12 @@ class ViewForCashRelease extends ViewRecord
             ->performedOn($record)
             ->event('rejected')
             ->withProperties([
-                'request_no'           => $record->request_no,
-                'activity_name'        => $record->activity_name,
-                'requesting_amount'    => $record->requesting_amount,
-                'previous_status'      => Status::PENDING->value,
-                'new_status'           => Status::REJECTED->value,
-                'status_remarks'       => $status_remarks,
+                'request_no' => $record->request_no,
+                'activity_name' => $record->activity_name,
+                'requesting_amount' => $record->requesting_amount,
+                'previous_status' => Status::PENDING->value,
+                'new_status' => Status::REJECTED->value,
+                'status_remarks' => $status_remarks,
                 'reason_for_rejection' => $data['rejection_reason'],
             ])
             ->log("Cash request {$record->request_no} was rejected by {$user->name} ({$user->position})");
@@ -340,5 +349,4 @@ class ViewForCashRelease extends ViewRecord
 
         return redirect()->route('filament.admin.resources.for-cash-releases.index');
     }
-
 }

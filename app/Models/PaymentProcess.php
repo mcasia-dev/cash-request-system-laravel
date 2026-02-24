@@ -43,12 +43,12 @@ class PaymentProcess extends Model implements HasMedia
         'due_date',
         'status',
         'status_remarks',
-        'disbursement_type',
         'check_branch_name',
         'check_no',
         'cut_off_date',
         'payroll_date',
         'payroll_credit',
+        'disbursement_type',
         'disbursement_added_by',
         'is_override'
     ];

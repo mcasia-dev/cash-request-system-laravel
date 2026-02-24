@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -19,6 +20,11 @@ class ForLiquidation extends Model implements HasMedia
         'total_change',
         'missing_amount',
         'aging',
+        'is_override'
+    ];
+
+    protected $casts = [
+        'is_override' => 'boolean',
     ];
 
     public function cashRequest(): BelongsTo
