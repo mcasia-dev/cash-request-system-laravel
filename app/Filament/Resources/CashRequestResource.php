@@ -20,6 +20,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
+use Filament\Forms\Set;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Actions\Action;
@@ -31,8 +32,13 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\HtmlString;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use Mayaram\LaravelOcr\Facades\LaravelOcr;
 
 class CashRequestResource extends Resource
 {
@@ -246,7 +252,18 @@ class CashRequestResource extends Resource
                         ->disk('public')
                         ->directory('liquidation-receipts')
                         ->preserveFilenames()
+                        ->live()
+                        ->afterStateUpdated(function ($state, Set $set): void {
+                            $receiptNo = self::extractReceiptNo($state);
+                            $set('detected_receipt_no', $receiptNo);
+                        })
                         ->required(),
+
+                    TextInput::make('detected_receipt_no')
+                        ->label('Detected Receipt No.')
+                        ->readOnly()
+                        ->dehydrated(false)
+                        ->helperText('Auto-detected from OCR after upload.'),
 
                     TextInput::make('amount')
                         ->numeric()
@@ -330,5 +347,96 @@ class CashRequestResource extends Resource
         return function ($record, array $data) {
             app(CancellationService::class)->cancel($record, $data, Auth::user());
         };
+    }
+
+    private static function extractReceiptNo(mixed $uploadedPath): ?string
+    {
+        $file = self::resolveUploadedFilePath($uploadedPath);
+
+        if ($file === null || !is_file($file)) {
+            Log::warning('OCR skipped: invalid file path', ['uploaded_path' => $uploadedPath]);
+            return null;
+        }
+
+        try {
+            Log::info('OCR started for liquidation receipt upload', [
+                'uploaded_path' => $uploadedPath,
+                'resolved_path' => $file,
+            ]);
+
+            $result = LaravelOcr::extract($file, [
+                'language' => 'eng',
+//                'psm' => 6,
+                'extract_line_items' => true,
+                'use_ai_cleanup' => true,
+            ]);
+
+//            dd($result);
+
+            $text = is_array($result) ? ($result['text'] ?? '') : '';
+            $receiptNo = self::extractReceiptReferenceFromText((string)$text);
+
+            Log::info('OCR completed for liquidation receipt upload', [
+                'uploaded_path' => $uploadedPath,
+                'detected_order_ref' => $receiptNo,
+                'ocr_text_sample' => mb_substr(preg_replace('/\s+/', ' ', (string)$text), 0, 180),
+            ]);
+
+            return $receiptNo;
+        } catch (\Throwable $e) {
+            Log::error('OCR failed for liquidation receipt upload', [
+                'uploaded_path' => $uploadedPath,
+                'error' => $e->getMessage(),
+                'exception_class' => $e::class,
+            ]);
+            return null;
+        }
+    }
+
+    private static function resolveUploadedFilePath(mixed $uploadedPath): ?string
+    {
+        if ($uploadedPath instanceof TemporaryUploadedFile || $uploadedPath instanceof UploadedFile) {
+            $path = $uploadedPath->getRealPath();
+            return is_string($path) && $path !== '' ? $path : null;
+        }
+
+        if (is_string($uploadedPath) && trim($uploadedPath) !== '') {
+            return Storage::disk('public')->path($uploadedPath);
+        }
+
+        return null;
+    }
+
+    private static function extractReceiptReferenceFromText(string $text): ?string
+    {
+        $normalizedText = strtoupper(str_replace("\r", '', $text));
+        $lines = preg_split('/\n+/', $normalizedText) ?: [];
+
+        $patterns = [
+            '/\bINVOICE\s*#?\s*([A-Z0-9\-]{5,})\b/',
+            '/\b(?:OR|O\.R\.|OFFICIAL\s+RECEIPT)\s*#?\s*([A-Z0-9\-]{5,})\b/',
+            '/\b(?:RECEIPT|REFERENCE|REF)\s*(?:NO|NUMBER)?\s*#?\s*([A-Z0-9\-]{5,})\b/',
+        ];
+
+        foreach ($lines as $line) {
+            $cleanLine = preg_replace('/\s+/', ' ', trim($line)) ?? '';
+            if ($cleanLine === '' || str_contains($cleanLine, 'CARD') || str_contains($cleanLine, 'FEEDBACK')) {
+                continue;
+            }
+
+            foreach ($patterns as $pattern) {
+                if (preg_match($pattern, $cleanLine, $matches) === 1) {
+                    $candidate = preg_replace('/[^A-Z0-9\-]/', '', trim($matches[1])) ?? '';
+                    return $candidate !== '' ? $candidate : null;
+                }
+            }
+        }
+
+        // Fallback: if OCR is noisy, grab a long numeric token likely to be invoice id.
+        if (preg_match('/\b(\d{8,14})\b/', $normalizedText, $matches) === 1) {
+            return $matches[1];
+        }
+
+        return null;
     }
 }
