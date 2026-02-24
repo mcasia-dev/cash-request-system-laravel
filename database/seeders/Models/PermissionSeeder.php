@@ -2266,7 +2266,19 @@ class PermissionSeeder extends Seeder
                 'guard_name' => 'api',
                 'created_at' => Carbon::now(),
                 'updated_at' => Carbon::now(),
-            ]
+            ],
+            [
+                'name' => 'can-override-liquidation-receipt',
+                'guard_name' => 'web',
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ],
+            [
+                'name' => 'can-override-liquidation-receipt',
+                'guard_name' => 'api',
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ],
         ];
 
         foreach ($permissions as $permission) {

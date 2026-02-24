@@ -2,6 +2,8 @@
 
 use App\Enums\CashRequest\Status;
 use App\Enums\CashRequest\StatusRemarks;
+use App\Models\CashRequest;
+use App\Models\ForCashRelease;
 use App\Models\ForLiquidation;
 use Carbon\Carbon;
 use Illuminate\Foundation\Inspiring;
@@ -44,14 +46,14 @@ Schedule::call(function () {
             foreach ($liquidations as $liquidation) {
                 $dueDate = $liquidation->cashRequest?->due_date;
 
-                if (! $dueDate) {
+                if (!$dueDate) {
                     continue;
                 }
 
                 // $agingDays = Carbon::parse($dueDate)->diffInDays($today);
                 $agingDays = $dueDate->diffInDays($today);
 
-                if ((int) $liquidation->aging !== $agingDays) {
+                if ((int)$liquidation->aging !== $agingDays) {
                     $liquidation->update(['aging' => $agingDays]);
                 }
             }
@@ -61,3 +63,53 @@ Schedule::call(function () {
     ->timezone('Asia/Manila')
     ->dailyAt('00:05')
     ->name('update-for-liquidation-aging');
+
+/**
+ * Scheduled task to auto-cancel unclaimed cash requests once the release window has passed.
+ *
+ * Runs every 5 minutes to catch same-day expirations promptly.
+ *
+ * Criteria:
+ * - Cash request status is APPROVED and for releasing
+ * - Related ForCashRelease has releasing_date and release window end time
+ * - date_released is null (unclaimed)
+ * - Current time is after the release window end time
+ */
+Schedule::call(function () {
+    $now = Carbon::now();
+
+    ForCashRelease::query()
+        ->whereNull('date_released')
+        ->whereNotNull('releasing_date')
+        ->whereNotNull('releasing_time_to')
+        ->whereHas('cashRequest', function ($query) {
+            $query->where('status', Status::APPROVED->value)
+                ->where('status_remarks', StatusRemarks::FOR_RELEASING->value);
+        })
+        ->with('cashRequest:id,status,status_remarks,date_released')
+        ->chunkById(200, function ($releases) use ($now) {
+            foreach ($releases as $release) {
+                $releaseDate = $release->releasing_date;
+                $releaseTimeTo = $release->releasing_time_to;
+
+                if (!$releaseDate || !$releaseTimeTo) {
+                    continue;
+                }
+
+                $releaseWindowEnd = Carbon::parse(
+                    $releaseDate->format('Y-m-d') . ' ' . $releaseTimeTo->format('H:i:s')
+                );
+
+                if ($now->greaterThan($releaseWindowEnd)) {
+                    $release->cashRequest->update([
+                        'status' => Status::CANCELLED->value,
+                        'status_remarks' => StatusRemarks::UNCLAIMED_RELEASE_WINDOW_EXPIRED->value,
+                        'reason_for_cancelling' => 'Unclaimed: No claim was made within the scheduled release window.',
+                    ]);
+                }
+            }
+        });
+})
+    ->timezone('Asia/Manila')
+    ->everyFiveMinutes()
+    ->name('cancel-unclaimed-release-requests');

@@ -31,6 +31,7 @@ enum StatusRemarks: string
     case FOR_PAYMENT_PROCESSING = "For Payment Processing";
     case FOR_RELEASING = "For Releasing";
     case FOR_LIQUIDATION = "For Liquidation";
+    case UNCLAIMED = "Unclaimed";
     case LIQUIDATION_RECEIPT_SUBMITTED = "Liquidation Receipt Submitted";
     case LIQUIDATED = "Liquidated";
 }

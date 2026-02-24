@@ -133,11 +133,12 @@ class CashRequestResource extends Resource
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
                         Status::PENDING->value => 'warning',
+                        Status::IN_PROGRESS->value => 'info',
                         Status::APPROVED->value => 'success',
+                        Status::RELEASED->value => 'primary',
+                        Status::LIQUIDATED->value => 'gray',
                         Status::REJECTED->value => 'danger',
                         Status::CANCELLED->value => 'gray',
-                        Status::LIQUIDATED->value => 'info',
-                        Status::RELEASED->value => 'info',
                         default => 'secondary',
                     })
                     ->searchable(),

@@ -11,6 +11,7 @@
         "filament/filament": "^3.3",
         "filament/spatie-laravel-media-library-plugin": "^3.2",
         "jaocero/activity-timeline": "^1.2",
+        "joaopaulolndev/filament-general-settings": "^1.0",
         "laravel/framework": "^11.31",
         "laravel/tinker": "^2.9",
         "spatie/laravel-activitylog": "^4.10",

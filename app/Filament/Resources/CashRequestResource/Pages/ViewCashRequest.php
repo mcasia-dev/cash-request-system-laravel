@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Filament\Resources\CashRequestResource\Pages;
 
 use App\Enums\CashRequest\Status;
@@ -41,13 +42,33 @@ class ViewCashRequest extends ViewRecord
                         TextEntry::make('status')
                             ->badge()
                             ->color(fn(string $state): string => match ($state) {
-                                'pending'    => 'warning',
-                                'approved'   => 'success',
-                                'released'   => 'info',
+                                'pending' => 'warning',
+                                'approved' => 'success',
+                                'released' => 'info',
                                 'liquidated' => 'primary',
-                                'rejected'   => 'danger',
-                                default      => 'gray',
+                                'rejected' => 'danger',
+                                default => 'gray',
                             }),
+
+                        TextEntry::make('status_remarks')
+                            ->label('Status Remarks')
+                            ->badge()
+                            ->color(fn($record): string => match ($record->status) {
+                                'pending' => 'warning',
+                                'approved' => 'success',
+                                'released' => 'info',
+                                'liquidated' => 'primary',
+                                'rejected' => 'danger',
+                                default => 'gray',
+                            }),
+
+                        TextEntry::make('reason_for_rejection')
+                            ->label('Reason for Rejection')
+                            ->visible(fn($record) => $record->status === Status::REJECTED->value),
+
+                        TextEntry::make('reason_for_cancelling')
+                            ->label('Reason for Cancelling')
+                            ->visible(fn($record) => $record->status === Status::CANCELLED->value),
                     ])
                     ->columns(3),
 
@@ -274,7 +295,7 @@ class ViewCashRequest extends ViewRecord
     {
         static $cache = [];
 
-        if (! array_key_exists($record->id, $cache)) {
+        if (!array_key_exists($record->id, $cache)) {
             $cache[$record->id] = ForLiquidation::where('cash_request_id', $record->id)->first();
         }
 
@@ -291,9 +312,9 @@ class ViewCashRequest extends ViewRecord
     private function getLatestActivity(CashRequest $record, string $event): ?Activity
     {
         static $cache = [];
-        $key          = $record->id . '|' . $event;
+        $key = $record->id . '|' . $event;
 
-        if (! array_key_exists($key, $cache)) {
+        if (!array_key_exists($key, $cache)) {
             $cache[$key] = Activity::query()
                 ->where('subject_type', $record::class)
                 ->where('subject_id', $record->id)
