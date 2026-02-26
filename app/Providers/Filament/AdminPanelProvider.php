@@ -2,10 +2,18 @@
 
 namespace App\Providers\Filament;
 
-use Filament\Pages;
+use App\Filament\Resources\CashRequestResource\Widgets\SampleChart;
+use App\Filament\Widgets\MyApprovalDecisionPieChart;
+use App\Filament\Widgets\MyReleaseNaturePercentageChart;
+use App\Filament\Pages\Dashboard;
+use App\Filament\Widgets\RequestCountOverviewStats;
+use App\Filament\Widgets\ReleaseAmountSummaryStats;
+use App\Filament\Widgets\SampleGraphChart;
+use App\Filament\Widgets\UnliquidatedCashRequestsTable;
 use Filament\Panel;
 use Filament\Widgets;
 use Filament\PanelProvider;
+use Filament\View\PanelsRenderHook;
 use Filament\Support\Colors\Color;
 use App\Filament\Pages\Auth\Register;
 use App\Filament\Pages\Auth\CustomLogin;
@@ -23,6 +31,8 @@ use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Althinect\FilamentSpatieRolesPermissions\FilamentSpatieRolesPermissionsPlugin;
 use App\Http\Middleware\ForceLogoutAfterRegistration;
 use Joaopaulolndev\FilamentGeneralSettings\FilamentGeneralSettingsPlugin;
+use Leandrocfe\FilamentApexCharts\FilamentApexChartsPlugin;
+use TomatoPHP\FilamentNotes\Filament\Widgets\NotesWidget;
 use TomatoPHP\FilamentNotes\FilamentNotesPlugin;
 
 class AdminPanelProvider extends PanelProvider
@@ -43,12 +53,17 @@ class AdminPanelProvider extends PanelProvider
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
             ->pages([
-                Pages\Dashboard::class,
+                Dashboard::class,
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([
-                \App\Filament\Widgets\UserInfoClockWidget::class,
-                \TomatoPHP\FilamentNotes\Filament\Widgets\NotesWidget::class
+//                \App\Filament\Widgets\UserInfoClockWidget::class,
+                RequestCountOverviewStats::class,
+                ReleaseAmountSummaryStats::class,
+                MyReleaseNaturePercentageChart::class,
+                MyApprovalDecisionPieChart::class,
+                UnliquidatedCashRequestsTable::class,
+                NotesWidget::class,
             ])
             ->middleware([
                 EncryptCookies::class,
@@ -67,13 +82,19 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->plugins([
                 FilamentSpatieRolesPermissionsPlugin::make(),
-                FilamentNotesPlugin::make()->useChecklist(),
+                FilamentNotesPlugin::make()
+                    ->useChecklist(),
+                FilamentApexChartsPlugin::make(),
                 FilamentGeneralSettingsPlugin::make()
                     ->canAccess(fn() => auth()->user()->isSuperAdmin())
                     ->setIcon('heroicon-o-cog')
                     ->setNavigationGroup('Administrator')
 
             ])
+            ->renderHook(
+                PanelsRenderHook::BODY_END,
+                fn(): string => view('filament.hooks.database-notification-sound')->render(),
+            )
             ->viteTheme('resources/css/filament/admin/theme.css')
             ->databaseNotifications();
     }

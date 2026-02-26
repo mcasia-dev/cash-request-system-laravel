@@ -14,6 +14,7 @@ use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
+use Filament\Notifications\Actions\Action as NotificationAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Illuminate\Support\Facades\Auth;
@@ -173,6 +174,20 @@ class ViewForFinanceVerification extends ViewRecord
 
         // Send an email notification
         // ApproveCashRequestJob::dispatch($record);
+
+        Notification::make()
+            ->title('Cash Request Update')
+            ->body("Your cash request {$record->request_no} has been approved by Finance and forwarded for payment processing.")
+            ->actions([
+                NotificationAction::make('markAsRead')
+                    ->button()
+                    ->markAsRead(),
+
+                NotificationAction::make('view')
+                    ->link()
+                    ->url(route('filament.admin.resources.cash-requests.track-status', ['record' => $record->id])),
+            ])
+            ->sendToDatabase($record->user);
 
         Notification::make()
             ->title('Cash Request Approved!')
