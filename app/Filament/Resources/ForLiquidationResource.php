@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Filament\Resources;
 
 use Filament\Tables;
@@ -14,9 +15,10 @@ use App\Filament\Resources\ForLiquidationResource\Pages;
 
 class ForLiquidationResource extends Resource
 {
-    protected static ?string $model           = ForLiquidation::class;
+    protected static ?string $model = ForLiquidation::class;
     protected static ?string $navigationGroup = 'Cash Requests';
-    protected static ?string $navigationIcon  = 'heroicon-o-receipt-percent';
+    protected static ?string $navigationIcon = 'heroicon-o-receipt-percent';
+    protected ?string $pollingInterval = '5s';
 
     public static function getNavigationBadge(): ?string
     {
@@ -87,7 +89,7 @@ class ForLiquidationResource extends Resource
                     ->sortable(),
 
                 TextColumn::make('aging')
-                    ->formatStateUsing(fn ($state): string => "{$state} day(s)")
+                    ->formatStateUsing(fn($state): string => "{$state} day(s)")
                     ->badge()
                     ->color('primary')
                     ->sortable()
@@ -97,13 +99,13 @@ class ForLiquidationResource extends Resource
                     ->label('Status')
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
-                        Status::PENDING->value    => 'warning',
-                        Status::APPROVED->value   => 'success',
-                        Status::REJECTED->value   => 'danger',
-                        Status::CANCELLED->value  => 'gray',
+                        Status::PENDING->value => 'warning',
+                        Status::APPROVED->value => 'success',
+                        Status::REJECTED->value => 'danger',
+                        Status::CANCELLED->value => 'gray',
                         Status::LIQUIDATED->value => 'info',
-                        Status::RELEASED->value   => 'info',
-                        default                   => 'secondary',
+                        Status::RELEASED->value => 'info',
+                        default => 'secondary',
                     })
                     ->searchable(),
 
@@ -136,10 +138,10 @@ class ForLiquidationResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index'  => Pages\ListForLiquidations::route('/'),
+            'index' => Pages\ListForLiquidations::route('/'),
             'create' => Pages\CreateForLiquidation::route('/create'),
-            'edit'   => Pages\EditForLiquidation::route('/{record}/edit'),
-            'view'   => Pages\ViewForLiquidation::route('/{record}/view'),
+            'edit' => Pages\EditForLiquidation::route('/{record}/edit'),
+            'view' => Pages\ViewForLiquidation::route('/{record}/view'),
         ];
     }
 

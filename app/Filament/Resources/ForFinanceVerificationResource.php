@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Filament\Resources;
 
 use App\Enums\CashRequest\Status;
@@ -15,13 +16,14 @@ use Illuminate\Database\Eloquent\Model;
 
 class ForFinanceVerificationResource extends Resource
 {
-    protected static ?string $model           = ForFinanceVerification::class;
+    protected static ?string $model = ForFinanceVerification::class;
     protected static ?string $navigationGroup = 'Cash Requests';
-    protected static ?string $slug            = 'for-verification';
+    protected static ?string $slug = 'for-verification';
     protected static ?string $navigationLabel = 'For Verification';
-    protected static ?string $label           = 'For Verification';
+    protected static ?string $label = 'For Verification';
 
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-check';
+    protected ?string $pollingInterval = '5s';
 
     public static function getNavigationBadge(): ?string
     {
@@ -40,9 +42,9 @@ class ForFinanceVerificationResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
-        // ->whereHas('roles', function ($query) {
-        //     $query->where('name', 'User');
-        // })
+            // ->whereHas('roles', function ($query) {
+            //     $query->where('name', 'User');
+            // })
             ->where('status', Status::IN_PROGRESS->value)
             ->where('status_remarks', StatusRemarks::FOR_FINANCE_VERIFICATION->value);
     }
@@ -77,13 +79,13 @@ class ForFinanceVerificationResource extends Resource
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
-                        Status::PENDING->value    => 'warning',
-                        Status::APPROVED->value   => 'success',
-                        Status::REJECTED->value   => 'danger',
-                        Status::CANCELLED->value  => 'gray',
+                        Status::PENDING->value => 'warning',
+                        Status::APPROVED->value => 'success',
+                        Status::REJECTED->value => 'danger',
+                        Status::CANCELLED->value => 'gray',
                         Status::LIQUIDATED->value => 'info',
-                        Status::RELEASED->value   => 'primary',
-                        default                   => 'secondary',
+                        Status::RELEASED->value => 'primary',
+                        default => 'secondary',
                     })
                     ->searchable(),
 
@@ -120,10 +122,10 @@ class ForFinanceVerificationResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index'  => Pages\ListForFinanceVerifications::route('/'),
+            'index' => Pages\ListForFinanceVerifications::route('/'),
             'create' => Pages\CreateForFinanceVerification::route('/create'),
-            'edit'   => Pages\EditForFinanceVerification::route('/{record}/edit'),
-            'view'   => Pages\ViewForFinanceVerification::route('/{record}/view'),
+            'edit' => Pages\EditForFinanceVerification::route('/{record}/edit'),
+            'view' => Pages\ViewForFinanceVerification::route('/{record}/view'),
         ];
     }
 

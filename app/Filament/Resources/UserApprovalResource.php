@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Filament\Resources;
 
 use App\Enums\User\AccountStatus;
@@ -23,19 +24,20 @@ use Illuminate\Support\Facades\Auth;
 
 class UserApprovalResource extends Resource
 {
-    protected static ?string $model           = User::class;
+    protected static ?string $model = User::class;
     protected static ?string $navigationGroup = 'Administrator';
-    protected static ?string $slug            = 'user-request-approval';
+    protected static ?string $slug = 'user-request-approval';
     protected static ?string $navigationLabel = 'User Request (For Approval)';
-    protected static ?string $label           = 'User Request (For Approval)';
-    protected static ?string $navigationIcon  = 'heroicon-o-shield-check';
+    protected static ?string $label = 'User Request (For Approval)';
+    protected static ?string $navigationIcon = 'heroicon-o-shield-check';
+    protected ?string $pollingInterval = '5s';
 
     public static function getNavigationBadge(): ?string
     {
         $query = static::getModel()::query()
             ->where('status', Status::PENDING->value);
 
-        if (! Auth::user()->hasAnyRole(['super_admin', 'Super Admin'])) {
+        if (!Auth::user()->hasAnyRole(['super_admin', 'Super Admin'])) {
             $query->where('department_id', Auth::user()->department_id);
         }
 
@@ -57,7 +59,7 @@ class UserApprovalResource extends Resource
         $query = parent::getEloquentQuery()
             ->where('status', Status::PENDING->value);
 
-        if (! Auth::user()->hasAnyRole(['super_admin', 'Super Admin'])) {
+        if (!Auth::user()->hasAnyRole(['super_admin', 'Super Admin'])) {
             $query->where('department_id', Auth::user()->department_id);
         }
 
@@ -112,9 +114,9 @@ class UserApprovalResource extends Resource
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
                         AccountStatus::SUSPENDED->value => 'warning',
-                        AccountStatus::ACTIVE->value    => 'success',
-                        AccountStatus::BLOCKED->value   => 'danger',
-                        default                         => 'secondary',
+                        AccountStatus::ACTIVE->value => 'success',
+                        AccountStatus::BLOCKED->value => 'danger',
+                        default => 'secondary',
                     })
                     ->sortable(),
 
@@ -122,10 +124,10 @@ class UserApprovalResource extends Resource
                     ->label('Approval Status')
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
-                        Status::PENDING->value     => 'warning',
-                        Status::APPROVED->value    => 'success',
+                        Status::PENDING->value => 'warning',
+                        Status::APPROVED->value => 'success',
                         Status::DISAPPROVED->value => 'danger',
-                        default                    => 'secondary',
+                        default => 'secondary',
                     })
                     ->sortable(),
 
@@ -186,10 +188,10 @@ class UserApprovalResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index'  => Pages\ListUserApprovals::route('/'),
+            'index' => Pages\ListUserApprovals::route('/'),
             'create' => Pages\CreateUserApproval::route('/create'),
-            'edit'   => Pages\EditUserApproval::route('/{record}/edit'),
-            'view'   => Pages\ViewUserApproval::route('/{record}/view'),
+            'edit' => Pages\EditUserApproval::route('/{record}/edit'),
+            'view' => Pages\ViewUserApproval::route('/{record}/view'),
         ];
     }
 

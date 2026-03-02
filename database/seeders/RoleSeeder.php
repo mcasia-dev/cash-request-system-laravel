@@ -1,4 +1,5 @@
 <?php
+
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
@@ -14,39 +15,39 @@ class RoleSeeder extends Seeder
         // Create roles
         $roles = [
             [
-                'name'       => 'super_admin',
+                'name' => 'super_admin',
                 'guard_name' => 'web',
             ],
             [
-                'name'       => 'department_head',
+                'name' => 'department_head',
                 'guard_name' => 'web',
             ],
             [
-                'name'       => 'president',
+                'name' => 'president',
                 'guard_name' => 'web',
             ],
             [
-                'name'       => 'sales_channel_manager',
+                'name' => 'sales_channel_manager',
                 'guard_name' => 'web',
             ],
             [
-                'name'       => 'national_sales_manager',
+                'name' => 'national_sales_manager',
                 'guard_name' => 'web',
             ],
             [
-                'name'       => 'treasury_manager',
+                'name' => 'treasury_manager',
+                'guard_name' => 'web',
+            ],
+//            [
+//                'name'       => 'treasury_supervisor',
+//                'guard_name' => 'web',
+//            ],
+            [
+                'name' => 'treasury_staff',
                 'guard_name' => 'web',
             ],
             [
-                'name'       => 'treasury_supervisor',
-                'guard_name' => 'web',
-            ],
-            [
-                'name'       => 'treasury_staff',
-                'guard_name' => 'web',
-            ],
-            [
-                'name'       => 'finance_staff',
+                'name' => 'finance_staff',
                 'guard_name' => 'web',
             ],
         ];

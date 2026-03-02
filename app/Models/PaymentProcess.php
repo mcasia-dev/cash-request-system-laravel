@@ -50,11 +50,13 @@ class PaymentProcess extends Model implements HasMedia
         'payroll_credit',
         'disbursement_type',
         'disbursement_added_by',
-        'is_override'
+        'is_override',
+        'is_approved_by_treasury_manager'
     ];
 
     protected $casts = [
         'is_override' => 'boolean',
+        'is_approved_by_treasury_manager' => 'boolean',
         'activity_date' => 'date',
         'due_date' => 'date',
         'cut_off_date' => 'date',

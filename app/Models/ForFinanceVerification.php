@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -12,9 +13,10 @@ use Spatie\MediaLibrary\InteractsWithMedia;
 class ForFinanceVerification extends Model implements HasMedia
 {
     use InteractsWithMedia;
+
     protected $table = 'cash_requests';
 
-     protected $fillable = [
+    protected $fillable = [
         'request_no',
         'user_id',
         'activity_name',
@@ -47,17 +49,20 @@ class ForFinanceVerification extends Model implements HasMedia
         'cut_off_date',
         'payroll_date',
         'payroll_credit',
-        'disbursement_added_by', 'is_override'
-     ];
+        'disbursement_added_by',
+        'is_override',
+        'is_approved_by_treasury_manager'
+    ];
 
     protected $casts = [
-        'is_override'     => 'boolean',
-        'activity_date'   => 'date',
-        'due_date'        => 'date',
-        'cut_off_date'    => 'date',
-        'payroll_date'    => 'date',
+        'is_override' => 'boolean',
+        'is_approved_by_treasury_manager' => 'boolean',
+        'activity_date' => 'date',
+        'due_date' => 'date',
+        'cut_off_date' => 'date',
+        'payroll_date' => 'date',
         'date_liquidated' => 'datetime',
-        'date_released'   => 'datetime',
+        'date_released' => 'datetime',
     ];
 
     public function registerMediaCollections(): void

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -47,17 +48,19 @@ class CashRequest extends Model implements HasMedia
         'payroll_date',
         'payroll_credit',
         'disbursement_added_by',
-        'is_override'
+        'is_override',
+        'is_approved_by_treasury_manager'
     ];
 
     protected $casts = [
-        'is_override'     => 'boolean',
-        'activity_date'   => 'date',
-        'due_date'        => 'date',
-        'cut_off_date'    => 'date',
-        'payroll_date'    => 'date',
+        'is_override' => 'boolean',
+        'is_approved_by_treasury_manager' => 'boolean',
+        'activity_date' => 'date',
+        'due_date' => 'date',
+        'cut_off_date' => 'date',
+        'payroll_date' => 'date',
         'date_liquidated' => 'datetime',
-        'date_released'   => 'datetime',
+        'date_released' => 'datetime',
     ];
 
     protected static function booted()
@@ -79,7 +82,7 @@ class CashRequest extends Model implements HasMedia
                 ->first();
 
             $lastNumber = $last
-                ? (int) substr($last->request_no, -4)
+                ? (int)substr($last->request_no, -4)
                 : 0;
 
             $next = str_pad($lastNumber + 1, 4, '0', STR_PAD_LEFT);

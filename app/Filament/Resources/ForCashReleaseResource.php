@@ -20,6 +20,7 @@ class ForCashReleaseResource extends Resource
     protected static ?string $model = ForCashRelease::class;
     protected static ?string $navigationGroup = 'For Approval';
     protected static ?string $navigationIcon = 'heroicon-o-banknotes';
+    protected ?string $pollingInterval = '5s';
 
     public static function getNavigationBadge(): ?string
     {
