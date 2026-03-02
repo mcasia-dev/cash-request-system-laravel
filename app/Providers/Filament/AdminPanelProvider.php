@@ -32,6 +32,9 @@ use Althinect\FilamentSpatieRolesPermissions\FilamentSpatieRolesPermissionsPlugi
 use App\Http\Middleware\ForceLogoutAfterRegistration;
 use Joaopaulolndev\FilamentGeneralSettings\FilamentGeneralSettingsPlugin;
 use Leandrocfe\FilamentApexCharts\FilamentApexChartsPlugin;
+use RickDBCN\FilamentEmail\FilamentEmail;
+use Rmsramos\Activitylog\ActivitylogPlugin;
+use Tapp\FilamentAuthenticationLog\FilamentAuthenticationLogPlugin;
 use TomatoPHP\FilamentNotes\Filament\Widgets\NotesWidget;
 use TomatoPHP\FilamentNotes\FilamentNotesPlugin;
 
@@ -82,14 +85,24 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->plugins([
                 FilamentSpatieRolesPermissionsPlugin::make(),
+
                 FilamentNotesPlugin::make()
                     ->useChecklist(),
+
                 FilamentApexChartsPlugin::make(),
+
                 FilamentGeneralSettingsPlugin::make()
                     ->canAccess(fn() => auth()->user()->isSuperAdmin())
                     ->setIcon('heroicon-o-cog')
-                    ->setNavigationGroup('Administrator')
+                    ->setNavigationGroup('Settings'),
 
+                ActivitylogPlugin::make()
+                    ->navigationGroup('Logs')
+                    ->authorize(fn() => auth()->user()->isSuperAdmin()),
+
+                FilamentAuthenticationLogPlugin::make(),
+
+                FilamentEmail::make(),
             ])
             ->renderHook(
                 PanelsRenderHook::BODY_END,

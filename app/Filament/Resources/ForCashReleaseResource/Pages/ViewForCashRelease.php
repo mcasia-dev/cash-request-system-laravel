@@ -15,6 +15,8 @@ use App\Services\Remarks\StatusRemarkResolver;
 use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
+use Filament\Infolists\Components\Actions;
+use Filament\Infolists\Components\Actions\Action as InfolistAction;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
@@ -24,6 +26,8 @@ use Filament\Notifications\Actions\Action as NotificationAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Illuminate\Support\Facades\Auth;
+use Filament\Support\Enums\Alignment;
+use Illuminate\Support\Facades\DB;
 
 class ViewForCashRelease extends ViewRecord
 {
@@ -106,7 +110,36 @@ class ViewForCashRelease extends ViewRecord
                     ->schema([
                         RepeatableEntry::make('cashRequest.activityLists')
                             ->label('')
+                            ->getStateUsing(fn($record) => $record->cashRequest->activityLists()
+                                ->where('status', '!=', 'rejected')
+                                ->get())
                             ->schema([
+                                Actions::make([
+                                    InfolistAction::make('rejectActivity')
+                                        ->icon('heroicon-o-minus')
+                                        ->iconButton()
+                                        ->tooltip('Reject activity')
+                                        ->color('danger')
+                                        ->size('xs')
+                                        ->extraAttributes([
+                                            'class' => 'border border-red-500 rounded-full text-transparent hover:bg-red-50',
+                                        ])
+                                        ->modalHeading('Reject Activity')
+                                        ->modalDescription('Are you sure you want to reject this activity?')
+                                        ->modalSubmitActionLabel('Reject')
+                                        ->form([
+                                            Textarea::make('rejection_remarks')
+                                                ->label('Rejection Remarks')
+                                                ->required()
+                                                ->maxLength(65535),
+                                        ])
+                                        ->visible(fn($record): bool => $this->getStatus($this->record) && $record->status !== 'rejected')
+                                        ->action(fn(array $data, $record) => $this->rejectActivity($record, $data)),
+                                ])
+                                    ->alignment(Alignment::End)
+                                    ->fullWidth()
+                                    ->columnSpanFull(),
+
                                 TextEntry::make('activity_name')
                                     ->label('Activity Name'),
 
@@ -131,6 +164,20 @@ class ViewForCashRelease extends ViewRecord
                                 SpatieMediaLibraryImageEntry::make('attachment')
                                     ->label('Attached File/Image')
                                     ->collection('attachments')
+                                    ->columnSpanFull(),
+
+                                TextEntry::make('status')
+                                    ->label('Activity Status')
+                                    ->badge()
+                                    ->color(fn(string $state): string => match ($state) {
+                                        'rejected' => 'danger',
+                                        'pending' => 'warning',
+                                        default => 'gray',
+                                    }),
+
+                                TextEntry::make('rejection_remarks')
+                                    ->label('Rejection Remarks')
+                                    ->visible(fn($record) => filled($record->rejection_remarks))
                                     ->columnSpanFull(),
                             ])
                             ->columns(3),
@@ -348,5 +395,46 @@ class ViewForCashRelease extends ViewRecord
             ->send();
 
         return redirect()->route('filament.admin.resources.for-cash-releases.index');
+    }
+
+    private function rejectActivity($record, array $data): void
+    {
+        DB::transaction(function () use ($record, $data): void {
+            $record->update([
+                'status' => 'rejected',
+                'rejection_remarks' => $data['rejection_remarks'],
+            ]);
+
+            $cashRequest = $record->cashRequest ?? $this->record->cashRequest;
+            $total = $cashRequest->activityLists()
+                ->where('status', '!=', 'rejected')
+                ->sum('requesting_amount');
+
+            $cashRequest->update([
+                'requesting_amount' => (float) $total,
+            ]);
+
+            $hasRemainingActivities = $cashRequest->activityLists()
+                ->where(function ($query) {
+                    $query->whereNull('status')
+                        ->orWhere('status', '!=', 'rejected');
+                })
+                ->exists();
+
+            if (!$hasRemainingActivities) {
+                $statusRemarks = app(StatusRemarkResolver::class)->rejectByPermissions(Auth::user(), 'treasury');
+
+                $cashRequest->update([
+                    'status' => Status::REJECTED->value,
+                    'status_remarks' => $statusRemarks,
+                    'reason_for_rejection' => $data['rejection_remarks'],
+                ]);
+            }
+        });
+
+        Notification::make()
+            ->title('Activity rejected')
+            ->success()
+            ->send();
     }
 }

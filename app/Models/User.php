@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
@@ -11,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
+use Rappasoft\LaravelAuthenticationLog\Traits\AuthenticationLoggable;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\Permission\Traits\HasRoles;
@@ -18,7 +20,7 @@ use Spatie\Permission\Traits\HasRoles;
 class User extends Authenticatable implements HasMedia, HasAvatar
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, HasRoles, HasSuperAdmin, InteractsWithMedia;
+    use HasFactory, Notifiable, HasRoles, HasSuperAdmin, InteractsWithMedia, AuthenticationLoggable;
 
     /**
      * The attributes that are mass assignable.
@@ -63,7 +65,7 @@ class User extends Authenticatable implements HasMedia, HasAvatar
     {
         return [
             'email_verified_at' => 'datetime',
-            'password'          => 'hashed',
+            'password' => 'hashed',
         ];
     }
 
@@ -78,24 +80,24 @@ class User extends Authenticatable implements HasMedia, HasAvatar
          * @return void
          */
         static::creating(function ($user) {
-            $last_id     = self::latest()->first()->id ?? 0;
-            $year        = Carbon::now()->year;
+            $last_id = self::latest()->first()->id ?? 0;
+            $year = Carbon::now()->year;
             $random_char = str_pad($last_id + 1, 4, '0', STR_PAD_LEFT);
             $tracking_no = "MCA-{$year}-{$random_char}";
 
             $length = 12;
 
-            $characters       = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            $characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
             $charactersLength = Str::length($characters);
-            $randomString     = '';
+            $randomString = '';
 
             for ($i = 0; $i < $length; $i++) {
                 $randomString .= $characters[random_int(0, $charactersLength - 1)];
             }
 
-            $user->control_no        = $tracking_no;
-            $user->name              = "{$user->first_name} {$user->last_name}";
-            $user->signature_number  = $randomString;
+            $user->control_no = $tracking_no;
+            $user->name = "{$user->first_name} {$user->last_name}";
+            $user->signature_number = $randomString;
         });
     }
 

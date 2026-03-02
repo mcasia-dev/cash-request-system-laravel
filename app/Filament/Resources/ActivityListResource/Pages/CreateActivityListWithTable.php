@@ -108,7 +108,8 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
                         SpatieMediaLibraryFileUpload::make('attachment')
                             ->collection('attachments')
                             ->multiple()
-                            ->responsiveImages(),
+                            ->responsiveImages()
+                            ->required(),
 
                         Textarea::make('purpose')
                             ->columnSpanFull()
