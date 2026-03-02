@@ -91,3 +91,33 @@
     background-color: rgb(127 29 29 / 0.35);
     color: rgb(252 165 165);
 }
+
+/* Dashboard chart responsiveness */
+.fi-widget .apexcharts-canvas,
+.fi-widget .apexcharts-svg {
+    max-width: 100%;
+}
+
+.fi-widget .apexcharts-svg {
+    width: 100% !important;
+}
+
+.fi-widget .apexcharts-legend {
+    flex-wrap: wrap;
+    gap: 0.35rem 0.6rem;
+}
+
+@media (max-width: 640px) {
+    .fi-widget .apexcharts-canvas {
+        height: 240px !important;
+    }
+
+    .fi-widget .apexcharts-svg {
+        height: 240px !important;
+    }
+
+    .fi-widget .apexcharts-legend {
+        justify-content: center;
+        font-size: 0.75rem;
+    }
+}

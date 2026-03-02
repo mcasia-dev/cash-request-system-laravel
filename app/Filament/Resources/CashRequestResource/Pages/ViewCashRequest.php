@@ -104,6 +104,21 @@ class ViewCashRequest extends ViewRecord
                                     ->label('Attached File/Image')
                                     ->collection('attachments')
                                     ->columnSpanFull(),
+
+                                TextEntry::make('status')
+                                    ->label('Activity Status')
+                                    ->badge()
+                                    ->color(fn(string $state): string => match ($state) {
+                                        'rejected' => 'danger',
+                                        'approved' => 'success',
+                                        'pending' => 'warning',
+                                        default => 'gray',
+                                    }),
+
+                                TextEntry::make('rejection_remarks')
+                                    ->label('Reason for Rejection')
+                                    ->visible(fn($record) => filled($record->rejection_remarks))
+                                    ->columnSpanFull(),
                             ])
                             ->columns(3),
                     ]),

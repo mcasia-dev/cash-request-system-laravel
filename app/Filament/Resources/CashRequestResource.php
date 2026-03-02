@@ -25,7 +25,6 @@ use Filament\Tables;
 use Filament\Tables\Actions\Action;
 use Filament\Tables\Actions\ActionGroup;
 use Filament\Tables\Actions\DeleteAction;
-use Filament\Tables\Actions\EditAction;
 use Filament\Tables\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -39,6 +38,7 @@ class CashRequestResource extends Resource
     protected static ?string $model = CashRequest::class;
     protected static ?string $navigationGroup = 'Cash Requests';
     protected static ?string $navigationIcon = 'heroicon-o-document-text';
+    protected ?string $pollingInterval = '5s';
 
     public static function getEloquentQuery(): Builder
     {
@@ -78,7 +78,8 @@ class CashRequestResource extends Resource
                     ->maxValue(fn($get) => $get('nature_of_request') === NatureOfRequestEnum::PETTY_CASH->value ? 1500 : null),
 
                 SpatieMediaLibraryFileUpload::make('attachment')
-                    ->collection('attachments'),
+                    ->collection('attachments')
+                    ->required(),
 
                 Textarea::make('purpose')
                     ->columnSpanFull()
@@ -198,7 +199,7 @@ class CashRequestResource extends Resource
                         ->modalHeading('Reject Cash Request')
                         ->modalSubmitActionLabel('Submit')
                         ->action(self::getCancelAction())
-                        ->visible(fn($record) => $record->status === Status::PENDING->value),
+                        ->visible(fn($record) => self::canCancel($record)),
                 ]),
 
             ])
@@ -319,6 +320,11 @@ class CashRequestResource extends Resource
         return function ($record, array $data) {
             app(LiquidationService::class)->liquidate($record, $data, Auth::user());
         };
+    }
+
+    public static function canCancel($record): bool
+    {
+        return ($record->status === Status::PENDING->value || $record->status === Status::IN_PROGRESS->value) && !$record->is_override && $record->status_remarks != null;
     }
 
     /**

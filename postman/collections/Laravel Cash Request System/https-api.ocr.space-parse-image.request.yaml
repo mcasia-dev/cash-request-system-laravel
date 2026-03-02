@@ -1,0 +1,60 @@
+$kind: http-request
+name: https://api.ocr.space/parse/image
+url: https://api.ocr.space/parse/image
+method: POST
+headers:
+  apikey: K85454910688957
+body:
+  type: formdata
+  content:
+    - type: text
+      key: apikey
+      value: K85454910688957
+      description: ""
+      disabled: true
+    - type: text
+      key: url
+      value: https://www.receiptfont.com/wp-content/uploads/template-tesco-1-screenshot-1.png
+      description: ""
+      disabled: false
+    - type: text
+      key: filetype
+      value: jpg
+      description: ""
+      disabled: true
+    - type: text
+      key: scale
+      value: "true"
+      description: ""
+      disabled: false
+    - type: text
+      key: isOverlayRequired
+      value: "false"
+      description: ""
+      disabled: false
+    - type: text
+      key: isCreateSearchablePdf
+      value: "false"
+      description: ""
+      disabled: false
+    - type: text
+      key: detectOrientation
+      value: "false"
+      description: ""
+      disabled: false
+    - type: text
+      key: isSearchablePdfHideTextLayer
+      value: "false"
+      description: ""
+      disabled: false
+    - type: text
+      key: OCREngine
+      value: "2"
+      description: ""
+      disabled: false
+    - type: text
+      key: isTable
+      value: "true"
+      description: ""
+      disabled: false
+order: 1772432379182

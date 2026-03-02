@@ -10,7 +10,6 @@ use App\Filament\Resources\PaymentProcessResource;
 use App\Jobs\ApproveCashRequestByTreasuryJob;
 use App\Jobs\RejectCashRequestJob;
 use App\Models\ForCashRelease;
-use App\Models\ForLiquidation;
 use App\Models\User;
 use App\Services\Remarks\StatusRemarkResolver;
 use Carbon\Carbon;
@@ -21,6 +20,8 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\TimePicker;
 use Filament\Forms\Get;
+use Filament\Infolists\Components\Actions;
+use Filament\Infolists\Components\Actions\Action as InfolistAction;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
@@ -29,7 +30,9 @@ use Filament\Infolists\Infolist;
 use Filament\Notifications\Actions\Action as NotificationAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
+use Filament\Support\Enums\Alignment;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Joaopaulolndev\FilamentGeneralSettings\Services\GeneralSettingsService;
 
 class ViewPaymentProcess extends ViewRecord
@@ -47,7 +50,7 @@ class ViewPaymentProcess extends ViewRecord
             // SET DISBURSEMENT BUTTON
             Action::make('set_disbursement')
                 ->label('Set Disbursement')
-                ->visible(fn($record) => $record->nature_of_request === NatureOfRequestEnum::CASH_ADVANCE->value && $record->disbursement_added_by == null)
+                ->visible(fn($record) => $this->canSetDisbursement($record))
                 ->color('gray')
                 ->form($this->getDisbursementTypeFormSchema())
                 ->action(fn($record, array $data) => $this->saveDisbursementType($record, $data)),
@@ -60,13 +63,21 @@ class ViewPaymentProcess extends ViewRecord
                 ->action(fn($record) => $this->overrideRequest($record))
                 ->visible(fn($record) => $this->canOverride($record)),
 
-            // APPROVED BUTTON
+            // APPROVED BUTTON (For Treasury Manager)
+            Action::make('approve_request')
+                ->label('Approve Request')
+                ->color('primary')
+                ->requiresConfirmation()
+                ->action(fn($record) => $this->approveCashRequest($record))
+                ->visible(fn($record) => $this->canApproveRequest($record)),
+
+            // APPROVED BUTTON WITH RELEASE FORM (For Treasury Staff)
             Action::make('Approve')
                 ->color('primary')
                 ->requiresConfirmation()
                 ->form(fn($record) => $this->getApproveFormSchema($record))
-                ->action(fn($record, array $data) => $this->approveCashRequest($record, $data))
-                ->visible(fn($record) => $this->canApprove($record)),
+                ->action(fn($record, array $data) => $this->approveCashRequestWithReleaseForm($record, $data))
+                ->visible(fn($record) => $this->canApproveRequestWithRemarks($record)),
 
             // REJECTION BUTTON
             Action::make('Reject')
@@ -142,6 +153,32 @@ class ViewPaymentProcess extends ViewRecord
                                 ->where('status', '!=', 'rejected')
                                 ->get())
                             ->schema([
+                                Actions::make([
+                                    InfolistAction::make('rejectActivity')
+                                        ->icon('heroicon-o-minus')
+                                        ->iconButton()
+                                        ->tooltip('Reject activity')
+                                        ->color('danger')
+                                        ->size('xs')
+                                        ->extraAttributes([
+                                            'class' => 'border border-red-500 rounded-full text-transparent hover:bg-red-50',
+                                        ])
+                                        ->modalHeading('Reject Activity')
+                                        ->modalDescription('Are you sure you want to reject this activity?')
+                                        ->modalSubmitActionLabel('Reject')
+                                        ->form([
+                                            Textarea::make('rejection_remarks')
+                                                ->label('Rejection Remarks')
+                                                ->required()
+                                                ->maxLength(65535),
+                                        ])
+                                        ->visible(fn($record): bool => $this->getStatus($this->record) && $record->status !== 'rejected')
+                                        ->action(fn(array $data, $record) => $this->rejectActivity($record, $data)),
+                                ])
+                                    ->alignment(Alignment::End)
+                                    ->fullWidth()
+                                    ->columnSpanFull(),
+
                                 TextEntry::make('activity_name')
                                     ->label('Activity Name'),
 
@@ -166,6 +203,20 @@ class ViewPaymentProcess extends ViewRecord
                                 SpatieMediaLibraryImageEntry::make('attachment')
                                     ->label('Attached File/Image')
                                     ->collection('attachments')
+                                    ->columnSpanFull(),
+
+                                TextEntry::make('status')
+                                    ->label('Activity Status')
+                                    ->badge()
+                                    ->color(fn(string $state): string => match ($state) {
+                                        'rejected' => 'danger',
+                                        'pending' => 'warning',
+                                        default => 'gray',
+                                    }),
+
+                                TextEntry::make('rejection_remarks')
+                                    ->label('Rejection Remarks')
+                                    ->visible(fn($record) => filled($record->rejection_remarks))
                                     ->columnSpanFull(),
                             ])
                             ->columns(3),
@@ -276,9 +327,18 @@ class ViewPaymentProcess extends ViewRecord
         return $record->status === Status::IN_PROGRESS->value && $record->status_remarks === StatusRemarks::FOR_PAYMENT_PROCESSING->value;
     }
 
-    private function canApprove(mixed $record): bool
+    private function canApproveRequest(mixed $record)
     {
-        if (!($this->getStatus($record) && $this->isTreasuryManager() && $record->is_override)) {
+        if (!($this->getStatus($record) && $this->isTreasuryManager() && $record->is_override && !$record->is_approved_by_treasury_manager)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function canApproveRequestWithRemarks(mixed $record): bool
+    {
+        if (!($this->getStatus($record) && $this->isTreasuryStaff() && $record->is_override && $record->is_approved_by_treasury_manager)) {
             return false;
         }
 
@@ -289,6 +349,43 @@ class ViewPaymentProcess extends ViewRecord
         return true;
     }
 
+    private function approveCashRequest(mixed $record)
+    {
+        $user = Auth::user();
+
+        $record->update([
+            'is_approved_by_treasury_manager' => true,
+        ]);
+
+        // Log activity
+        activity()
+            ->causedBy(Auth::user())
+            ->performedOn($record)
+            ->event('approved')
+            ->withProperties([
+                'request_no' => $record->request_no,
+                'activity_name' => $record->activity_name,
+                'requesting_amount' => $record->requesting_amount,
+                'previous_status' => $record->status,
+                'new_status' => $record->status,
+                'status_remarks' => $record->status_remarks,
+            ])
+            ->log("Cash request {$record->request_no} was approved by {$user->name} ({$user->position})");
+
+        ViewPaymentProcess::notifyTreasuryStaff(
+            $record,
+            'Cash Request Update',
+            "Cash request {$record->request_no} has been approved by Treasury Manager."
+        );
+
+        Notification::make()
+            ->title('Cash Request Approved!')
+            ->success()
+            ->send();
+
+        return redirect()->route('filament.admin.resources.payment-processing.index');
+    }
+
     /**
      * Approve the cash request, create the release record, set due date (if applicable),
      * log activity, and dispatch the approval notification.
@@ -296,7 +393,7 @@ class ViewPaymentProcess extends ViewRecord
      * @param mixed $record
      * @param array<string, mixed> $data
      */
-    private function approveCashRequest($record, array $data)
+    private function approveCashRequestWithReleaseForm($record, array $data)
     {
         $user = Auth::user();
         $status_remarks = app(StatusRemarkResolver::class)->approveByPermissions($user, 'treasury');
@@ -588,6 +685,18 @@ class ViewPaymentProcess extends ViewRecord
         ];
     }
 
+    private function canSetDisbursement($record)
+    {
+        // It will only show if the nature of request is cash advance,
+        // the disbursement_added_by is null, the role of current user is Treasury Staff,
+        // already override and already verified/approved by the Treasury Manager.
+        return $record->nature_of_request === NatureOfRequestEnum::CASH_ADVANCE->value
+            && $record->disbursement_added_by == null
+            && $this->isTreasuryStaff()
+            && $record->is_override
+            && $record->is_approved_by_treasury_manager;
+    }
+
     private function overrideRequest($record)
     {
         $user = Auth::user();
@@ -642,6 +751,23 @@ class ViewPaymentProcess extends ViewRecord
             ->exists();
     }
 
+    private function isTreasuryStaff(): bool
+    {
+        $user = Auth::user();
+
+        if (!$user) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        return $user->roles()
+            ->where('name', 'treasury_staff')
+            ->exists();
+    }
+
     /**
      * Notify treasury manager about payment processing updates.
      * @param $record
@@ -672,6 +798,38 @@ class ViewPaymentProcess extends ViewRecord
                     ->url(route('filament.admin.resources.payment-processing.view', ['record' => $record->id])),
             ])
             ->sendToDatabase($treasuryManagers);
+    }
+
+    /**
+     * Notify treasury staff about treasury manager approval updates.
+     * @param $record
+     * @param string $title
+     * @param string $body
+     */
+    private static function notifyTreasuryStaff($record, string $title, string $body): void
+    {
+        $treasuryStaffs = User::query()
+            ->whereHas('roles', function ($query) {
+                $query->where('name', 'treasury_staff');
+            })
+            ->get();
+
+        if ($treasuryStaffs->isEmpty()) {
+            return;
+        }
+
+        Notification::make()
+            ->title($title)
+            ->body($body)
+            ->actions([
+                NotificationAction::make('markAsRead')
+                    ->button()
+                    ->markAsRead(),
+                NotificationAction::make('view')
+                    ->link()
+                    ->url(route('filament.admin.resources.payment-processing.view', ['record' => $record->id])),
+            ])
+            ->sendToDatabase($treasuryStaffs);
     }
 
     private function canOverride($record): bool
@@ -707,6 +865,47 @@ class ViewPaymentProcess extends ViewRecord
         ]);
 
         return $agingDays !== false ? (int)$agingDays : 3;
+    }
+
+    private function rejectActivity($record, array $data): void
+    {
+        DB::transaction(function () use ($record, $data): void {
+            $record->update([
+                'status' => 'rejected',
+                'rejection_remarks' => $data['rejection_remarks'],
+            ]);
+
+            $cashRequest = $record->cashRequest ?? $this->record;
+            $total = $cashRequest->activityLists()
+                ->where('status', '!=', 'rejected')
+                ->sum('requesting_amount');
+
+            $cashRequest->update([
+                'requesting_amount' => (float) $total,
+            ]);
+
+            $hasRemainingActivities = $cashRequest->activityLists()
+                ->where(function ($query) {
+                    $query->whereNull('status')
+                        ->orWhere('status', '!=', 'rejected');
+                })
+                ->exists();
+
+            if (!$hasRemainingActivities) {
+                $statusRemarks = app(StatusRemarkResolver::class)->rejectByPermissions(Auth::user(), 'treasury');
+
+                $cashRequest->update([
+                    'status' => Status::REJECTED->value,
+                    'status_remarks' => $statusRemarks,
+                    'reason_for_rejection' => $data['rejection_remarks'],
+                ]);
+            }
+        });
+
+        Notification::make()
+            ->title('Activity rejected')
+            ->success()
+            ->send();
     }
 
 }

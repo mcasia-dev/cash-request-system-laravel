@@ -9,5 +9,9 @@ class UserInfoClockWidget extends Widget
     protected static string $view = 'filament.widgets.user-info-clock-widget';
 
     protected int | string | array $columnSpan = 'full';
-}
 
+    public static function canView(): bool
+    {
+        return false;
+    }
+}

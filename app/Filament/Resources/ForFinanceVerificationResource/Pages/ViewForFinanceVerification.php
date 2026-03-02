@@ -9,14 +9,19 @@ use App\Services\Remarks\StatusRemarkResolver;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Infolists\Components\Actions;
+use Filament\Infolists\Components\Actions\Action as InfolistAction;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
+use Filament\Notifications\Actions\Action as NotificationAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
+use Filament\Support\Enums\Alignment;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class ViewForFinanceVerification extends ViewRecord
 {
@@ -102,7 +107,36 @@ class ViewForFinanceVerification extends ViewRecord
                     ->schema([
                         RepeatableEntry::make('activityLists')
                             ->label('')
+                            ->getStateUsing(fn($record) => $record->activityLists()
+                                ->where('status', '!=', 'rejected')
+                                ->get())
                             ->schema([
+                                Actions::make([
+                                    InfolistAction::make('rejectActivity')
+                                        ->icon('heroicon-o-minus')
+                                        ->iconButton()
+                                        ->tooltip('Reject activity')
+                                        ->color('danger')
+                                        ->size('xs')
+                                        ->extraAttributes([
+                                            'class' => 'border border-red-500 rounded-full text-transparent hover:bg-red-50',
+                                        ])
+                                        ->modalHeading('Reject Activity')
+                                        ->modalDescription('Are you sure you want to reject this activity?')
+                                        ->modalSubmitActionLabel('Reject')
+                                        ->form([
+                                            Textarea::make('rejection_remarks')
+                                                ->label('Rejection Remarks')
+                                                ->required()
+                                                ->maxLength(65535),
+                                        ])
+                                        ->visible(fn($record): bool => $this->getStatus($this->record) && $record->status !== 'rejected')
+                                        ->action(fn(array $data, $record) => $this->rejectActivity($record, $data)),
+                                ])
+                                    ->alignment(Alignment::End)
+                                    ->fullWidth()
+                                    ->columnSpanFull(),
+
                                 TextEntry::make('activity_name')
                                     ->label('Activity Name'),
 
@@ -123,6 +157,20 @@ class ViewForFinanceVerification extends ViewRecord
                                 SpatieMediaLibraryImageEntry::make('attachment')
                                     ->label('Attached File/Image')
                                     ->collection('attachments')
+                                    ->columnSpanFull(),
+
+                                TextEntry::make('status')
+                                    ->label('Activity Status')
+                                    ->badge()
+                                    ->color(fn(string $state): string => match ($state) {
+                                        'rejected' => 'danger',
+                                        'pending' => 'warning',
+                                        default => 'gray',
+                                    }),
+
+                                TextEntry::make('rejection_remarks')
+                                    ->label('Rejection Remarks')
+                                    ->visible(fn($record) => filled($record->rejection_remarks))
                                     ->columnSpanFull(),
                             ])
                             ->columns(3),
@@ -175,6 +223,20 @@ class ViewForFinanceVerification extends ViewRecord
         // ApproveCashRequestJob::dispatch($record);
 
         Notification::make()
+            ->title('Cash Request Update')
+            ->body("Your cash request {$record->request_no} has been approved by Finance and forwarded for payment processing.")
+            ->actions([
+                NotificationAction::make('markAsRead')
+                    ->button()
+                    ->markAsRead(),
+
+                NotificationAction::make('view')
+                    ->link()
+                    ->url(route('filament.admin.resources.cash-requests.track-status', ['record' => $record->id])),
+            ])
+            ->sendToDatabase($record->user);
+
+        Notification::make()
             ->title('Cash Request Approved!')
             ->success()
             ->send();
@@ -223,6 +285,47 @@ class ViewForFinanceVerification extends ViewRecord
 
         return redirect()->route('filament.admin.resources.for-verification.index');
 
+    }
+
+    private function rejectActivity($record, array $data): void
+    {
+        DB::transaction(function () use ($record, $data): void {
+            $record->update([
+                'status' => 'rejected',
+                'rejection_remarks' => $data['rejection_remarks'],
+            ]);
+
+            $cashRequest = $record->cashRequest;
+            $total = $cashRequest->activityLists()
+                ->where('status', '!=', 'rejected')
+                ->sum('requesting_amount');
+
+            $cashRequest->update([
+                'requesting_amount' => (float) $total,
+            ]);
+
+            $hasRemainingActivities = $cashRequest->activityLists()
+                ->where(function ($query) {
+                    $query->whereNull('status')
+                        ->orWhere('status', '!=', 'rejected');
+                })
+                ->exists();
+
+            if (!$hasRemainingActivities) {
+                $statusRemarks = app(StatusRemarkResolver::class)->rejectByPermissions(Auth::user(), 'finance');
+
+                $cashRequest->update([
+                    'status' => Status::REJECTED->value,
+                    'status_remarks' => $statusRemarks,
+                    'reason_for_rejection' => $data['rejection_remarks'],
+                ]);
+            }
+        });
+
+        Notification::make()
+            ->title('Activity rejected')
+            ->success()
+            ->send();
     }
 
 }

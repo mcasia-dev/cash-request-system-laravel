@@ -103,8 +103,8 @@ Schedule::call(function () {
                 if ($now->greaterThan($releaseWindowEnd)) {
                     $release->cashRequest->update([
                         'status' => Status::CANCELLED->value,
-                        'status_remarks' => StatusRemarks::UNCLAIMED_RELEASE_WINDOW_EXPIRED->value,
-                        'reason_for_cancelling' => 'Unclaimed: No claim was made within the scheduled release window.',
+                        'status_remarks' => StatusRemarks::UNCLAIMED->value,
+                        'reason_for_cancelling' => 'No claim was made within the scheduled release window.',
                     ]);
                 }
             }

@@ -14,9 +14,15 @@
         "joaopaulolndev/filament-general-settings": "^1.0",
         "laravel/framework": "^11.31",
         "laravel/tinker": "^2.9",
+        "leandrocfe/filament-apex-charts": "*",
+        "rappasoft/laravel-authentication-log": "^4.0",
+        "rickdbcn/filament-email": "^1.13",
+        "rmsramos/activitylog": "^2.0",
         "spatie/laravel-activitylog": "^4.10",
+        "tapp/filament-authentication-log": "3.1",
         "tomatophp/filament-alerts": "^2.2",
-        "tomatophp/filament-notes": "^1.0"
+        "tomatophp/filament-notes": "^1.0",
+        "torann/geoip": "^3.0"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

@@ -10,6 +10,7 @@ use App\Jobs\ApproveCashRequestJob;
 use App\Jobs\RejectCashRequestJob;
 use App\Models\User;
 use App\Services\CashRequestApprovalFlowService;
+use App\Services\Remarks\StatusRemarkResolver;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -166,6 +167,24 @@ class ViewForApprovalRequest extends ViewRecord
                                                 $cashRequest->update([
                                                     'requesting_amount' => (float) $total,
                                                 ]);
+
+                                                $hasRemainingActivities = $cashRequest->activityLists()
+                                                    ->where(function ($query) {
+                                                        $query->whereNull('status')
+                                                            ->orWhere('status', '!=', 'rejected');
+                                                    })
+                                                    ->exists();
+
+                                                if (!$hasRemainingActivities) {
+                                                    $statusRemarks = app(StatusRemarkResolver::class)
+                                                        ->rejectByPermissions(Auth::user(), 'approval');
+
+                                                    $cashRequest->update([
+                                                        'status' => Status::REJECTED->value,
+                                                        'status_remarks' => $statusRemarks,
+                                                        'reason_for_rejection' => $data['rejection_remarks'],
+                                                    ]);
+                                                }
                                             });
 
                                             Notification::make()
