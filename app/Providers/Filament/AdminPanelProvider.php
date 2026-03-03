@@ -2,34 +2,36 @@
 
 namespace App\Providers\Filament;
 
+use AchyutN\FilamentLogViewer\FilamentLogViewer;
+use Althinect\FilamentSpatieRolesPermissions\FilamentSpatieRolesPermissionsPlugin;
+use App\Filament\Pages\Auth\CustomLogin;
+use App\Filament\Pages\Auth\EditProfile;
+use App\Filament\Pages\Auth\Register;
+use App\Filament\Pages\Dashboard;
 use App\Filament\Resources\CashRequestResource\Widgets\SampleChart;
 use App\Filament\Widgets\MyApprovalDecisionPieChart;
 use App\Filament\Widgets\MyReleaseNaturePercentageChart;
-use App\Filament\Pages\Dashboard;
-use App\Filament\Widgets\RequestCountOverviewStats;
 use App\Filament\Widgets\ReleaseAmountSummaryStats;
+use App\Filament\Widgets\RequestCountOverviewStats;
 use App\Filament\Widgets\SampleGraphChart;
 use App\Filament\Widgets\UnliquidatedCashRequestsTable;
-use Filament\Panel;
-use Filament\Widgets;
-use Filament\PanelProvider;
-use Filament\View\PanelsRenderHook;
-use Filament\Support\Colors\Color;
-use App\Filament\Pages\Auth\Register;
-use App\Filament\Pages\Auth\CustomLogin;
-use App\Filament\Pages\Auth\EditProfile;
+use App\Http\Middleware\ForceLogoutAfterRegistration;
 use Filament\Http\Middleware\Authenticate;
-use Illuminate\Session\Middleware\StartSession;
-use Illuminate\Cookie\Middleware\EncryptCookies;
 use Filament\Http\Middleware\AuthenticateSession;
-use Illuminate\Routing\Middleware\SubstituteBindings;
-use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
-use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
+use Filament\Panel;
+use Filament\PanelProvider;
+use Filament\Support\Colors\Color;
+use Filament\View\PanelsRenderHook;
+use Filament\Widgets;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
-use Althinect\FilamentSpatieRolesPermissions\FilamentSpatieRolesPermissionsPlugin;
-use App\Http\Middleware\ForceLogoutAfterRegistration;
+use Illuminate\Cookie\Middleware\EncryptCookies;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
+use Illuminate\Routing\Middleware\SubstituteBindings;
+use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Joaopaulolndev\FilamentGeneralSettings\FilamentGeneralSettingsPlugin;
 use Leandrocfe\FilamentApexCharts\FilamentApexChartsPlugin;
 use RickDBCN\FilamentEmail\FilamentEmail;
@@ -92,17 +94,22 @@ class AdminPanelProvider extends PanelProvider
                 FilamentApexChartsPlugin::make(),
 
                 FilamentGeneralSettingsPlugin::make()
-                    ->canAccess(fn() => auth()->user()->isSuperAdmin())
+                    ->canAccess(fn() => Auth::user()->isSuperAdmin())
                     ->setIcon('heroicon-o-cog')
                     ->setNavigationGroup('Settings'),
 
                 ActivitylogPlugin::make()
                     ->navigationGroup('Logs')
-                    ->authorize(fn() => auth()->user()->isSuperAdmin()),
+                    ->authorize(fn() => Auth::user()->isSuperAdmin()),
 
                 FilamentAuthenticationLogPlugin::make(),
 
                 FilamentEmail::make(),
+
+                FilamentLogViewer::make()
+                    ->navigationGroup('Logs')
+                    ->navigationLabel('System Logs')
+                    ->authorize(fn (): bool => Auth::user()->isSuperAdmin()),
             ])
             ->renderHook(
                 PanelsRenderHook::BODY_END,

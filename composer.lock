@@ -4,8 +4,83 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "1563887dc3925477d1358870b11d08ac",
+    "content-hash": "2257c7554c77ac6b15371b192bc74f10",
     "packages": [
+        {
+            "name": "achyutn/filament-log-viewer",
+            "version": "v0.7",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/achyutkneupane/filament-log-viewer.git",
+                "reference": "a86fb4eb7f4035f983b2df42b8d090998a1a1d33"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/achyutkneupane/filament-log-viewer/zipball/a86fb4eb7f4035f983b2df42b8d090998a1a1d33",
+                "reference": "a86fb4eb7f4035f983b2df42b8d090998a1a1d33",
+                "shasum": ""
+            },
+            "require": {
+                "calebporzio/sushi": "^2.5",
+                "filament/filament": "^3.0",
+                "php": ">=8.2"
+            },
+            "require-dev": {
+                "laravel/pint": "^1.23",
+                "rector/rector": "^2.1"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "AchyutN\\FilamentLogViewer\\LogViewerProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "AchyutN\\FilamentLogViewer\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Achyut Neupane",
+                    "email": "achyutkneupane@gmail.com",
+                    "homepage": "https://achyut.com.np",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "A Filament package to view and manage Laravel logs.",
+            "keywords": [
+                "Viewer",
+                "filament",
+                "laravel",
+                "log"
+            ],
+            "support": {
+                "issues": "https://github.com/achyutkneupane/filament-log-viewer/issues",
+                "source": "https://github.com/achyutkneupane/filament-log-viewer/tree/v0.7"
+            },
+            "funding": [
+                {
+                    "url": "https://www.buymeacoffee.com/achyutn",
+                    "type": "buy_me_a_coffee"
+                },
+                {
+                    "url": "https://github.com/achyutkneupane",
+                    "type": "github"
+                },
+                {
+                    "url": "https://www.patreon.com/Achyut",
+                    "type": "patreon"
+                }
+            ],
+            "time": "2025-11-28T19:00:12+00:00"
+        },
         {
             "name": "althinect/filament-spatie-roles-permissions",
             "version": "v2.3.2",

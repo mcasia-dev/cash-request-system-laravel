@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Filament\Resources;
 
 use App\Enums\CashRequest\Status;
@@ -9,6 +8,7 @@ use App\Filament\Resources\CashRequestResource\Pages;
 use App\Models\CashRequest;
 use App\Services\CashRequest\CancellationService;
 use App\Services\CashRequest\LiquidationService;
+use App\Services\Ocr\OcrSpaceService;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
@@ -20,6 +20,8 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
+use Filament\Forms\Set;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Actions\Action;
@@ -32,13 +34,14 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\HtmlString;
+use Illuminate\Validation\ValidationException;
 
 class CashRequestResource extends Resource
 {
-    protected static ?string $model = CashRequest::class;
+    protected static ?string $model           = CashRequest::class;
     protected static ?string $navigationGroup = 'Cash Requests';
-    protected static ?string $navigationIcon = 'heroicon-o-document-text';
-    protected ?string $pollingInterval = '5s';
+    protected static ?string $navigationIcon  = 'heroicon-o-document-text';
+    protected ?string $pollingInterval        = '5s';
 
     public static function getEloquentQuery(): Builder
     {
@@ -91,9 +94,6 @@ class CashRequestResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('user.name')
-                    ->label('Requestor'),
-
                 TextColumn::make('request_no')
                     ->label('Request No.')
                     ->sortable()
@@ -108,9 +108,9 @@ class CashRequestResource extends Resource
                     ->label('Nature of Request')
                     ->badge()
                     ->color(fn($state) => match ($state) {
-                        NatureOfRequestEnum::PETTY_CASH->value => 'primary',
+                        NatureOfRequestEnum::PETTY_CASH->value   => 'primary',
                         NatureOfRequestEnum::CASH_ADVANCE->value => 'success',
-                        default => 'secondary'
+                        default                                  => 'secondary'
                     })
                     ->searchable()
                     ->sortable(),
@@ -118,29 +118,32 @@ class CashRequestResource extends Resource
                 TextColumn::make('date_liquidated')
                     ->label('Date Liquidated')
                     ->date()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('date_released')
                     ->label('Date Released')
                     ->date()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('due_date')
                     ->label('Liquidation Due Date')
                     ->date()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
-                        Status::PENDING->value => 'warning',
+                        Status::PENDING->value     => 'warning',
                         Status::IN_PROGRESS->value => 'info',
-                        Status::APPROVED->value => 'success',
-                        Status::RELEASED->value => 'primary',
-                        Status::LIQUIDATED->value => 'gray',
-                        Status::REJECTED->value => 'danger',
-                        Status::CANCELLED->value => 'gray',
-                        default => 'secondary',
+                        Status::APPROVED->value    => 'success',
+                        Status::RELEASED->value    => 'primary',
+                        Status::LIQUIDATED->value  => 'gray',
+                        Status::REJECTED->value    => 'danger',
+                        Status::CANCELLED->value   => 'gray',
+                        default                    => 'secondary',
                     })
                     ->searchable(),
 
@@ -150,16 +153,6 @@ class CashRequestResource extends Resource
                     ->color('secondary')
                     ->sortable()
                     ->searchable(),
-
-                TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-
-                TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 SelectFilter::make('status')
@@ -220,11 +213,11 @@ class CashRequestResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListCashRequests::route('/'),
-            'create' => CreateActivityListWithTable::route('/create'),
-            'edit' => Pages\EditCashRequest::route('/{record}/edit'),
-            'view' => Pages\ViewCashRequest::route('/{record}/view'),
-            'track-status' => Pages\TrackRequestStatus::route('/{record}/track-status'),
+            'index'             => Pages\ListCashRequests::route('/'),
+            'create'            => CreateActivityListWithTable::route('/create'),
+            'edit'              => Pages\EditCashRequest::route('/{record}/edit'),
+            'view'              => Pages\ViewCashRequest::route('/{record}/view'),
+            'track-status'      => Pages\TrackRequestStatus::route('/{record}/track-status'),
             'track-status-text' => Pages\TrackRequestStatusText::route('/{record}/track-status-text'),
         ];
     }
@@ -247,7 +240,16 @@ class CashRequestResource extends Resource
                         ->disk('public')
                         ->directory('liquidation-receipts')
                         ->preserveFilenames()
+                        ->maxSize(1024)
+                        ->helperText('Please upload a clear image of the receipt. The system will attempt to read the receipt number from the image. If it fails, you can try uploading a clearer image. Only one receipt per entry is allowed, and duplicate receipt numbers will be rejected. The maximum file size is 1MB.')
+                        ->live()
+                        ->afterStateUpdated(fn($state, Set $set, Get $get) => app(OcrSpaceService::class)->getReceiptState($state, $set, $get))
                         ->required(),
+
+                    TextInput::make('receipt_number')
+                        ->label('Detected Receipt Number')
+                        ->readOnly()
+                        ->dehydrated(true),
 
                     TextInput::make('amount')
                         ->numeric()
@@ -263,7 +265,7 @@ class CashRequestResource extends Resource
                 ->label('Total Receipt Amount')
                 ->content(function (Get $get) {
                     $total = collect($get('liquidation_items'))
-                        ->sum(fn($item) => (float)($item['amount'] ?? 0));
+                        ->sum(fn($item) => (float) ($item['amount'] ?? 0));
 
                     return number_format($total, 2, '.', ',');
                 }),
@@ -275,15 +277,15 @@ class CashRequestResource extends Resource
                 ->label('Amount to Reimburse')
                 ->visible(function (Get $get) use ($record): bool {
                     $total = collect($get('liquidation_items'))
-                        ->sum(fn($item) => (float)($item['amount'] ?? 0));
+                        ->sum(fn($item) => (float) ($item['amount'] ?? 0));
 
-                    return $total > (float)$record->requesting_amount;
+                    return $total > (float) $record->requesting_amount;
                 })
                 ->content(function (Get $get) use ($record) {
                     $total = collect($get('liquidation_items'))
-                        ->sum(fn($item) => (float)($item['amount'] ?? 0));
+                        ->sum(fn($item) => (float) ($item['amount'] ?? 0));
 
-                    $reimburse = $total - (float)$record->requesting_amount;
+                    $reimburse = $total - (float) $record->requesting_amount;
 
                     $formatted = number_format($reimburse, 2, '.', ',');
 
@@ -294,15 +296,15 @@ class CashRequestResource extends Resource
                 ->label('Cash Return')
                 ->visible(function (Get $get) use ($record): bool {
                     $total = collect($get('liquidation_items'))
-                        ->sum(fn($item) => (float)($item['amount'] ?? 0));
+                        ->sum(fn($item) => (float) ($item['amount'] ?? 0));
 
-                    return $total < (float)$record->requesting_amount;
+                    return $total < (float) $record->requesting_amount;
                 })
                 ->content(function (Get $get) use ($record) {
                     $total = collect($get('liquidation_items'))
-                        ->sum(fn($item) => (float)($item['amount'] ?? 0));
+                        ->sum(fn($item) => (float) ($item['amount'] ?? 0));
 
-                    $missing = (float)$record->requesting_amount - $total;
+                    $missing = (float) $record->requesting_amount - $total;
 
                     $formatted = number_format($missing, 2, '.', ',');
 
@@ -318,13 +320,26 @@ class CashRequestResource extends Resource
     public static function getLiquidateAction(): \Closure
     {
         return function ($record, array $data) {
-            app(LiquidationService::class)->liquidate($record, $data, Auth::user());
+            try {
+                app(LiquidationService::class)->liquidate($record, $data, Auth::user());
+            } catch (ValidationException $exception) {
+                $message = collect($exception->errors())
+                    ->flatten()
+                    ->first() ?? 'Liquidation submission failed.';
+
+                Notification::make()
+                    ->title((string) $message)
+                    ->danger()
+                    ->send();
+
+                throw $exception;
+            }
         };
     }
 
     public static function canCancel($record): bool
     {
-        return ($record->status === Status::PENDING->value || $record->status === Status::IN_PROGRESS->value) && !$record->is_override && $record->status_remarks != null;
+        return ($record->status === Status::PENDING->value || $record->status === Status::IN_PROGRESS->value) && ! $record->is_override && $record->status_remarks != null;
     }
 
     /**
