@@ -1,5 +1,6 @@
 /.phpunit.cache
 /node_modules
+/postman
 /public/build
 /public/hot
 /public/storage
@@ -21,4 +22,3 @@ yarn-error.log
 /.nova
 /.vscode
 /.zed
-/postman
