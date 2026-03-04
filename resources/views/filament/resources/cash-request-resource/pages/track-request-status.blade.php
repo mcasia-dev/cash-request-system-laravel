@@ -1,153 +1,254 @@
 <x-filament-panels::page>
     <style>
-        .tracker-shell {
-            background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
-            border: 1px solid #e2e8f0;
-            border-radius: 16px;
-            padding: 20px;
+        .timeline {
+            width: min(100%, 700px);
+            margin: 0 auto;
+            position: relative;
+            padding-left: 4px;
+            padding-top: 6px;
+            padding-bottom: 10px;
         }
 
-        .tracker-line {
+        .timeline::before {
+            content: '';
             position: absolute;
-            left: 50%;
-            top: 0;
-            bottom: 0;
-            width: 4px;
-            transform: translateX(-50%);
-            background: #dbe5ef;
-            border-radius: 999px;
+            left: 12px;
+            top: 2px;
+            bottom: 2px;
+            width: 2px;
+            background: #e2e8f0;
         }
 
-        .tracker-step {
+        .step {
             position: relative;
             display: grid;
-            grid-template-columns: 1fr 56px 1fr;
-            align-items: center;
-            margin-bottom: 28px;
+            grid-template-columns: 28px 1fr;
+            gap: 16px;
+            margin-bottom: 30px;
         }
 
-        .tracker-step:last-child {
+        .step:last-child {
             margin-bottom: 0;
         }
 
-        .tracker-step--right .tracker-card {
-            grid-column: 3;
-            grid-row: 1;
-        }
-
-        .tracker-step--left .tracker-card {
-            grid-column: 1;
-            grid-row: 1;
-        }
-
-        .tracker-dot-wrap {
-            grid-column: 2;
-            grid-row: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 2;
-        }
-
-        .tracker-dot {
-            width: 38px;
-            height: 38px;
+        .step-dot {
+            width: 18px;
+            height: 18px;
             border-radius: 999px;
-            border: 4px solid #fff;
+            border: 2px solid #d7dee8;
+            background: #f8fafc;
+            margin-top: 12px;
+            z-index: 1;
+        }
+
+        .step > div:last-child {
+            padding-top: 4px;
+            padding-bottom: 2px;
+        }
+
+        .step-top {
             display: flex;
             align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            color: #fff;
-            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
+            justify-content: space-between;
+            gap: 14px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
         }
 
-        .tracker-card {
-            border-radius: 12px;
-            border: 2px solid;
-            padding: 16px;
-            background: #fff;
-            box-shadow: 0 10px 25px rgba(15, 23, 42, 0.06);
-        }
-
-        .tracker-card h3 {
+        .step-head {
             margin: 0;
+            font-size: 24px;
+            line-height: 1.2;
+            font-weight: 500;
+            color: #1e293b;
         }
 
-        .tracker-meta {
-            margin-top: 10px;
+        .step-pill {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 11px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: 0.01em;
+        }
+
+        .step-meta {
             display: grid;
-            gap: 4px;
+            gap: 8px;
             font-size: 14px;
+            color: #475569;
+            line-height: 1.62;
         }
 
-        @media (max-width: 900px) {
-            .tracker-line {
-                left: 16px;
-                transform: none;
+        .step-meta span {
+            color: #64748b;
+            font-weight: 400;
+        }
+
+        .s-approved .step-dot {
+            background: #047857;
+            border-color: #d1fae5;
+            box-shadow: 0 0 0 3px #ecfdf5;
+        }
+
+        .s-approved .step-pill {
+            background: #fef3c7;
+            color: #9a6700;
+        }
+
+        .s-rejected .step-dot {
+            background: #dc2626;
+            border-color: #fecaca;
+            box-shadow: 0 0 0 3px #fff1f2;
+        }
+
+        .s-rejected .step-pill {
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+
+        .s-pending .step-dot {
+            background: #d97706;
+            border-color: #fde68a;
+            box-shadow: 0 0 0 3px #fff7ed;
+        }
+
+        .s-pending .step-pill {
+            background: #ffedd5;
+            color: #9a5a00;
+        }
+
+        .s-upcoming .step-dot,
+        .s-stopped .step-dot {
+            background: #cbd5e1;
+            border-color: #e2e8f0;
+        }
+
+        .s-upcoming .step-pill,
+        .s-stopped .step-pill {
+            background: #e2e8f0;
+            color: #64748b;
+        }
+
+        .intro-pill {
+            background: #e2e8f0;
+            color: #64748b;
+        }
+
+        .dark .timeline::before {
+            background: #334155;
+        }
+
+        .dark .step-head {
+            color: #e2e8f0;
+        }
+
+        .dark .step-meta {
+            color: #cbd5e1;
+        }
+
+        .dark .step-meta span {
+            color: #94a3b8;
+        }
+
+        .dark .step-dot {
+            border-color: #334155;
+            background: #0f172a;
+        }
+
+        .dark .s-approved .step-dot {
+            background: #10b981;
+            border-color: #064e3b;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18);
+        }
+
+        .dark .s-rejected .step-dot {
+            background: #ef4444;
+            border-color: #7f1d1d;
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.18);
+        }
+
+        .dark .s-pending .step-dot {
+            background: #f59e0b;
+            border-color: #78350f;
+            box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18);
+        }
+
+        .dark .s-upcoming .step-dot,
+        .dark .s-stopped .step-dot {
+            background: #64748b;
+            border-color: #334155;
+        }
+
+        .dark .s-approved .step-pill {
+            background: #3f2e00;
+            color: #fcd34d;
+        }
+
+        .dark .s-rejected .step-pill {
+            background: #3f1115;
+            color: #fca5a5;
+        }
+
+        .dark .s-pending .step-pill {
+            background: #422006;
+            color: #fdba74;
+        }
+
+        .dark .s-upcoming .step-pill,
+        .dark .s-stopped .step-pill,
+        .dark .intro-pill {
+            background: #1e293b;
+            color: #cbd5e1;
+        }
+
+        @media (max-width: 768px) {
+            .step {
+                gap: 12px;
+                margin-bottom: 22px;
             }
 
-            .tracker-step {
-                grid-template-columns: 40px 1fr;
+            .step-head {
+                font-size: 20px;
             }
 
-            .tracker-dot-wrap {
-                grid-column: 1;
-            }
-
-            .tracker-step--left .tracker-card,
-            .tracker-step--right .tracker-card {
-                grid-column: 2;
+            .step-meta {
+                font-size: 13px;
+                gap: 6px;
+                line-height: 1.56;
             }
         }
     </style>
 
-    <div class="space-y-5">
-        <div class="tracker-shell">
-            <div class="text-sm text-slate-700">
-                <span class="font-semibold">Request No:</span> {{ $this->getRecord()->request_no }}
-            </div>
-            <div class="text-sm text-slate-700">
-                <span class="font-semibold">Nature of Request:</span> {{ $this->getRecord()->nature_of_request }}
+    @php($steps = $this->getTrackerSteps())
+
+    <div class="timeline">
+        <div class="step">
+            <div class="step-dot"></div>
+            <div class="step-top">
+                <h2 class="step-head">{{ $this->getRecord()->request_no }}</h2>
+                <span class="step-pill intro-pill">{{ str($this->getRecord()->nature_of_request)->replace('_', ' ')->title() }}</span>
             </div>
         </div>
 
-        <div class="tracker-shell relative">
-            <div class="tracker-line"></div>
-
-            @foreach ($this->getTrackerSteps() as $index => $step)
-                @php($styles = $this->getStateStyles($step['status']))
-                @php($isRight = $index % 2 === 1)
-                @php($dotColor = match($step['status']) {
-                    'approved' => '#059669',
-                    'rejected' => '#dc2626',
-                    'pending' => '#f59e0b',
-                    default => '#94a3b8',
-                })
-
-                <div class="tracker-step {{ $isRight ? 'tracker-step--right' : 'tracker-step--left' }}">
-                    <div class="tracker-dot-wrap">
-                        <div class="tracker-dot" style="background: {{ $dotColor }};">
-                            {{ $step['status'] === 'approved' ? '✓' : ($step['status'] === 'rejected' ? 'X' : '!') }}
-                        </div>
+        @foreach ($steps as $step)
+            @php($stateClass = 's-' . ($step['status'] ?? 'upcoming'))
+            <div class="step {{ $stateClass }}">
+                <div class="step-dot"></div>
+                <div>
+                    <div class="step-top">
+                        <h3 class="step-head">{{ $step['title'] }}</h3>
+                        <span class="step-pill">{{ $step['statusLabel'] }}</span>
                     </div>
 
-                    <div class="tracker-card {{ $styles['card'] }}">
-                        <div class="flex items-center justify-between gap-3">
-                            <h3 class="text-xl font-semibold {{ $styles['title'] }}">{{ $step['title'] }}</h3>
-                            <span class="rounded-full px-3 py-1 text-xs font-semibold {{ $styles['badge'] }}">
-                                {{ $step['statusLabel'] }}
-                            </span>
-                        </div>
-
-                        <div class="tracker-meta text-slate-700">
-                            <div><span class="font-semibold">Remarks:</span> {{ $step['remarks'] }}</div>
-                            <div><span class="font-semibold">By:</span> {{ $step['by'] }}</div>
-                            <div><span class="font-semibold">Date:</span> {{ $step['date'] }}</div>
-                        </div>
+                    <div class="step-meta">
+                        <div><span>remarks:</span> {{ $step['remarks'] }}</div>
+                        <div><span>by:</span> {{ $step['by'] }}</div>
+                        <div><span>date:</span> {{ $step['date'] }}</div>
                     </div>
                 </div>
-            @endforeach
-        </div>
+            </div>
+        @endforeach
     </div>
 </x-filament-panels::page>

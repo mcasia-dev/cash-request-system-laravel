@@ -352,6 +352,7 @@ class ViewForLiquidation extends ViewRecord
                     return $receipt->getMedia('liquidation-receipts')->map(fn($media) => [
                         'url' => $media->getUrl(),
                         'amount' => $receipt->receipt_amount,
+                        'receipt_number' => $receipt->receipt_number,
                         'remarks' => $receipt->remarks,
                     ]);
                 })
@@ -381,6 +382,7 @@ class ViewForLiquidation extends ViewRecord
             foreach ($receipts as $receipt) {
                 $safeUrl = e($receipt['url']);
                 $amount = number_format((float)($receipt['amount'] ?? 0), 2);
+                $receiptNumber = filled($receipt['receipt_number']) ? e($receipt['receipt_number']) : 'N/A';
                 $remarks = filled($receipt['remarks']) ? e($receipt['remarks']) : 'N/A';
 
                 $html .= '<div style="width:220px;border:1px solid #e5e7eb;border-radius:8px;padding:10px;background:#fff;">'
@@ -393,6 +395,7 @@ class ViewForLiquidation extends ViewRecord
                     . '</a>'
                     . '<div style="margin-top:8px;font-size:12px;line-height:1.45;">'
                     . '<div><strong>Amount:</strong> PHP ' . $amount . '</div>'
+                    . '<div><strong>Receipt No:</strong> ' . $receiptNumber . '</div>'
                     . '<div><strong>Remarks:</strong> ' . $remarks . '</div>'
                     . '</div>'
                     . '</div>';

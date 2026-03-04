@@ -15,6 +15,7 @@ class LiquidationReceipt extends Model implements HasMedia
     protected $fillable = [
         'liquidation_id',
         'receipt_amount',
+        'receipt_number',
         'remarks'
     ];
 

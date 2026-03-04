@@ -70,7 +70,7 @@ Schedule::call(function () {
  * Runs every 5 minutes to catch same-day expirations promptly.
  *
  * Criteria:
- * - Cash request status is APPROVED and for releasing
+ * - Cash request status is "approved" and the status remarks is "for releasing"
  * - Related ForCashRelease has releasing_date and release window end time
  * - date_released is null (unclaimed)
  * - Current time is after the release window end time
