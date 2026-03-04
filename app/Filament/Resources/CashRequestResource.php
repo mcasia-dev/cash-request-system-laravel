@@ -237,14 +237,20 @@ class CashRequestResource extends Resource
                 ->reactive()
                 ->schema([
                     FileUpload::make('receipt')
-                        ->label('Upload Receipt')
+                        ->label('Receipt Image')
                         ->disk('public')
                         ->directory('liquidation-receipts')
                         ->preserveFilenames()
                         ->maxSize(1024)
                         ->helperText('Please upload a clear image of the receipt. The system will attempt to read the receipt number from the image. If it fails, you can try uploading a clearer image. Only one receipt per entry is allowed, and duplicate receipt numbers will be rejected. The maximum file size is 1MB.')
                         ->live()
-                        ->afterStateUpdated(fn($state, Set $set, Get $get) => app(OcrSpaceService::class)->getReceiptState($state, $set, $get))
+                        ->afterStateUpdated(function ($state, Set $set, Get $get, FileUpload $component): void {
+                            $isValid = app(OcrSpaceService::class)->getReceiptState($state, $set, $get, $component->getStatePath());
+
+                            if (! $isValid) {
+                                $component->state([]);
+                            }
+                        })
                         ->required(),
 
                     TextInput::make('receipt_number')
