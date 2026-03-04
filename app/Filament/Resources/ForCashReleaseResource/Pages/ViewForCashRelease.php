@@ -102,7 +102,6 @@ class ViewForCashRelease extends ViewRecord
                     ->columns(3),
 
                 Section::make('Activity Information')
-                    ->collapsed()
                     ->collapsible()
                     ->getStateUsing(fn($record) => $record->activityLists()
                         ->where('status', '!=', 'rejected')

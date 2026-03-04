@@ -124,7 +124,6 @@ class ViewForApprovalRequest extends ViewRecord
 
                 Section::make('Activity Information')
                     ->collapsible()
-                    ->collapsed()
                     ->schema([
                         RepeatableEntry::make('activityLists')
                             ->label('')

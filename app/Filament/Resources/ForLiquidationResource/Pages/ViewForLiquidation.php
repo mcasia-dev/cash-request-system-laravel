@@ -105,7 +105,6 @@ class ViewForLiquidation extends ViewRecord
 
                 Section::make('Activity Information')
                     ->collapsible()
-                    ->collapsed()
                     ->schema([
                         RepeatableEntry::make('cashRequest.activityLists')
                             ->label('')

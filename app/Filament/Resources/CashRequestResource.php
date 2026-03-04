@@ -268,6 +268,13 @@ class CashRequestResource extends Resource
                 ])
                 ->columns(2),
 
+            ...self::getPlaceholders($record),
+        ];
+    }
+
+    private static function getPlaceholders($record): array
+    {
+        return [
             Placeholder::make('total_receipts')
                 ->label('Total Receipt Amount')
                 ->content(function (Get $get) {
@@ -278,7 +285,8 @@ class CashRequestResource extends Resource
                 }),
 
             Placeholder::make('amount_to_liquidate')
-                ->label('Amount to Liquidate'),
+                ->label('Amount to Liquidate')
+                ->content(fn() => number_format((float) $record->requesting_amount, 2, '.', ',')),
 
             Placeholder::make('amount_to_reimburse')
                 ->label('Amount to Reimburse')
