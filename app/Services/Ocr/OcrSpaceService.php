@@ -16,6 +16,28 @@ use Throwable;
 class OcrSpaceService
 {
     /**
+     * Clear invalid receipt upload state and remove stored file when available.
+     */
+    private function clearInvalidReceiptUpload($state, ?string $path, Set $set, ?string $receiptFieldPath = null): void
+    {
+        $targetField = $receiptFieldPath ?: 'receipt';
+
+        $set($targetField, null);
+        $set($targetField, []);
+        $set('receipt_number', null);
+
+        if ($state instanceof TemporaryUploadedFile && method_exists($state, 'delete')) {
+            $state->delete();
+
+            return;
+        }
+
+        if (is_string($path) && str_starts_with($path, 'liquidation-receipts/') && Storage::disk('public')->exists($path)) {
+            Storage::disk('public')->delete($path);
+        }
+    }
+
+    /**
      * Parse an image file using OCR.space and return extracted text.
      */
     public function extractTextFromImage(string $absoluteImagePath): string
@@ -199,7 +221,7 @@ class OcrSpaceService
         return strtoupper((string) preg_replace('/[^A-Z0-9\-\/]/i', '', $raw));
     }
 
-    public function getReceiptState($state, Set $set, Get $get)
+    public function getReceiptState($state, Set $set, Get $get, ?string $receiptFieldPath = null): bool
     {
         $path         = null;
         $absolutePath = null;
@@ -220,7 +242,7 @@ class OcrSpaceService
             Log::warning('Liquidation upload validation skipped: empty receipt path', [
                 'user_id' => Auth::id(),
             ]);
-            return;
+            return false;
         }
 
         try {
@@ -238,14 +260,14 @@ class OcrSpaceService
                     'receipt_path' => $path,
                 ]);
 
-                $set('receipt_number', null);
+                $this->clearInvalidReceiptUpload($state, $path, $set, $receiptFieldPath);
 
                 Notification::make()
                     ->title('Receipt number could not be detected from this image.')
                     ->danger()
                     ->send();
 
-                return;
+                return false;
             }
 
             $items           = collect($get('../../liquidation_items') ?? []);
@@ -255,8 +277,9 @@ class OcrSpaceService
                 ->contains(fn($value) => $value === $receiptNumber);
 
             $duplicateInDb = LiquidationReceipt::query()
+                ->with('liquidation.cashRequest')
                 ->where('receipt_number', $receiptNumber)
-                ->exists();
+                ->first();
 
             if ($duplicateInForm || $duplicateInDb) {
                 Log::error('Liquidation upload validation failed: duplicate receipt number', [
@@ -264,17 +287,30 @@ class OcrSpaceService
                     'receipt_path'      => $path,
                     'receipt_number'    => $receiptNumber,
                     'duplicate_in_form' => $duplicateInForm,
-                    'duplicate_in_db'   => $duplicateInDb,
+                    'duplicate_in_db'   => (bool) $duplicateInDb,
                 ]);
 
-                $set('receipt_number', null);
+                $this->clearInvalidReceiptUpload($state, $path, $set, $receiptFieldPath);
+
+                $errorMessage = 'Receipt number has already been used in this form.';
+
+                if ($duplicateInDb) {
+                    $cashRequest = $duplicateInDb->liquidation?->cashRequest;
+                    $activity = $cashRequest?->activityLists->first()->activity_name ?: 'Unknown activity';
+                    $usedAt = $cashRequest?->created_at;
+                    $usedAtText = $usedAt ? $usedAt->format('F d, Y h:i A') : 'an unknown date/time';
+
+                    $errorMessage = "Receipt number has already been used in activity \"{$activity}\" on {$usedAtText}.";
+                }
 
                 Notification::make()
-                    ->title('Receipt number is already exist.')
+                    ->title('Duplicate receipt number detected')
+                    ->body($errorMessage)
+                    ->duration(10000)
                     ->danger()
                     ->send();
 
-                return;
+                return false;
             }
 
             $set('receipt_number', $receiptNumber);
@@ -291,13 +327,16 @@ class OcrSpaceService
                 'error'        => $exception->getMessage(),
             ]);
 
-            $set('receipt_number', null);
+            $this->clearInvalidReceiptUpload($state, $path, $set, $receiptFieldPath);
 
             Notification::make()
                 ->title('Unable to read the receipt image. Please upload a clearer image.')
                 ->danger()
                 ->send();
+
+            return false;
         }
-        return $state;
+
+        return true;
     }
 }
