@@ -1,18 +1,11 @@
 <?php
-
 namespace App\Filament\Resources\PaymentProcessResource\Pages;
 
 use App\Enums\CashRequest\DisbursementType;
-use App\Enums\CashRequest\Status;
-use App\Enums\CashRequest\StatusRemarks;
 use App\Enums\NatureOfRequestEnum;
 use App\Filament\Resources\PaymentProcessResource;
-use App\Jobs\ApproveCashRequestByTreasuryJob;
-use App\Jobs\RejectCashRequestJob;
-use App\Models\ForCashRelease;
-use App\Models\User;
-use App\Services\Remarks\StatusRemarkResolver;
 use Carbon\Carbon;
+use Facades\App\Services\CashRequest\PaymentProcessService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -20,6 +13,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\TimePicker;
 use Filament\Forms\Get;
+use Filament\Forms\Set;
 use Filament\Infolists\Components\Actions;
 use Filament\Infolists\Components\Actions\Action as InfolistAction;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -27,13 +21,8 @@ use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
-use Filament\Notifications\Actions\Action as NotificationAction;
-use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Support\Enums\Alignment;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
-use Joaopaulolndev\FilamentGeneralSettings\Services\GeneralSettingsService;
 
 class ViewPaymentProcess extends ViewRecord
 {
@@ -50,34 +39,36 @@ class ViewPaymentProcess extends ViewRecord
             // SET DISBURSEMENT BUTTON
             Action::make('set_disbursement')
                 ->label('Set Disbursement')
-                ->visible(fn($record) => $this->canSetDisbursement($record))
+                ->visible(fn($record) => PaymentProcessService::canSetDisbursement($record))
                 ->color('gray')
                 ->form($this->getDisbursementTypeFormSchema())
-                ->action(fn($record, array $data) => $this->saveDisbursementType($record, $data)),
+                ->action(fn($record, array $data) => PaymentProcessService::saveDisbursementType($record, $data)),
 
             // OVERRIDE BUTTON
             Action::make('override')
                 ->label('Override')
                 ->color('warning')
                 ->requiresConfirmation()
-                ->action(fn($record) => $this->overrideRequest($record))
-                ->visible(fn($record) => $this->canOverride($record)),
+                ->form(fn($record) => $this->getOverrideFormSchema($record))
+                ->action(fn($record, array $data) => PaymentProcessService::overrideRequest($record, $data))
+                ->visible(fn($record) => PaymentProcessService::canOverride($record)),
 
             // APPROVED BUTTON (For Treasury Manager)
             Action::make('approve_request')
                 ->label('Approve Request')
                 ->color('primary')
                 ->requiresConfirmation()
-                ->action(fn($record) => $this->approveCashRequest($record))
-                ->visible(fn($record) => $this->canApproveRequest($record)),
+                ->form(fn($record) => $this->getOverrideFormSchema($record))
+                ->action(fn($record, array $data) => PaymentProcessService::approveCashRequest($record, $data))
+                ->visible(fn($record) => PaymentProcessService::canApproveRequest($record)),
 
             // APPROVED BUTTON WITH RELEASE FORM (For Treasury Staff)
             Action::make('Approve')
                 ->color('primary')
                 ->requiresConfirmation()
                 ->form(fn($record) => $this->getApproveFormSchema($record))
-                ->action(fn($record, array $data) => $this->approveCashRequestWithReleaseForm($record, $data))
-                ->visible(fn($record) => $this->canApproveRequestWithRemarks($record)),
+                ->action(fn($record, array $data) => PaymentProcessService::approveCashRequestWithReleaseForm($record, $data))
+                ->visible(fn($record) => PaymentProcessService::canApproveRequestWithRemarks($record)),
 
             // REJECTION BUTTON
             Action::make('Reject')
@@ -90,8 +81,8 @@ class ViewPaymentProcess extends ViewRecord
                 ])
                 ->modalHeading('Reject Cash Request')
                 ->modalSubmitActionLabel('Reject')
-                ->action(fn($record, array $data) => $this->rejectCashRequest($record, $data))
-                ->visible(fn($record) => $this->getStatus($record)),
+                ->action(fn($record, array $data) => PaymentProcessService::rejectCashRequest($record, $data))
+                ->visible(fn($record) => PaymentProcessService::getStatus($record)),
         ];
     }
 
@@ -114,14 +105,13 @@ class ViewPaymentProcess extends ViewRecord
                         TextEntry::make('user.name')
                             ->label('Requestor'),
 
+                        TextEntry::make('nature_of_request')
+                            ->label('Nature of Request')
+                            ->badge(),
+
                         TextEntry::make('requesting_amount')
                             ->label('Total Requesting Amount')
                             ->money('PHP'),
-
-                        TextEntry::make('nature_of_request')
-                            ->label('Nature of Request')
-                            ->badge()
-                            ->color('warning'),
 
                         TextEntry::make('created_at')
                             ->label('Date Submitted')
@@ -130,12 +120,12 @@ class ViewPaymentProcess extends ViewRecord
                         TextEntry::make('status')
                             ->badge()
                             ->color(fn(string $state): string => match ($state) {
-                                'pending' => 'warning',
-                                'approved' => 'success',
-                                'released' => 'info',
+                                'pending'    => 'warning',
+                                'approved'   => 'success',
+                                'released'   => 'info',
                                 'liquidated' => 'primary',
-                                'rejected' => 'danger',
-                                default => 'gray',
+                                'rejected'   => 'danger',
+                                default      => 'gray',
                             }),
 
                         TextEntry::make('status_remarks')
@@ -143,14 +133,38 @@ class ViewPaymentProcess extends ViewRecord
                     ])
                     ->columns(4),
 
+                Section::make('Proposed Schedule')
+                    ->collapsible()
+                    ->schema([
+                        TextEntry::make('forCashRelease.proposed_releasing_date')
+                            ->label('Proposed Releasing Date')
+                            ->date()
+                            ->placeholder('-'),
+
+                        TextEntry::make('forCashRelease.proposed_releasing_time_from')
+                            ->label('Proposed Releasing Time From')
+                            ->formatStateUsing(fn($state) => $state ? Carbon::parse($state)->format('h:i A') : '-'),
+
+                        TextEntry::make('forCashRelease.proposed_releasing_time_to')
+                            ->label('Proposed Releasing Time To')
+                            ->formatStateUsing(fn($state) => $state ? Carbon::parse($state)->format('h:i A') : '-'),
+
+                        TextEntry::make('proposed_due_date')
+                            ->label('Proposed Due Date')
+                            ->date()
+                            ->placeholder('-'),
+                    ])
+                    ->columns(4)
+                    ->visible(fn($record) => $record->nature_of_request === NatureOfRequestEnum::CASH_ADVANCE->value && $record->is_override),
+
                 Section::make('Activity Information')
                     ->collapsible()
                     ->schema([
                         RepeatableEntry::make('activityLists')
                             ->label('')
                             ->getStateUsing(fn($record) => $record->activityLists()
-                                ->where('status', '!=', 'rejected')
-                                ->get())
+                                    ->where('status', '!=', 'rejected')
+                                    ->get())
                             ->schema([
                                 Actions::make([
                                     InfolistAction::make('rejectActivity')
@@ -171,8 +185,8 @@ class ViewPaymentProcess extends ViewRecord
                                                 ->required()
                                                 ->maxLength(65535),
                                         ])
-                                        ->visible(fn($record): bool => $this->getStatus($this->record) && $record->status !== 'rejected')
-                                        ->action(fn(array $data, $record) => $this->rejectActivity($record, $data)),
+                                        ->visible(fn($record): bool => PaymentProcessService::getStatus($this->record) && $record->status !== 'rejected')
+                                        ->action(fn(array $data, $record) => PaymentProcessService::rejectActivity($record, $data)),
                                 ])
                                     ->alignment(Alignment::End)
                                     ->fullWidth()
@@ -191,10 +205,6 @@ class ViewPaymentProcess extends ViewRecord
                                 TextEntry::make('purpose')
                                     ->label('Purpose'),
 
-                                TextEntry::make('cashRequest.nature_of_request')
-                                    ->label('Nature of Request')
-                                    ->badge(),
-
                                 TextEntry::make('requesting_amount')
                                     ->label('Requesting Amount')
                                     ->money('PHP'),
@@ -209,8 +219,8 @@ class ViewPaymentProcess extends ViewRecord
                                     ->badge()
                                     ->color(fn(string $state): string => match ($state) {
                                         'rejected' => 'danger',
-                                        'pending' => 'warning',
-                                        default => 'gray',
+                                        'pending'  => 'warning',
+                                        default    => 'gray',
                                     }),
 
                                 TextEntry::make('rejection_remarks')
@@ -219,52 +229,6 @@ class ViewPaymentProcess extends ViewRecord
                                     ->columnSpanFull(),
                             ])
                             ->columns(3),
-
-                        Section::make('Disbursement Method')
-                            ->collapsible()
-                            ->collapsed()
-                            ->schema([
-                                TextEntry::make('disbursement_type')
-                                    ->label('Disbursement Type')
-                                    ->badge()
-                                    ->placeholder('Not yet set'),
-
-                                TextEntry::make('requesting_amount')
-                                    ->label('Amount')
-                                    ->money('PHP'),
-
-                                TextEntry::make('check_branch_name')
-                                    ->label('Check Branch Name')
-                                    ->visible(fn($record) => $record->disbursement_type === DisbursementType::CHECK->value)
-                                    ->placeholder('-'),
-
-                                TextEntry::make('check_no')
-                                    ->label('Check No.')
-                                    ->visible(fn($record) => $record->disbursement_type === DisbursementType::CHECK->value)
-                                    ->placeholder('-'),
-
-                                TextEntry::make('voucher_no')
-                                    ->label('Voucher No.')
-                                    ->visible(fn($record) => $record->disbursement_type === DisbursementType::CHECK->value)
-                                    ->placeholder('-'),
-
-                                TextEntry::make('cut_off_date')
-                                    ->label('Cut-off Date')
-                                    ->date()
-                                    ->visible(fn($record) => $record->disbursement_type === DisbursementType::PAYROLL->value)
-                                    ->placeholder('-'),
-
-                                TextEntry::make('payroll_credit')
-                                    ->label('Payroll Credit')
-                                    ->money('PHP')
-                                    ->visible(fn($record) => $record->disbursement_type === DisbursementType::PAYROLL->value)
-                                    ->placeholder('-'),
-
-                                TextEntry::make('disbursementAddedBy.name')
-                                    ->label('Added By'),
-                            ])
-                            ->columns(3)
-                            ->visible(fn($record) => $record->disbursement_type != null),
                     ]),
 
                 Section::make('Disbursement Method')
@@ -282,29 +246,29 @@ class ViewPaymentProcess extends ViewRecord
 
                         TextEntry::make('check_branch_name')
                             ->label('Check Branch Name')
-                            ->visible(fn($record) => $record->disbursement_type === DisbursementType::CHECK->value)
+                            ->visible(fn($record) => $record->isCheckDisbursement())
                             ->placeholder('-'),
 
                         TextEntry::make('check_no')
                             ->label('Check No.')
-                            ->visible(fn($record) => $record->disbursement_type === DisbursementType::CHECK->value)
+                            ->visible(fn($record) => $record->isCheckDisbursement())
                             ->placeholder('-'),
 
                         TextEntry::make('voucher_no')
                             ->label('Voucher No.')
-                            ->visible(fn($record) => $record->disbursement_type === DisbursementType::CHECK->value)
+                            ->visible(fn($record) => $record->isCheckDisbursement())
                             ->placeholder('-'),
 
                         TextEntry::make('cut_off_date')
                             ->label('Cut-off Date')
                             ->date()
-                            ->visible(fn($record) => $record->disbursement_type === DisbursementType::PAYROLL->value)
+                            ->visible(fn($record) => $record->isPayrollDisbursement())
                             ->placeholder('-'),
 
                         TextEntry::make('payroll_credit')
                             ->label('Payroll Credit')
                             ->money('PHP')
-                            ->visible(fn($record) => $record->disbursement_type === DisbursementType::PAYROLL->value)
+                            ->visible(fn($record) => $record->isPayrollDisbursement())
                             ->placeholder('-'),
 
                         TextEntry::make('disbursementAddedBy.name')
@@ -315,268 +279,69 @@ class ViewPaymentProcess extends ViewRecord
             ]);
     }
 
-    /**
-     * Determine if the cash request is eligible for payment processing actions.
-     *
-     * @param mixed $record
-     * @return bool
-     */
-    private function getStatus(mixed $record): bool
+    private function getOverrideFormSchema($record): array
     {
-        return $record->status === Status::IN_PROGRESS->value && $record->status_remarks === StatusRemarks::FOR_PAYMENT_PROCESSING->value;
-    }
-
-    private function canApproveRequest(mixed $record)
-    {
-        if (!($this->getStatus($record) && $this->isTreasuryManager() && $record->is_override && !$record->is_approved_by_treasury_manager)) {
-            return false;
+        if ($record->nature_of_request !== NatureOfRequestEnum::CASH_ADVANCE->value) {
+            return [];
         }
 
-        return true;
-    }
+        $agingDays = PaymentProcessService::getAgingDaysFromSettings();
 
-    private function canApproveRequestWithRemarks(mixed $record): bool
-    {
-        if (!($this->getStatus($record) && $this->isTreasuryStaff() && $record->is_override && $record->is_approved_by_treasury_manager)) {
-            return false;
-        }
-
-        if ($record->nature_of_request === NatureOfRequestEnum::CASH_ADVANCE->value) {
-            return $record->disbursement_type !== null;
-        }
-
-        return true;
-    }
-
-    private function approveCashRequest(mixed $record)
-    {
-        $user = Auth::user();
-
-        $record->update([
-            'is_approved_by_treasury_manager' => true,
-        ]);
-
-        // Log activity
-        activity()
-            ->causedBy(Auth::user())
-            ->performedOn($record)
-            ->event('approved')
-            ->withProperties([
-                'request_no' => $record->request_no,
-                'activity_name' => $record->activity_name,
-                'requesting_amount' => $record->requesting_amount,
-                'previous_status' => $record->status,
-                'new_status' => $record->status,
-                'status_remarks' => $record->status_remarks,
-            ])
-            ->log("Cash request {$record->request_no} was approved by {$user->name} ({$user->position})");
-
-        ViewPaymentProcess::notifyTreasuryStaff(
-            $record,
-            'Cash Request Update',
-            "Cash request {$record->request_no} has been approved by Treasury Manager."
-        );
-
-        Notification::make()
-            ->title('Cash Request Approved!')
-            ->success()
-            ->send();
-
-        return redirect()->route('filament.admin.resources.payment-processing.index');
-    }
-
-    /**
-     * Approve the cash request, create the release record, set due date (if applicable),
-     * log activity, and dispatch the approval notification.
-     *
-     * @param mixed $record
-     * @param array<string, mixed> $data
-     */
-    private function approveCashRequestWithReleaseForm($record, array $data)
-    {
-        $user = Auth::user();
-        $status_remarks = app(StatusRemarkResolver::class)->approveByPermissions($user, 'treasury');
-        $releasingDate = $data['releasing_date'] ?? $data['payroll_date'] ?? null;
-        $timeFrom = $data['releasing_time_from'] ?? null;
-        $timeTo = $data['releasing_time_to'] ?? null;
-
-        // Insert the "For Releasing" Data
-        ForCashRelease::create([
-            'cash_request_id' => $record->id,
-            'processed_by' => $user->id,
-            'remarks' => $data['remarks'],
-            'releasing_date' => $releasingDate,
-            'releasing_time_from' => $timeFrom,
-            'releasing_time_to' => $timeTo,
-            'date_processed' => Carbon::now(),
-        ]);
-
-        $agingDays = $this->getAgingDaysFromSettings();
-        $due_date = Carbon::parse($releasingDate)->addDays($agingDays);
-
-        // Update the record status
-        $record->update([
-            'status' => Status::APPROVED->value,
-            'status_remarks' => $status_remarks,
-            'due_date' => $due_date,
-        ]);
-
-        // Log activity
-        activity()
-            ->causedBy(Auth::user())
-            ->performedOn($record)
-            ->event('approved')
-            ->withProperties([
-                'request_no' => $record->request_no,
-                'activity_name' => $record->activity_name,
-                'requesting_amount' => $record->requesting_amount,
-                'previous_status' => Status::IN_PROGRESS->value,
-                'new_status' => Status::APPROVED->value,
-                'status_remarks' => $status_remarks,
-            ])
-            ->log("Cash request {$record->request_no} was approved by {$user->name} ({$user->position})");
-
-        // Send an email notification
-        ApproveCashRequestByTreasuryJob::dispatch($record);
-
-        Notification::make()
-            ->title('Cash Request Update')
-            ->body("Your cash request {$record->request_no} has been approved for releasing.")
-            ->actions([
-                NotificationAction::make('markAsRead')
-                    ->button()
-                    ->markAsRead(),
-                NotificationAction::make('view')
-                    ->link()
-                    ->url(route('filament.admin.resources.cash-requests.track-status', ['record' => $record->id])),
-            ])
-            ->sendToDatabase($record->user);
-
-        Notification::make()
-            ->title('Cash Request Approved!')
-            ->success()
-            ->send();
-
-        return redirect()->route('filament.admin.resources.payment-processing.index');
-    }
-
-    /**
-     * Reject the cash request, log the rejection, and dispatch notification.
-     *
-     * @param mixed $record
-     * @param array<string, mixed> $data
-     */
-    private function rejectCashRequest($record, array $data)
-    {
-        $user = Auth::user();
-        $status_remarks = app(StatusRemarkResolver::class)->rejectByPermissions($user, 'treasury');
-
-        // Update the record status and save rejection reason
-        $record->update([
-            'status' => Status::REJECTED->value,
-            'status_remarks' => $status_remarks,
-            'reason_for_rejection' => $data['rejection_reason'],
-        ]);
-
-        // Log activity
-        activity()
-            ->causedBy($user)
-            ->performedOn($record)
-            ->event('rejected')
-            ->withProperties([
-                'request_no' => $record->request_no,
-                'activity_name' => $record->activity_name,
-                'requesting_amount' => $record->requesting_amount,
-                'previous_status' => Status::PENDING->value,
-                'new_status' => Status::REJECTED->value,
-                'status_remarks' => $status_remarks,
-                'reason_for_rejection' => $data['rejection_reason'],
-            ])
-            ->log("Cash request {$record->request_no} was rejected by {$user->name} ({$user->position})");
-
-        // Send an email notification
-        RejectCashRequestJob::dispatch($record);
-
-        Notification::make()
-            ->title('Cash Request Update')
-            ->body("Your cash request {$record->request_no} has been rejected.")
-            ->actions([
-                NotificationAction::make('markAsRead')
-                    ->button()
-                    ->markAsRead(),
-                NotificationAction::make('view')
-                    ->link()
-                    ->url(route('filament.admin.resources.cash-requests.track-status', ['record' => $record->id])),
-            ])
-            ->sendToDatabase($record->user);
-
-        Notification::make()
-            ->title('Cash Request Rejected!')
-            ->success()
-            ->send();
-
-        return redirect()->route('filament.admin.resources.payment-processing.index');
-
-    }
-
-    private function getApproveFormSchema($record): array
-    {
-        if (
-            $record->nature_of_request === NatureOfRequestEnum::CASH_ADVANCE->value
-            && $record->disbursement_type === DisbursementType::PAYROLL->value
-        ) {
-            return $this->getPayrollApproveFormSchema();
-        }
-
-        return $this->getStandardApproveFormSchema();
-    }
-
-    /**
-     * Build the standard approval form schema for releasing cash requests.
-     */
-    private function getStandardApproveFormSchema(): array
-    {
         return [
-            Textarea::make('remarks')
-                ->required(),
-
-            DatePicker::make('releasing_date')
-                ->label('Releasing Date')
+            DatePicker::make('proposed_releasing_date')
+                ->label('Proposed Releasing Date')
                 ->required()
-                ->default(now())
-                ->minDate(now()->toDateString()),
+                ->live()
+                ->default(fn($record) => $record->forCashRelease?->proposed_releasing_date ?? now())
+                ->minDate(now()->toDateString())
+                ->afterStateUpdated(function ($state, Set $set) use ($agingDays): void {
+                    if (! $state) {
+                        return;
+                    }
 
-            TimePicker::make('releasing_time_from')
-                ->label('Releasing Time From')
-                ->required()
-                ->default(now()),
+                    $set('proposed_due_date', $this->adjustDueDateToWeekday(Carbon::parse($state)->addDays($agingDays)));
+                }),
 
-            TimePicker::make('releasing_time_to')
-                ->label('Releasing Time To')
+            TimePicker::make('proposed_releasing_time_from')
+                ->label('Proposed Releasing Time From')
                 ->required()
-                ->default(now()),
+                ->default(fn($record) => $record->forCashRelease?->proposed_releasing_time_from ?? now()),
+
+            TimePicker::make('proposed_releasing_time_to')
+                ->label('Proposed Releasing Time To')
+                ->required()
+                ->default(fn($record) => $record->forCashRelease?->proposed_releasing_time_to ?? now()),
+
+            DatePicker::make('proposed_due_date')
+                ->label('Proposed Due Date')
+                ->required()
+                ->readonly()
+                ->default(function (Get $get, $record) use ($agingDays) {
+                    $releasingDate = $get('proposed_releasing_date') ?? $record->forCashRelease?->proposed_releasing_date ?? now();
+
+                    return $this->adjustDueDateToWeekday(Carbon::parse($releasingDate)->addDays($agingDays));
+                })
+                ->minDate(function (Get $get) use ($agingDays) {
+                    $releasingDate = $get('proposed_releasing_date') ?? now()->toDateString();
+
+                    return $this->adjustDueDateToWeekday(Carbon::parse($releasingDate)->addDays($agingDays));
+                }),
         ];
     }
 
-    /**
-     * Build the payroll-specific approval form schema.
-     */
-    private function getPayrollApproveFormSchema(): array
+    private function adjustDueDateToWeekday(Carbon $dueDate): string
     {
-        return [
-            Textarea::make('remarks')
-                ->required(),
+        if ($dueDate->isWeekend()) {
+            $dueDate = $dueDate->next(Carbon::MONDAY);
+        }
 
-            DatePicker::make('payroll_date')
-                ->label('Payroll Date')
-                ->required()
-                ->default(now())
-                ->minDate(now()->toDateString()),
-        ];
+        return $dueDate->toDateString();
     }
 
     /**
      * Build the disbursement type selection form schema with conditional fields.
+     *
+     * @return array
      */
     private function getDisbursementTypeFormSchema(): array
     {
@@ -602,6 +367,8 @@ class ViewPaymentProcess extends ViewRecord
 
     /**
      * Build the check-specific disbursement fields.
+     *
+     * @return array
      */
     private function getCheckDisbursementTypeSchema(): array
     {
@@ -627,6 +394,8 @@ class ViewPaymentProcess extends ViewRecord
 
     /**
      * Build the payroll-specific disbursement fields.
+     *
+     * @return array
      */
     private function getPayrollDisbursementTypeSchema(): array
     {
@@ -638,273 +407,63 @@ class ViewPaymentProcess extends ViewRecord
         ];
     }
 
-    /**
-     * Persist the selected disbursement type and related details.
-     */
-    private function saveDisbursementType($record, array $data): void
+    private function getApproveFormSchema($record): array
     {
-        $basePayload = [
-            'disbursement_type' => $data['disbursement_type'],
-            'disbursement_added_by' => Auth::id(),
-        ];
+        if (
+            $record->nature_of_request === NatureOfRequestEnum::CASH_ADVANCE->value
+            && $record->disbursement_type === DisbursementType::PAYROLL->value
+        ) {
+            return $this->getPayrollApproveFormSchema();
+        }
 
-        $typePayload = match ($data['disbursement_type']) {
-            DisbursementType::CHECK->value => $this->getCheckDisbursementPayload($data),
-            DisbursementType::PAYROLL->value => $this->getPayrollDisbursementPayload($data),
-            default => [],
-        };
-
-        $record->update(array_merge($basePayload, $typePayload));
-
-        Notification::make()
-            ->title('Disbursement details saved.')
-            ->success()
-            ->send();
+        return $this->getStandardApproveFormSchema();
     }
 
     /**
-     * Build the payload for check disbursement fields.
+     * Build the payroll-specific approval form schema.
+     *
+     * @return array
      */
-    private function getCheckDisbursementPayload(array $data): array
+    private function getPayrollApproveFormSchema(): array
     {
         return [
-            'check_branch_name' => $data['check_branch_name'] ?? null,
-            'check_no' => $data['check_no'] ?? null,
+            Textarea::make('remarks')
+                ->required(),
+
+            DatePicker::make('payroll_date')
+                ->label('Payroll Date')
+                ->required()
+                ->default(now())
+                ->minDate(now()->toDateString()),
         ];
     }
 
     /**
-     * Build the payload for payroll disbursement fields.
+     * Build the standard approval form schema for releasing cash requests.
+     *
+     * @return array
      */
-    private function getPayrollDisbursementPayload(array $data): array
+    private function getStandardApproveFormSchema(): array
     {
         return [
-            'cut_off_date' => $data['cut_off_date'],
-            'payroll_credit' => $data['payroll_credit'],
+            Textarea::make('remarks')
+                ->required(),
+
+            DatePicker::make('releasing_date')
+                ->label('Releasing Date')
+                ->required()
+                ->default(now())
+                ->minDate(now()->toDateString()),
+
+            TimePicker::make('releasing_time_from')
+                ->label('Releasing Time From')
+                ->required()
+                ->default(now()),
+
+            TimePicker::make('releasing_time_to')
+                ->label('Releasing Time To')
+                ->required()
+                ->default(now()),
         ];
     }
-
-    private function canSetDisbursement($record)
-    {
-        // It will only show if the nature of request is cash advance,
-        // the disbursement_added_by is null, the role of current user is Treasury Staff,
-        // already override and already verified/approved by the Treasury Manager.
-        return $record->nature_of_request === NatureOfRequestEnum::CASH_ADVANCE->value
-            && $record->disbursement_added_by == null
-            && $this->isTreasuryStaff()
-            && $record->is_override
-            && $record->is_approved_by_treasury_manager;
-    }
-
-    private function overrideRequest($record)
-    {
-        $user = Auth::user();
-
-        // Update the record status and save rejection reason
-        $record->update([
-            'is_override' => true,
-        ]);
-
-        // Log activity
-        activity()
-            ->causedBy($user)
-            ->performedOn($record)
-            ->event('override')
-            ->withProperties([
-                'request_no' => $record->request_no,
-                'activity_name' => $record->activity_name,
-                'requesting_amount' => $record->requesting_amount,
-                'previous_status' => Status::PENDING->value,
-                'new_status' => Status::IN_PROGRESS->value,
-                'status_remarks' => $record->status_remarks,
-            ])
-            ->log("Cash request {$record->request_no} was override by {$user->name} ({$user->position})");
-
-        // Notify the Treasury Manager once the Treasury Staff override the request.
-        ViewPaymentProcess::notifyTreasuryManager(
-            $record,
-            'Cash Request Overridden',
-            "Cash request {$record->request_no} has been overridden."
-        );
-
-        return Notification::make()
-            ->title('Cash Request Override!')
-            ->success()
-            ->send();
-    }
-
-    private function isTreasuryManager(): bool
-    {
-        $user = Auth::user();
-
-        if (!$user) {
-            return false;
-        }
-
-        if ($user->isSuperAdmin()) {
-            return true;
-        }
-
-        return $user->roles()
-            ->where('name', 'treasury_manager')
-            ->exists();
-    }
-
-    private function isTreasuryStaff(): bool
-    {
-        $user = Auth::user();
-
-        if (!$user) {
-            return false;
-        }
-
-        if ($user->isSuperAdmin()) {
-            return true;
-        }
-
-        return $user->roles()
-            ->where('name', 'treasury_staff')
-            ->exists();
-    }
-
-    /**
-     * Notify treasury manager about payment processing updates.
-     * @param $record
-     * @param string $title
-     * @param string $body
-     */
-    private static function notifyTreasuryManager($record, string $title, string $body): void
-    {
-        $treasuryManagers = User::query()
-            ->whereHas('roles', function ($query) {
-                $query->where('name', 'treasury_manager');
-            })
-            ->get();
-
-        if ($treasuryManagers->isEmpty()) {
-            return;
-        }
-
-        Notification::make()
-            ->title($title)
-            ->body($body)
-            ->actions([
-                NotificationAction::make('markAsRead')
-                    ->button()
-                    ->markAsRead(),
-                NotificationAction::make('view')
-                    ->link()
-                    ->url(route('filament.admin.resources.payment-processing.view', ['record' => $record->id])),
-            ])
-            ->sendToDatabase($treasuryManagers);
-    }
-
-    /**
-     * Notify treasury staff about treasury manager approval updates.
-     * @param $record
-     * @param string $title
-     * @param string $body
-     */
-    private static function notifyTreasuryStaff($record, string $title, string $body): void
-    {
-        $treasuryStaffs = User::query()
-            ->whereHas('roles', function ($query) {
-                $query->where('name', 'treasury_staff');
-            })
-            ->get();
-
-        if ($treasuryStaffs->isEmpty()) {
-            return;
-        }
-
-        Notification::make()
-            ->title($title)
-            ->body($body)
-            ->actions([
-                NotificationAction::make('markAsRead')
-                    ->button()
-                    ->markAsRead(),
-                NotificationAction::make('view')
-                    ->link()
-                    ->url(route('filament.admin.resources.payment-processing.view', ['record' => $record->id])),
-            ])
-            ->sendToDatabase($treasuryStaffs);
-    }
-
-    private function canOverride($record): bool
-    {
-        if ($record->is_override) {
-            return false;
-        }
-
-        $user = Auth::user();
-
-        if (!$user) {
-            return false;
-        }
-
-        if ($user->isSuperAdmin()) {
-            return true;
-        }
-
-        try {
-            return $user->hasPermissionTo('can-override-payment-process-request');
-        } catch (\Spatie\Permission\Exceptions\PermissionDoesNotExist $e) {
-            return false;
-        }
-    }
-
-    private function getAgingDaysFromSettings(): int
-    {
-        $settings = app(GeneralSettingsService::class)->get();
-        $value = $settings?->more_configs['aging_field'] ?? null;
-
-        $agingDays = filter_var($value, FILTER_VALIDATE_INT, [
-            'options' => ['min_range' => 1],
-        ]);
-
-        return $agingDays !== false ? (int)$agingDays : 3;
-    }
-
-    private function rejectActivity($record, array $data): void
-    {
-        DB::transaction(function () use ($record, $data): void {
-            $record->update([
-                'status' => 'rejected',
-                'rejection_remarks' => $data['rejection_remarks'],
-            ]);
-
-            $cashRequest = $record->cashRequest ?? $this->record;
-            $total = $cashRequest->activityLists()
-                ->where('status', '!=', 'rejected')
-                ->sum('requesting_amount');
-
-            $cashRequest->update([
-                'requesting_amount' => (float) $total,
-            ]);
-
-            $hasRemainingActivities = $cashRequest->activityLists()
-                ->where(function ($query) {
-                    $query->whereNull('status')
-                        ->orWhere('status', '!=', 'rejected');
-                })
-                ->exists();
-
-            if (!$hasRemainingActivities) {
-                $statusRemarks = app(StatusRemarkResolver::class)->rejectByPermissions(Auth::user(), 'treasury');
-
-                $cashRequest->update([
-                    'status' => Status::REJECTED->value,
-                    'status_remarks' => $statusRemarks,
-                    'reason_for_rejection' => $data['rejection_remarks'],
-                ]);
-            }
-        });
-
-        Notification::make()
-            ->title('Activity rejected')
-            ->success()
-            ->send();
-    }
-
 }

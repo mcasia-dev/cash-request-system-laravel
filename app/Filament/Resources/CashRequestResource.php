@@ -7,9 +7,8 @@ use App\Enums\NatureOfRequestEnum;
 use App\Filament\Resources\ActivityListResource\Pages\CreateActivityListWithTable;
 use App\Filament\Resources\CashRequestResource\Pages;
 use App\Models\CashRequest;
-use App\Services\CashRequest\CancellationService;
-use App\Services\CashRequest\LiquidationService;
 use App\Services\Ocr\OcrSpaceService;
+use Facades\App\Services\CashRequest\CashRequestService;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
@@ -22,7 +21,6 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
-use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Actions\Action;
@@ -35,7 +33,6 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\HtmlString;
-use Illuminate\Validation\ValidationException;
 
 class CashRequestResource extends Resource
 {
@@ -173,7 +170,7 @@ class CashRequestResource extends Resource
                         ->color('info')
                         ->form(self::getLiquidateForm())
                         ->modalSubmitActionLabel('Submit')
-                        ->action(self::getLiquidateAction())
+                        ->action(CashRequestService::getLiquidateAction())
                         ->visible(fn($record) => $record->status === Status::RELEASED->value && $record->status_remarks == StatusRemarks::FOR_LIQUIDATION->value),
 
                     ViewAction::make(),
@@ -190,10 +187,10 @@ class CashRequestResource extends Resource
                                 ->maxLength(65535),
                         ])
                         ->icon('heroicon-o-x-circle')
-                        ->modalHeading('Reject Cash Request')
+                        ->modalHeading('Reject Calabel: sh Request')
                         ->modalSubmitActionLabel('Submit')
-                        ->action(self::getCancelAction())
-                        ->visible(fn($record) => self::canCancel($record)),
+                        ->action(CashRequestService::getCancelAction())
+                        ->visible(fn($record) => CashRequestService::canCancel($record)),
                 ]),
 
             ])
@@ -275,96 +272,73 @@ class CashRequestResource extends Resource
     private static function getPlaceholders($record): array
     {
         return [
-            Placeholder::make('total_receipts')
-                ->label('Total Receipt Amount')
-                ->content(function (Get $get) {
-                    $total = collect($get('liquidation_items'))
-                        ->sum(fn($item) => (float) ($item['amount'] ?? 0));
-
-                    return number_format($total, 2, '.', ',');
-                }),
-
-            Placeholder::make('amount_to_liquidate')
-                ->label('Amount to Liquidate')
-                ->content(fn() => number_format((float) $record->requesting_amount, 2, '.', ',')),
-
-            Placeholder::make('amount_to_reimburse')
-                ->label('Amount to Reimburse')
-                ->visible(function (Get $get) use ($record): bool {
-                    $total = collect($get('liquidation_items'))
-                        ->sum(fn($item) => (float) ($item['amount'] ?? 0));
-
-                    return $total > (float) $record->requesting_amount;
-                })
-                ->content(function (Get $get) use ($record) {
-                    $total = collect($get('liquidation_items'))
-                        ->sum(fn($item) => (float) ($item['amount'] ?? 0));
-
-                    $reimburse = $total - (float) $record->requesting_amount;
-
-                    $formatted = number_format($reimburse, 2, '.', ',');
-
-                    return new HtmlString("<span style=\"color:#16a34a;font-weight:600;\">{$formatted}</span>");
-                }),
-
-            Placeholder::make('missing_amount')
-                ->label('Cash Return')
-                ->visible(function (Get $get) use ($record): bool {
-                    $total = collect($get('liquidation_items'))
-                        ->sum(fn($item) => (float) ($item['amount'] ?? 0));
-
-                    return $total < (float) $record->requesting_amount;
-                })
-                ->content(function (Get $get) use ($record) {
-                    $total = collect($get('liquidation_items'))
-                        ->sum(fn($item) => (float) ($item['amount'] ?? 0));
-
-                    $missing = (float) $record->requesting_amount - $total;
-
-                    $formatted = number_format($missing, 2, '.', ',');
-
-                    return new HtmlString("<span style=\"color:#dc2626;font-weight:600;\">{$formatted}</span>");
-                }),
+            self::getTotalReceiptsPlaceholder($record),
+            self::getAmountToLiquidatePlaceholder($record),
+            self::getAmountToReimbursePlaceholder($record),
+            self::getMissingAmountPlaceholder($record),
         ];
     }
 
-    /**
-     * Build the liquidation action closure to save receipts and update status.
-     * @return \Closure
-     */
-    public static function getLiquidateAction(): \Closure
+    private static function getTotalReceiptsPlaceholder($record)
     {
-        return function ($record, array $data) {
-            try {
-                app(LiquidationService::class)->liquidate($record, $data, Auth::user());
-            } catch (ValidationException $exception) {
-                $message = collect($exception->errors())
-                    ->flatten()
-                    ->first() ?? 'Liquidation submission failed.';
+        return Placeholder::make('total_receipts')
+            ->label('Total Receipt Amount')
+            ->content(function (Get $get) {
+                $total = collect($get('liquidation_items'))
+                    ->sum(fn($item) => (float) ($item['amount'] ?? 0));
 
-                Notification::make()
-                    ->title((string) $message)
-                    ->danger()
-                    ->send();
-
-                throw $exception;
-            }
-        };
+                return number_format($total, 2, '.', ',');
+            });
     }
 
-    public static function canCancel($record): bool
+    private static function getAmountToLiquidatePlaceholder($record)
     {
-        return ($record->status === Status::PENDING->value || $record->status === Status::IN_PROGRESS->value) && ! $record->is_override && $record->status_remarks != null;
+        return Placeholder::make('amount_to_liquidate')
+            ->label('Amount to Liquidate')
+            ->content(fn() => number_format((float) $record->requesting_amount, 2, '.', ','));
     }
 
-    /**
-     * Build the cancel action closure to mark a request as cancelled.
-     * @return \Closure
-     */
-    public static function getCancelAction(): \Closure
+    private static function getAmountToReimbursePlaceholder($record)
     {
-        return function ($record, array $data) {
-            app(CancellationService::class)->cancel($record, $data, Auth::user());
-        };
+        return Placeholder::make('amount_to_reimburse')
+            ->label('Amount to Reimburse')
+            ->visible(function (Get $get) use ($record): bool {
+                $total = collect($get('liquidation_items'))
+                    ->sum(fn($item) => (float) ($item['amount'] ?? 0));
+
+                return $total > (float) $record->requesting_amount;
+            })
+            ->content(function (Get $get) use ($record) {
+                $total = collect($get('liquidation_items'))
+                    ->sum(fn($item) => (float) ($item['amount'] ?? 0));
+
+                $reimburse = $total - (float) $record->requesting_amount;
+
+                $formatted = number_format($reimburse, 2, '.', ',');
+
+                return new HtmlString("<span style=\"color:#16a34a;font-weight:600;\">{$formatted}</span>");
+            });
+    }
+
+    private static function getMissingAmountPlaceholder($record)
+    {
+        return Placeholder::make('missing_amount')
+            ->label('Cash Return')
+            ->visible(function (Get $get) use ($record): bool {
+                $total = collect($get('liquidation_items'))
+                    ->sum(fn($item) => (float) ($item['amount'] ?? 0));
+
+                return $total < (float) $record->requesting_amount;
+            })
+            ->content(function (Get $get) use ($record) {
+                $total = collect($get('liquidation_items'))
+                    ->sum(fn($item) => (float) ($item['amount'] ?? 0));
+
+                $missing = (float) $record->requesting_amount - $total;
+
+                $formatted = number_format($missing, 2, '.', ',');
+
+                return new HtmlString("<span style=\"color:#dc2626;font-weight:600;\">{$formatted}</span>");
+            });
     }
 }

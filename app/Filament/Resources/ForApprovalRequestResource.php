@@ -75,6 +75,7 @@ class ForApprovalRequestResource extends Resource
 
                 TextColumn::make('nature_of_request')
                     ->label('Nature of Request')
+                    ->badge()
                     ->searchable()
                     ->sortable(),
 

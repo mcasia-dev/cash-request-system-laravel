@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -39,6 +38,7 @@ class CashRequest extends Model implements HasMedia
         'cc_expiration',
         'date_liquidated',
         'date_released',
+        'proposed_due_date',
         'due_date',
         'status',
         'status_remarks',
@@ -50,18 +50,19 @@ class CashRequest extends Model implements HasMedia
         'payroll_credit',
         'disbursement_added_by',
         'is_override',
-        'is_approved_by_treasury_manager'
+        'is_approved_by_treasury_manager',
     ];
 
     protected $casts = [
-        'is_override' => 'boolean',
+        'is_override'                     => 'boolean',
         'is_approved_by_treasury_manager' => 'boolean',
-        'activity_date' => 'date',
-        'due_date' => 'date',
-        'cut_off_date' => 'date',
-        'payroll_date' => 'date',
-        'date_liquidated' => 'datetime',
-        'date_released' => 'datetime',
+        'activity_date'                   => 'date',
+        'proposed_due_date'               => 'date',
+        'due_date'                        => 'date',
+        'cut_off_date'                    => 'date',
+        'payroll_date'                    => 'date',
+        'date_liquidated'                 => 'datetime',
+        'date_released'                   => 'datetime',
     ];
 
     protected static function booted()
@@ -83,7 +84,7 @@ class CashRequest extends Model implements HasMedia
                 ->first();
 
             $lastNumber = $last
-                ? (int)substr($last->request_no, -4)
+                ? (int) substr($last->request_no, -4)
                 : 0;
 
             $next = str_pad($lastNumber + 1, 4, '0', STR_PAD_LEFT);
@@ -115,6 +116,11 @@ class CashRequest extends Model implements HasMedia
     public function cashRequestApprovals(): HasMany
     {
         return $this->hasMany(CashRequestApproval::class);
+    }
+
+    public function disbursementAddedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'disbursement_added_by');
     }
 
     public function getActivitylogOptions(): LogOptions

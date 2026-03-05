@@ -1,20 +1,15 @@
 <?php
-
 namespace App\Filament\Resources\ForCashReleaseResource\Pages;
 
-use App\Enums\CashRequest\DisbursementType;
 use App\Enums\CashRequest\Status;
-use App\Enums\CashRequest\StatusRemarks;
 use App\Filament\Resources\ForCashReleaseResource;
-use App\Jobs\RejectCashRequestJob;
-use App\Jobs\ReleaseCashRequestByTreasuryJob;
 use App\Models\CashRequest;
 use App\Models\ForCashRelease;
-use App\Models\ForLiquidation;
-use App\Services\Remarks\StatusRemarkResolver;
-use Carbon\Carbon;
+use Facades\App\Services\CashRequest\ForCashReleaseService;
 use Filament\Actions\Action;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TimePicker;
 use Filament\Infolists\Components\Actions;
 use Filament\Infolists\Components\Actions\Action as InfolistAction;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -22,12 +17,8 @@ use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
-use Filament\Notifications\Actions\Action as NotificationAction;
-use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
-use Illuminate\Support\Facades\Auth;
 use Filament\Support\Enums\Alignment;
-use Illuminate\Support\Facades\DB;
 
 class ViewForCashRelease extends ViewRecord
 {
@@ -36,6 +27,15 @@ class ViewForCashRelease extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            // CHANGE RELEASING DATE BUTTON
+            Action::make('changeReleasingDate')
+                ->requiresConfirmation()
+                ->form(fn($record) => $this->getChangeReleasingDateFormSchema())
+                ->action(fn(ForCashRelease $record, array $data) => ForCashReleaseService::changeReleasingDate($record, $data))
+                ->color('warning')
+                ->visible(fn($record) => ForCashReleaseService::getStatus($record))
+                ->disabled(fn($record) => (int) ($record->update_releasing_date_attempt ?? 0) >= 3),
+
             // APPROVED BUTTON
             Action::make('Release')
                 ->requiresConfirmation()
@@ -43,9 +43,9 @@ class ViewForCashRelease extends ViewRecord
                     Textarea::make('remarks')
                         ->required(),
                 ])
-                ->action(fn(ForCashRelease $record, array $data) => $this->releaseCashRequest($record, $data))
+                ->action(fn(ForCashRelease $record, array $data) => ForCashReleaseService::releaseCashRequest($record, $data))
                 ->color('primary')
-                ->visible(fn($record) => $this->getStatus($record)),
+                ->visible(fn($record) => ForCashReleaseService::getStatus($record)),
 
             // REJECTION BUTTON
             Action::make('Reject')
@@ -58,8 +58,8 @@ class ViewForCashRelease extends ViewRecord
                 ])
                 ->modalHeading('Reject Cash Request')
                 ->modalSubmitActionLabel('Reject')
-                ->action(fn(CashRequest $record, array $data) => $this->rejectCashRequest($record, $data))
-                ->visible(fn($record) => $this->getStatus($record)),
+                ->action(fn(CashRequest $record, array $data) => ForCashReleaseService::rejectCashRequest($record, $data))
+                ->visible(fn($record) => ForCashReleaseService::getStatus($record)),
         ];
     }
 
@@ -75,6 +75,10 @@ class ViewForCashRelease extends ViewRecord
                         TextEntry::make('cashRequest.user.name')
                             ->label('Requestor'),
 
+                        TextEntry::make('cashRequest.nature_of_request')
+                            ->label('Nature of Request')
+                            ->badge(),
+
                         TextEntry::make('cashRequest.requesting_amount')
                             ->label('Total Requesting Amount')
                             ->money('PHP'),
@@ -83,12 +87,12 @@ class ViewForCashRelease extends ViewRecord
                             ->label('Status')
                             ->badge()
                             ->color(fn(string $state): string => match ($state) {
-                                'pending' => 'warning',
-                                'approved' => 'success',
-                                'released' => 'info',
+                                'pending'    => 'warning',
+                                'approved'   => 'success',
+                                'released'   => 'info',
                                 'liquidated' => 'primary',
-                                'rejected' => 'danger',
-                                default => 'gray',
+                                'rejected'   => 'danger',
+                                default      => 'gray',
                             }),
 
                         TextEntry::make('cashRequest.reason_for_rejection')
@@ -104,14 +108,14 @@ class ViewForCashRelease extends ViewRecord
                 Section::make('Activity Information')
                     ->collapsible()
                     ->getStateUsing(fn($record) => $record->activityLists()
-                        ->where('status', '!=', 'rejected')
-                        ->get())
+                            ->where('status', '!=', 'rejected')
+                            ->get())
                     ->schema([
                         RepeatableEntry::make('cashRequest.activityLists')
                             ->label('')
                             ->getStateUsing(fn($record) => $record->cashRequest->activityLists()
-                                ->where('status', '!=', 'rejected')
-                                ->get())
+                                    ->where('status', '!=', 'rejected')
+                                    ->get())
                             ->schema([
                                 Actions::make([
                                     InfolistAction::make('rejectActivity')
@@ -132,8 +136,8 @@ class ViewForCashRelease extends ViewRecord
                                                 ->required()
                                                 ->maxLength(65535),
                                         ])
-                                        ->visible(fn($record): bool => $this->getStatus($this->record) && $record->status !== 'rejected')
-                                        ->action(fn(array $data, $record) => $this->rejectActivity($record, $data)),
+                                        ->visible(fn($record): bool => ForCashReleaseService::getStatus($this->record) && $record->status !== 'rejected')
+                                        ->action(fn(array $data, $record) => ForCashReleaseService::rejectActivity($record, $data)),
                                 ])
                                     ->alignment(Alignment::End)
                                     ->fullWidth()
@@ -152,10 +156,6 @@ class ViewForCashRelease extends ViewRecord
                                 TextEntry::make('purpose')
                                     ->label('Purpose'),
 
-                                TextEntry::make('nature_of_request')
-                                    ->label('Nature of Request')
-                                    ->badge(),
-
                                 TextEntry::make('requesting_amount')
                                     ->label('Requesting Amount')
                                     ->money('PHP'),
@@ -170,8 +170,8 @@ class ViewForCashRelease extends ViewRecord
                                     ->badge()
                                     ->color(fn(string $state): string => match ($state) {
                                         'rejected' => 'danger',
-                                        'pending' => 'warning',
-                                        default => 'gray',
+                                        'pending'  => 'warning',
+                                        default    => 'gray',
                                     }),
 
                                 TextEntry::make('rejection_remarks')
@@ -186,47 +186,47 @@ class ViewForCashRelease extends ViewRecord
                     ->collapsible()
                     ->collapsed()
                     ->schema([
-                        TextEntry::make('disbursement_type')
+                        TextEntry::make('cashRequest.disbursement_type')
                             ->label('Disbursement Type')
                             ->badge()
                             ->placeholder('Not yet set'),
 
-                        TextEntry::make('requesting_amount')
+                        TextEntry::make('cashRequest.requesting_amount')
                             ->label('Amount')
                             ->money('PHP'),
 
-                        TextEntry::make('check_branch_name')
+                        TextEntry::make('cashRequest.check_branch_name')
                             ->label('Check Branch Name')
-                            ->visible(fn($record) => $record->disbursement_type === DisbursementType::CHECK->value)
+                            ->visible(fn($record) => $record->isCheckDisbursement())
                             ->placeholder('-'),
 
-                        TextEntry::make('check_no')
+                        TextEntry::make('cashRequest.check_no')
                             ->label('Check No.')
-                            ->visible(fn($record) => $record->disbursement_type === DisbursementType::CHECK->value)
+                            ->visible(fn($record) => $record->isCheckDisbursement())
                             ->placeholder('-'),
 
-                        TextEntry::make('voucher_no')
+                        TextEntry::make('cashRequest.voucher_no')
                             ->label('Voucher No.')
-                            ->visible(fn($record) => $record->disbursement_type === DisbursementType::CHECK->value)
+                            ->visible(fn($record) => $record->isCheckDisbursement())
                             ->placeholder('-'),
 
-                        TextEntry::make('cut_off_date')
+                        TextEntry::make('cashRequest.cut_off_date')
                             ->label('Cut-off Date')
                             ->date()
-                            ->visible(fn($record) => $record->disbursement_type === DisbursementType::PAYROLL->value)
+                            ->visible(fn($record) => $record->isPayrollDisbursement())
                             ->placeholder('-'),
 
-                        TextEntry::make('payroll_credit')
+                        TextEntry::make('cashRequest.payroll_credit')
                             ->label('Payroll Credit')
                             ->money('PHP')
-                            ->visible(fn($record) => $record->disbursement_type === DisbursementType::PAYROLL->value)
+                            ->visible(fn($record) => $record->isPayrollDisbursement())
                             ->placeholder('-'),
 
-                        TextEntry::make('disbursementAddedBy.name')
+                        TextEntry::make('cashRequest.disbursementAddedBy.name')
                             ->label('Added By'),
                     ])
                     ->columns(3)
-                    ->visible(fn($record) => $record->disbursement_type != null),
+                    ->visible(fn($record) => $record->cashRequest->disbursement_type != null),
 
                 Section::make('Dates')
                     ->collapsible()
@@ -250,190 +250,35 @@ class ViewForCashRelease extends ViewRecord
                         TextEntry::make('cashRequest.date_liquidated')
                             ->label('Date Liquidated')
                             ->date(),
+
+                        TextEntry::make('update_releasing_date_attempt')
+                            ->label('Releasing Date Update Attempts'),
                     ])
                     ->columns(3),
             ]);
     }
 
-    /**
-     * Determine if the cash request is eligible for releasing.
-     *
-     * @param mixed $record
-     * @return bool
-     */
-    private function getStatus($record): bool
+    private function getChangeReleasingDateFormSchema(): array
     {
-        return $record->cashRequest->status === Status::APPROVED->value && $record->cashRequest->status_remarks === StatusRemarks::FOR_RELEASING->value;
-    }
+        return [
+            Textarea::make('remarks')
+                ->required(),
 
-    /**
-     * Release the cash request, update related records, log activity,
-     * and dispatch the treasury release notification.
-     *
-     * @param mixed $record
-     * @param array<string, mixed> $data
-     */
-    private function releaseCashRequest($record, array $data)
-    {
-        $user = Auth::user();
-        $status_remarks = app(StatusRemarkResolver::class)->releaseByPermissions($user);
+            DatePicker::make('releasing_date')
+                ->label('Releasing Date')
+                ->required()
+                ->default(fn($record) => $record->releasing_date ?? now())
+                ->minDate(now()->toDateString()),
 
-        // Update the released date and released_by column
-        $record->update([
-            'released_by' => $user->id,
-            'date_released' => Carbon::now(),
-        ]);
+            TimePicker::make('releasing_time_from')
+                ->label('Releasing Time From')
+                ->required()
+                ->default(fn($record) => $record->releasing_time_from ?? now()),
 
-        // Update the cash request record status
-        $record->cashRequest
-            ->update([
-                'status' => Status::RELEASED->value,
-                'status_remarks' => $status_remarks,
-                'date_released' => Carbon::now(),
-            ]);
-
-        // Create data for "for_liquidations" table
-        ForLiquidation::create([
-            'cash_request_id' => $record->cash_request_id,
-            'remarks' => $data['remarks'],
-        ]);
-
-        // Log activity
-        activity()
-            ->causedBy($user)
-            ->performedOn($record->cashRequest ?? $record)
-            ->event('released')
-            ->withProperties([
-                'request_no' => $record->request_no,
-                'activity_name' => $record->activity_name,
-                'requesting_amount' => $record->requesting_amount,
-                'previous_status' => Status::APPROVED->value,
-                'new_status' => Status::RELEASED->value,
-                'status_remarks' => $status_remarks,
-            ])
-            ->log("Cash request {$record->request_no} is released and now ready.");
-
-        // Send an email notification
-        ReleaseCashRequestByTreasuryJob::dispatch($record->cashRequest);
-
-        Notification::make()
-            ->title('Cash Request Update')
-            ->body("Your cash request {$record->cashRequest->request_no} has been released.")
-            ->actions([
-                NotificationAction::make('markAsRead')
-                    ->button()
-                    ->markAsRead(),
-                NotificationAction::make('view')
-                    ->link()
-                    ->url(route('filament.admin.resources.cash-requests.track-status', ['record' => $record->cashRequest->id])),
-            ])
-            ->sendToDatabase($record->cashRequest->user);
-
-        Notification::make()
-            ->title('Cash Request Released!')
-            ->success()
-            ->send();
-
-        return redirect()->route('filament.admin.resources.for-cash-releases.index');
-    }
-
-    /**
-     * Reject the cash request, log the rejection, and dispatch notification.
-     *
-     * @param mixed $record
-     * @param array<string, mixed> $data
-     */
-    private function rejectCashRequest($record, array $data)
-    {
-        $user = Auth::user();
-        $status_remarks = app(StatusRemarkResolver::class)->rejectByPermissions($user, 'treasury');
-
-        // Update the record status and save rejection reason
-        $record->cashRequest
-            ->update([
-                'status' => Status::REJECTED->value,
-                'status_remarks' => $status_remarks,
-                'reason_for_rejection' => $data['rejection_reason'],
-            ]);
-
-        // Log activity
-        activity()
-            ->causedBy($user)
-            ->performedOn($record)
-            ->event('rejected')
-            ->withProperties([
-                'request_no' => $record->request_no,
-                'activity_name' => $record->activity_name,
-                'requesting_amount' => $record->requesting_amount,
-                'previous_status' => Status::PENDING->value,
-                'new_status' => Status::REJECTED->value,
-                'status_remarks' => $status_remarks,
-                'reason_for_rejection' => $data['rejection_reason'],
-            ])
-            ->log("Cash request {$record->request_no} was rejected by {$user->name} ({$user->position})");
-
-        // Send an email notification
-        RejectCashRequestJob::dispatch($record);
-
-        Notification::make()
-            ->title('Cash Request Update')
-            ->body("Your cash request {$record->cashRequest->request_no} has been rejected.")
-            ->actions([
-                NotificationAction::make('markAsRead')
-                    ->button()
-                    ->markAsRead(),
-                NotificationAction::make('view')
-                    ->link()
-                    ->url(route('filament.admin.resources.cash-requests.track-status', ['record' => $record->cashRequest->id])),
-            ])
-            ->sendToDatabase($record->cashRequest->user);
-
-        Notification::make()
-            ->title('Cash Request Rejected!')
-            ->success()
-            ->send();
-
-        return redirect()->route('filament.admin.resources.for-cash-releases.index');
-    }
-
-    private function rejectActivity($record, array $data): void
-    {
-        DB::transaction(function () use ($record, $data): void {
-            $record->update([
-                'status' => 'rejected',
-                'rejection_remarks' => $data['rejection_remarks'],
-            ]);
-
-            $cashRequest = $record->cashRequest ?? $this->record->cashRequest;
-            $total = $cashRequest->activityLists()
-                ->where('status', '!=', 'rejected')
-                ->sum('requesting_amount');
-
-            $cashRequest->update([
-                'requesting_amount' => (float) $total,
-            ]);
-
-            $hasRemainingActivities = $cashRequest->activityLists()
-                ->where(function ($query) {
-                    $query->whereNull('status')
-                        ->orWhere('status', '!=', 'rejected');
-                })
-                ->exists();
-
-            if (!$hasRemainingActivities) {
-                $statusRemarks = app(StatusRemarkResolver::class)->rejectByPermissions(Auth::user(), 'treasury');
-
-                $cashRequest->update([
-                    'status' => Status::REJECTED->value,
-                    'status_remarks' => $statusRemarks,
-                    'reason_for_rejection' => $data['rejection_remarks'],
-                ]);
-            }
-        });
-
-        Notification::make()
-            ->title('Activity rejected')
-            ->success()
-            ->send();
+            TimePicker::make('releasing_time_to')
+                ->label('Releasing Time To')
+                ->required()
+                ->default(fn($record) => $record->releasing_time_to ?? now()),
+        ];  
     }
 }

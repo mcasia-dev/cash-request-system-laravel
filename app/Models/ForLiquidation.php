@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\Enums\CashRequest\DisbursementType;
+use App\Interface\HasDisbursementType;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 
-class ForLiquidation extends Model implements HasMedia
+class ForLiquidation extends Model implements HasMedia, HasDisbursementType
 {
     use InteractsWithMedia;
 
@@ -30,5 +32,15 @@ class ForLiquidation extends Model implements HasMedia
     public function cashRequest(): BelongsTo
     {
         return $this->belongsTo(CashRequest::class);
+    }
+
+    public function isCheckDisbursement()
+    {
+        return $this->cashRequest->disbursement_type === DisbursementType::CHECK->value;
+    }
+
+    public function isPayrollDisbursement()
+    {
+        return $this->cashRequest->disbursement_type === DisbursementType::PAYROLL->value;
     }
 }
