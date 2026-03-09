@@ -7,6 +7,7 @@ use App\Filament\Resources\PaymentProcessResource;
 use Carbon\Carbon;
 use Facades\App\Services\CashRequest\PaymentProcessService;
 use Filament\Actions\Action;
+use Filament\Actions\StaticAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -42,6 +43,12 @@ class ViewPaymentProcess extends ViewRecord
                 ->visible(fn($record) => PaymentProcessService::canSetDisbursement($record))
                 ->color('gray')
                 ->form($this->getDisbursementTypeFormSchema())
+                ->modalSubmitAction(fn(StaticAction $action) => $action->extraAttributes([
+                    'wire:loading.attr' => 'disabled',
+                ]))
+                ->extraAttributes([
+                    'wire:loading.attr' => 'disabled',
+                ])
                 ->action(fn($record, array $data) => PaymentProcessService::saveDisbursementType($record, $data)),
 
             // OVERRIDE BUTTON
@@ -50,7 +57,13 @@ class ViewPaymentProcess extends ViewRecord
                 ->color('warning')
                 ->requiresConfirmation()
                 ->form(fn($record) => $this->getOverrideFormSchema($record))
+                ->modalSubmitAction(fn(StaticAction $action) => $action->extraAttributes([
+                    'wire:loading.attr' => 'disabled',
+                ]))
                 ->action(fn($record, array $data) => PaymentProcessService::overrideRequest($record, $data))
+                ->extraAttributes([
+                    'wire:loading.attr' => 'disabled',
+                ])
                 ->visible(fn($record) => PaymentProcessService::canOverride($record)),
 
             // APPROVED BUTTON (For Treasury Manager)
@@ -59,7 +72,13 @@ class ViewPaymentProcess extends ViewRecord
                 ->color('primary')
                 ->requiresConfirmation()
                 ->form(fn($record) => $this->getOverrideFormSchema($record))
+                ->modalSubmitAction(fn(StaticAction $action) => $action->extraAttributes([
+                    'wire:loading.attr' => 'disabled',
+                ]))
                 ->action(fn($record, array $data) => PaymentProcessService::approveCashRequest($record, $data))
+                ->extraAttributes([
+                    'wire:loading.attr' => 'disabled',
+                ])
                 ->visible(fn($record) => PaymentProcessService::canApproveRequest($record)),
 
             // APPROVED BUTTON WITH RELEASE FORM (For Treasury Staff)
@@ -67,7 +86,13 @@ class ViewPaymentProcess extends ViewRecord
                 ->color('primary')
                 ->requiresConfirmation()
                 ->form(fn($record) => $this->getApproveFormSchema($record))
+                ->modalSubmitAction(fn(StaticAction $action) => $action->extraAttributes([
+                    'wire:loading.attr' => 'disabled',
+                ]))
                 ->action(fn($record, array $data) => PaymentProcessService::approveCashRequestWithReleaseForm($record, $data))
+                ->extraAttributes([
+                    'wire:loading.attr' => 'disabled',
+                ])
                 ->visible(fn($record) => PaymentProcessService::canApproveRequestWithRemarks($record)),
 
             // REJECTION BUTTON
@@ -81,7 +106,13 @@ class ViewPaymentProcess extends ViewRecord
                 ])
                 ->modalHeading('Reject Cash Request')
                 ->modalSubmitActionLabel('Reject')
+                ->modalSubmitAction(fn(StaticAction $action) => $action->extraAttributes([
+                    'wire:loading.attr' => 'disabled',
+                ]))
                 ->action(fn($record, array $data) => PaymentProcessService::rejectCashRequest($record, $data))
+                ->extraAttributes([
+                    'wire:loading.attr' => 'disabled',
+                ])
                 ->visible(fn($record) => PaymentProcessService::getStatus($record)),
         ];
     }
@@ -179,6 +210,9 @@ class ViewPaymentProcess extends ViewRecord
                                         ->modalHeading('Reject Activity')
                                         ->modalDescription('Are you sure you want to reject this activity?')
                                         ->modalSubmitActionLabel('Reject')
+                                        ->modalSubmitAction(fn(StaticAction $action) => $action->extraAttributes([
+                                            'wire:loading.attr' => 'disabled',
+                                        ]))
                                         ->form([
                                             Textarea::make('rejection_remarks')
                                                 ->label('Rejection Remarks')
@@ -299,7 +333,7 @@ class ViewPaymentProcess extends ViewRecord
                         return;
                     }
 
-                    $set('proposed_due_date', $this->adjustDueDateToWeekday(Carbon::parse($state)->addDays($agingDays)));
+                    $set('proposed_due_date', PaymentProcessService::adjustDueDateToWeekday(Carbon::parse($state)->addDays($agingDays)));
                 }),
 
             TimePicker::make('proposed_releasing_time_from')
@@ -315,27 +349,18 @@ class ViewPaymentProcess extends ViewRecord
             DatePicker::make('proposed_due_date')
                 ->label('Proposed Due Date')
                 ->required()
-                ->readonly()
+                ->readonly(fn () => PaymentProcessService::canEditProposedDueDate())
                 ->default(function (Get $get, $record) use ($agingDays) {
                     $releasingDate = $get('proposed_releasing_date') ?? $record->forCashRelease?->proposed_releasing_date ?? now();
 
-                    return $this->adjustDueDateToWeekday(Carbon::parse($releasingDate)->addDays($agingDays));
+                    return PaymentProcessService::adjustDueDateToWeekday(Carbon::parse($releasingDate)->addDays($agingDays));
                 })
                 ->minDate(function (Get $get) use ($agingDays) {
                     $releasingDate = $get('proposed_releasing_date') ?? now()->toDateString();
 
-                    return $this->adjustDueDateToWeekday(Carbon::parse($releasingDate)->addDays($agingDays));
+                    return PaymentProcessService::adjustDueDateToWeekday(Carbon::parse($releasingDate)->addDays($agingDays));
                 }),
         ];
-    }
-
-    private function adjustDueDateToWeekday(Carbon $dueDate): string
-    {
-        if ($dueDate->isWeekend()) {
-            $dueDate = $dueDate->next(Carbon::MONDAY);
-        }
-
-        return $dueDate->toDateString();
     }
 
     /**

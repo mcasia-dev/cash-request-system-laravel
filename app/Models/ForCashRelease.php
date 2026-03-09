@@ -27,6 +27,7 @@ class ForCashRelease extends Model implements HasMedia, HasDisbursementType
         'date_released',
         'date_edited',
         'edited_by',
+        'update_releasing_date_attempt',
     ];
 
     protected $casts = [
@@ -39,6 +40,7 @@ class ForCashRelease extends Model implements HasMedia, HasDisbursementType
         'date_processed'               => 'datetime',
         'date_released'                => 'datetime',
         'date_edited'                  => 'datetime',
+        'update_releasing_date_attempt'=> 'integer',
     ];
 
     public function cashRequest(): BelongsTo

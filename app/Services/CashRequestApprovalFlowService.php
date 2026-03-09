@@ -56,18 +56,73 @@ class CashRequestApprovalFlowService
             throw new RuntimeException('No active approval rule found for this request.');
         }
 
-        $roles = $rule->approvalRuleSteps()->pluck('role_name')->filter()->unique()->values();
+        $steps = $rule->approvalRuleSteps()
+            ->orderBy('step_order')
+            ->orderBy('id')
+            ->get(['role_name', 'step_order'])
+            ->filter(fn($step) => filled($step->role_name))
+            ->values();
 
-        if ($roles->isEmpty()) {
+        if ($steps->isEmpty()) {
             throw new RuntimeException('The matched approval rule has no configured approver roles.');
         }
 
         $record->cashRequestApprovals()->createMany(
-            $roles->map(fn($role) => [
-                'role_name' => $role,
-                'status'    => 'pending',
-            ])->all()
+            $steps->map(function ($step, int $index) {
+                return [
+                    'step_order' => $index + 1,
+                    'role_name' => $step->role_name,
+                    'status' => Status::PENDING->value,
+                ];
+            })->all()
         );
+    }
+
+    /**
+     * Resolve the current pending approval row id for this request.
+     */
+    private function getCurrentPendingApprovalId($record): ?int
+    {
+        $currentApprovalId = $record->cashRequestApprovals()
+            ->where('status', Status::PENDING->value)
+            ->orderByRaw('COALESCE(step_order, id)')
+            ->orderBy('id')
+            ->value('id');
+
+        if ($currentApprovalId === null) {
+            return null;
+        }
+
+        return (int) $currentApprovalId;
+    }
+
+    /**
+     * Scope query to requests where the current pending step is one of the given roles.
+     *
+     * @param Builder $query
+     * @param array<int, string> $roles
+     */
+    private function whereCurrentStepRoleIn(Builder $query, array $roles): Builder
+    {
+        return $query
+            ->whereExists(function ($subquery) use ($roles) {
+                $subquery->selectRaw('1')
+                    ->from('cash_request_approvals as cra')
+                    ->whereColumn('cra.cash_request_id', 'cash_requests.id')
+                    ->where('cra.status', Status::PENDING->value)
+                    ->whereIn('cra.role_name', $roles)
+                    ->whereRaw(
+                        'cra.id = (
+                            SELECT cra2.id
+                            FROM cash_request_approvals as cra2
+                            WHERE cra2.cash_request_id = cash_requests.id
+                              AND cra2.status = ?
+                            ORDER BY COALESCE(cra2.step_order, cra2.id), cra2.id
+                            LIMIT 1
+                        )',
+                        [Status::PENDING->value]
+                    );
+            });
     }
 
     /**
@@ -85,15 +140,10 @@ class CashRequestApprovalFlowService
             return $query->whereRaw('1 = 0');
         }
 
-        return $query
-            ->where('status', Status::PENDING->value)
-            ->whereExists(function ($subquery) use ($roles) {
-                $subquery->selectRaw('1')
-                    ->from('cash_request_approvals as cra')
-                    ->whereColumn('cra.cash_request_id', 'cash_requests.id')
-                    ->where('cra.status', 'pending')
-                    ->whereIn('cra.role_name', $roles);
-            });
+        return $this->whereCurrentStepRoleIn(
+            $query->where('status', Status::PENDING->value),
+            $roles
+        );
     }
 
     /**
@@ -134,13 +184,14 @@ class CashRequestApprovalFlowService
 
             if ($hasPending) {
                 $record->update([
-                    'status'         => Status::IN_PROGRESS->value,
-                    'status_remarks' => $this->resolveFinalApprovalRemark($record),
+                    'status'         => Status::PENDING->value,
+                    'status_remarks' => $remark,
                 ]);
 
                 return [
-                    'status_remarks' => $remark,
-                    'is_final_step'  => false,
+                    'status_remarks'           => $remark,
+                    'approved_remarks_by_role' => $remark,
+                    'is_final_step'            => false,
                 ];
             }
 
@@ -197,9 +248,17 @@ class CashRequestApprovalFlowService
      */
     private function getPendingApprovalForUser($record, User $user): ?CashRequestApproval
     {
+        $currentApprovalId = $this->getCurrentPendingApprovalId($record);
+
+        if ($currentApprovalId === null) {
+            return null;
+        }
+
         if ($user->isSuperAdmin()) {
             return $record->cashRequestApprovals()
-                ->where('status', 'pending')
+                ->where('status', Status::PENDING->value)
+                ->where('id', $currentApprovalId)
+                ->orderBy('id')
                 ->first();
         }
 
@@ -210,8 +269,10 @@ class CashRequestApprovalFlowService
         }
 
         return $record->cashRequestApprovals()
-            ->where('status', 'pending')
+            ->where('status', Status::PENDING->value)
+            ->where('id', $currentApprovalId)
             ->whereIn('role_name', $roles)
+            ->orderBy('id')
             ->first();
     }
 

@@ -4,6 +4,7 @@ namespace App\Filament\Resources\CashRequestResource\Pages;
 use App\Enums\CashRequest\Status;
 use App\Filament\Resources\CashRequestResource;
 use App\Models\LiquidationReceipt;
+use Carbon\Carbon;
 use Facades\App\Services\CashRequest\CashRequestService;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section;
@@ -198,7 +199,17 @@ class ViewCashRequest extends ViewRecord
                             ->label('Date Released')
                             ->date(),
 
-                        TextEntry::make('date_liquidated')
+                            TextEntry::make('forCashRelease.releasing_date')
+                            ->label('Releasing Date')
+                            ->formatStateUsing(function ($record) {
+                                info($record);
+                                return "{$record->forCashRelease?->releasing_date?->format('F d, Y')} "
+                                    . Carbon::parse($record->forCashRelease?->releasing_time_from)?->format('h:i A')
+                                    . ' - '
+                                    . Carbon::parse($record->forCashRelease?->releasing_time_to)?->format('h:i A');
+                            }),
+
+                            TextEntry::make('date_liquidated')
                             ->label('Date Liquidated')
                             ->date(),
                     ])

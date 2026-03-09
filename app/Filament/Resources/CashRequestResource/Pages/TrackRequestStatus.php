@@ -180,6 +180,7 @@ class TrackRequestStatus extends ViewRecord
     private function buildCashAdvanceApprovalSteps($record): array
     {
         $approvals = $record->cashRequestApprovals()
+            ->orderByRaw('COALESCE(step_order, id)')
             ->orderBy('id')
             ->get();
 
@@ -196,52 +197,66 @@ class TrackRequestStatus extends ViewRecord
             ]];
         }
 
-        $latestDeclined = $record->cashRequestApprovals()
-            ->where('status', 'declined')
-            ->orderByDesc('acted_at')
-            ->orderByDesc('id')
-            ->first();
+        $firstPendingIndex = $approvals->search(fn($approval) => $approval->status === 'pending');
+        $firstDeclinedIndex = $approvals->search(fn($approval) => $approval->status === 'declined');
 
-        if ($latestDeclined) {
-            $title = 'Approval - ' . str($latestDeclined->role_name)->replace('_', ' ')->title()->toString();
+        return $approvals->values()->map(function ($approval, int $index) use ($record, $firstPendingIndex, $firstDeclinedIndex) {
+            $roleTitle = str($approval->role_name)->replace('_', ' ')->title()->toString();
+            $title = 'Approval ' . ($index + 1) . ' - ' . $roleTitle;
 
-            return [[
+            if ($approval->status === 'approved') {
+                return [
+                    'title'       => $title,
+                    'status'      => 'approved',
+                    'statusLabel' => 'Approved',
+                    'remarks'     => $this->approvedRemarkByRole($approval->role_name),
+                    'by'          => $this->resolveApproverName($approval->approved_by),
+                    'date'        => $approval->acted_at?->format('F d, Y h:i A') ?? 'N/A',
+                ];
+            }
+
+            if ($approval->status === 'declined') {
+                return [
+                    'title'       => $title,
+                    'status'      => 'rejected',
+                    'statusLabel' => 'Rejected',
+                    'remarks'     => $record->reason_for_rejection ?: $this->rejectedRemarkByRole($approval->role_name),
+                    'by'          => $this->resolveApproverName($approval->approved_by),
+                    'date'        => $approval->acted_at?->format('F d, Y h:i A') ?? 'N/A',
+                ];
+            }
+
+            if ($firstDeclinedIndex !== false && $index > $firstDeclinedIndex) {
+                return [
+                    'title'       => $title,
+                    'status'      => 'stopped',
+                    'statusLabel' => 'Stopped',
+                    'remarks'     => 'Process stopped due to approval rejection',
+                    'by'          => 'N/A',
+                    'date'        => 'N/A',
+                ];
+            }
+
+            if ($firstPendingIndex !== false && $index > $firstPendingIndex) {
+                return [
+                    'title'       => $title,
+                    'status'      => 'upcoming',
+                    'statusLabel' => 'Not yet started',
+                    'remarks'     => 'Waiting for previous approval step',
+                    'by'          => 'N/A',
+                    'date'        => 'N/A',
+                ];
+            }
+
+            return [
                 'title'       => $title,
-                'status'      => 'rejected',
-                'statusLabel' => 'Rejected',
-                'remarks'     => $record->reason_for_rejection ?: $this->rejectedRemarkByRole($latestDeclined->role_name),
-                'by'          => $this->resolveApproverName($latestDeclined->approved_by),
-                'date'        => $latestDeclined->acted_at?->format('F d, Y h:i A') ?? 'N/A',
-            ]];
-        }
-
-        $latestApproved = $record->cashRequestApprovals()
-            ->where('status', 'approved')
-            ->orderByDesc('acted_at')
-            ->orderByDesc('id')
-            ->first();
-
-        if ($latestApproved) {
-            $title = 'Approval - ' . str($latestApproved->role_name)->replace('_', ' ')->title()->toString();
-
-            return [[
-                'title'       => $title,
-                'status'      => 'approved',
-                'statusLabel' => 'Approved',
-                'remarks'     => $this->approvedRemarkByRole($latestApproved->role_name),
-                'by'          => $this->resolveApproverName($latestApproved->approved_by),
-                'date'        => $latestApproved->acted_at?->format('F d, Y h:i A') ?? 'N/A',
-            ]];
-        }
-
-        return [[
-            'title'       => 'Approval',
-            'status'      => 'pending',
-            'statusLabel' => 'Pending',
-            'remarks'     => 'Waiting for review',
-            'by'          => 'N/A',
-            'date'        => 'N/A',
-        ]];
+                'status'      => 'pending',
+                'statusLabel' => 'Pending',
+                'remarks'     => 'Waiting for review',
+                'by'          => 'N/A',
+                'date'        => 'N/A',
+            ];
+        })->all();
     }
 
     /**

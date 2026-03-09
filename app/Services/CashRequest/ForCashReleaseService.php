@@ -7,6 +7,7 @@ use App\Jobs\RejectCashRequestJob;
 use App\Jobs\ReleaseCashRequestByTreasuryJob;
 use App\Models\ForLiquidation;
 use App\Services\Remarks\StatusRemarkResolver;
+use App\Traits\AdjustDueDateToBusinessDayTrait;
 use App\Traits\GenerateSettingTrait;
 use Carbon\Carbon;
 use Filament\Notifications\Actions\Action as NotificationAction;
@@ -16,6 +17,7 @@ use Illuminate\Support\Facades\DB;
 
 class ForCashReleaseService
 {
+    use AdjustDueDateToBusinessDayTrait;
     use GenerateSettingTrait;
 
     /**
@@ -254,10 +256,7 @@ class ForCashReleaseService
         $record->update($payload);
 
         $agingDays  = $this->getAgingDaysFromSettings();
-        $newDueDate = Carbon::parse($newReleasingDate)->addDays($agingDays);
-        if ($newDueDate->isWeekend()) {
-            $newDueDate = $newDueDate->next(Carbon::MONDAY);
-        }
+        $newDueDate = self::calculateDueDateFromReleasingDate(Carbon::parse($newReleasingDate), $agingDays);
 
         $record->cashRequest->update([
             'due_date' => $newDueDate,

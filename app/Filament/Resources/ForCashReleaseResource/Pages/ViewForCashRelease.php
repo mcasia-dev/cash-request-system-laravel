@@ -7,6 +7,7 @@ use App\Models\CashRequest;
 use App\Models\ForCashRelease;
 use Facades\App\Services\CashRequest\ForCashReleaseService;
 use Filament\Actions\Action;
+use Filament\Actions\StaticAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TimePicker;
@@ -31,8 +32,14 @@ class ViewForCashRelease extends ViewRecord
             Action::make('changeReleasingDate')
                 ->requiresConfirmation()
                 ->form(fn($record) => $this->getChangeReleasingDateFormSchema())
+                ->modalSubmitAction(fn(StaticAction $action) => $action->extraAttributes([
+                    'wire:loading.attr' => 'disabled',
+                ]))
                 ->action(fn(ForCashRelease $record, array $data) => ForCashReleaseService::changeReleasingDate($record, $data))
                 ->color('warning')
+                ->extraAttributes([
+                    'wire:loading.attr' => 'disabled',
+                ])
                 ->visible(fn($record) => ForCashReleaseService::getStatus($record))
                 ->disabled(fn($record) => (int) ($record->update_releasing_date_attempt ?? 0) >= 3),
 
@@ -43,8 +50,14 @@ class ViewForCashRelease extends ViewRecord
                     Textarea::make('remarks')
                         ->required(),
                 ])
+                ->modalSubmitAction(fn(StaticAction $action) => $action->extraAttributes([
+                    'wire:loading.attr' => 'disabled',
+                ]))
                 ->action(fn(ForCashRelease $record, array $data) => ForCashReleaseService::releaseCashRequest($record, $data))
                 ->color('primary')
+                ->extraAttributes([
+                    'wire:loading.attr' => 'disabled',
+                ])
                 ->visible(fn($record) => ForCashReleaseService::getStatus($record)),
 
             // REJECTION BUTTON
@@ -58,7 +71,13 @@ class ViewForCashRelease extends ViewRecord
                 ])
                 ->modalHeading('Reject Cash Request')
                 ->modalSubmitActionLabel('Reject')
+                ->modalSubmitAction(fn(StaticAction $action) => $action->extraAttributes([
+                    'wire:loading.attr' => 'disabled',
+                ]))
                 ->action(fn(CashRequest $record, array $data) => ForCashReleaseService::rejectCashRequest($record, $data))
+                ->extraAttributes([
+                    'wire:loading.attr' => 'disabled',
+                ])
                 ->visible(fn($record) => ForCashReleaseService::getStatus($record)),
         ];
     }
@@ -130,6 +149,9 @@ class ViewForCashRelease extends ViewRecord
                                         ->modalHeading('Reject Activity')
                                         ->modalDescription('Are you sure you want to reject this activity?')
                                         ->modalSubmitActionLabel('Reject')
+                                        ->modalSubmitAction(fn(StaticAction $action) => $action->extraAttributes([
+                                            'wire:loading.attr' => 'disabled',
+                                        ]))
                                         ->form([
                                             Textarea::make('rejection_remarks')
                                                 ->label('Rejection Remarks')

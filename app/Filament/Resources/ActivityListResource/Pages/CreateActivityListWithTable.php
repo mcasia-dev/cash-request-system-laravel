@@ -109,7 +109,7 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
                             ->collection('attachments')
                             ->multiple()
                             ->responsiveImages()
-                            ->required(),
+                            ->nullable(),
 
                         Textarea::make('purpose')
                             ->columnSpanFull()
@@ -386,7 +386,7 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
         $this->draftNatureOfRequest = $cashRequest?->nature_of_request;
     }
 
-    private function getConfiguredMaxAmountForNature(?string $nature): ?float
+    private function getConfiguredMaxAmountForNature(?string $nature)
     {
         if (blank($nature) || $nature !== NatureOfRequestEnum::PETTY_CASH->value) {
             return null;

@@ -31,7 +31,7 @@ class ViewForFinanceVerification extends ViewRecord
                 ->requiresConfirmation()
                 ->form(fn($record) => [
                     TextInput::make('voucher_no')
-                        ->label('Voucher No.')
+                        ->label('AP Voucher No.')
                         ->required(),
                 ])
                 ->action(fn($record, array $data) => ForFinanceVerificationService::approveRequest($record, $data))

@@ -10,6 +10,7 @@ use App\Jobs\RejectCashRequestJob;
 use App\Models\ForCashRelease;
 use App\Models\User;
 use App\Services\Remarks\StatusRemarkResolver;
+use App\Traits\AdjustDueDateToBusinessDayTrait;
 use App\Traits\GenerateSettingTrait;
 use Carbon\Carbon;
 use Filament\Notifications\Actions\Action as NotificationAction;
@@ -19,6 +20,7 @@ use Illuminate\Support\Facades\DB;
 
 class PaymentProcessService
 {
+    use AdjustDueDateToBusinessDayTrait;
     use GenerateSettingTrait;
 
     /**
@@ -60,8 +62,11 @@ class PaymentProcessService
         $status_remarks = app(StatusRemarkResolver::class)->approveByPermissions($user, 'treasury');
 
         if ($record->is_override) {
+            $proposed_due_date = Carbon::parse($data['proposed_due_date']);
+            $new_proposed_date = $this->adjustDueDateToWeekday($proposed_due_date);
+
             $record->update([
-                'proposed_due_date' => $data['proposed_due_date'] ?? $record->proposed_due_date,
+                'proposed_due_date' => $new_proposed_date ?? $record->proposed_due_date,
             ]);
 
             ForCashRelease::updateOrCreate(
@@ -197,7 +202,7 @@ class PaymentProcessService
         ]);
 
         $agingDays = $this->getAgingDaysFromSettings();
-        $due_date  = Carbon::parse($releasingDate)->addDays($agingDays);
+        $due_date  = self::adjustDueDateToWeekday(Carbon::parse($releasingDate)->addDays($agingDays));
 
         // Update the record status
         $record->update([
@@ -480,6 +485,17 @@ class PaymentProcessService
             ->exists();
     }
 
+    public function canEditProposedDueDate()
+    {
+        $isTreasuryStaff = $this->isTreasuryStaff();
+
+        if ($isTreasuryStaff) {
+            return true;
+        }
+
+        return false;
+    }
+
     /**
      * Notify treasury manager about payment processing updates.
      * @param $record
@@ -611,4 +627,5 @@ class PaymentProcessService
             ->success()
             ->send();
     }
+
 }
