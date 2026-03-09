@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'google_calendar' => [
+        'api_key' => env('GOOGLE_CALENDAR_API_KEY'),
+        'base_url' => env('GOOGLE_CALENDAR_API_BASE_URL', 'https://www.googleapis.com/calendar/v3'),
+        'holiday_calendar_id' => env('GOOGLE_PH_HOLIDAY_CALENDAR_ID', 'en.philippines#holiday@group.v.calendar.google.com'),
+    ],
+
 ];

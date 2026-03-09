@@ -1,16 +1,11 @@
 <?php
-
 namespace App\Filament\Resources\ForLiquidationResource\Pages;
 
 use App\Enums\CashRequest\DisbursementType;
 use App\Enums\CashRequest\Status;
-use App\Enums\CashRequest\StatusRemarks;
 use App\Filament\Resources\ForLiquidationResource;
-use App\Filament\Resources\PaymentProcessResource\Pages\ViewPaymentProcess;
 use App\Models\ForLiquidation;
-use App\Models\LiquidationReceipt;
-use App\Services\Remarks\StatusRemarkResolver;
-use Carbon\Carbon;
+use Facades\App\Services\CashRequest\ForLiquidationService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -21,12 +16,8 @@ use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
-use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\HtmlString;
 use Filament\Support\Enums\Alignment;
-use Illuminate\Support\Facades\DB;
 
 class ViewForLiquidation extends ViewRecord
 {
@@ -41,16 +32,16 @@ class ViewForLiquidation extends ViewRecord
                 ->color('warning')
                 ->requiresConfirmation()
                 ->form(fn(ForLiquidation $record) => $this->getOverrideFormSchema($record))
-                ->action(fn(ForLiquidation $record, array $data) => $this->overrideRequest($record, $data))
-                ->visible(fn(ForLiquidation $record) => $this->canOverride($record) && $record->receipt_amount != null),
+                ->action(fn(ForLiquidation $record, array $data) => ForLiquidationService::overrideRequest($record, $data))
+                ->visible(fn(ForLiquidation $record) => ForLiquidationService::canOverride($record) && $record->receipt_amount != null),
 
             // LIQUIDATE BUTTON
             Action::make('liquidate')
                 ->label('Liquidate')
                 ->color('primary')
                 ->requiresConfirmation()
-                ->action(fn(ForLiquidation $record) => $this->liquidateRequest($record))
-                ->visible(fn(ForLiquidation $record) => $this->canProcess($record) && $this->isTreasuryManager()),
+                ->action(fn(ForLiquidation $record) => ForLiquidationService::liquidateRequest($record))
+                ->visible(fn(ForLiquidation $record) => ForLiquidationService::canProcess($record) && ForLiquidationService::isTreasuryManager()),
 
             // REJECT BUTTON
             Action::make('reject')
@@ -65,8 +56,8 @@ class ViewForLiquidation extends ViewRecord
                 ])
                 ->modalHeading('Reject Liquidation')
                 ->modalSubmitActionLabel('Reject')
-                ->action(fn(ForLiquidation $record, array $data) => $this->rejectLiquidation($record, $data))
-                ->visible(fn(ForLiquidation $record) => $this->canProcess($record)),
+                ->action(fn(ForLiquidation $record, array $data) => ForLiquidationService::rejectLiquidation($record, $data))
+                ->visible(fn(ForLiquidation $record) => ForLiquidationService::canProcess($record)),
         ];
     }
 
@@ -85,6 +76,10 @@ class ViewForLiquidation extends ViewRecord
                         TextEntry::make('cashRequest.user.name')
                             ->label('Requestor'),
 
+                        TextEntry::make('cashRequest.nature_of_request')
+                            ->label('Nature of Request')
+                            ->badge(),
+
                         TextEntry::make('cashRequest.requesting_amount')
                             ->label('Total Requesting Amount')
                             ->money('PHP'),
@@ -93,12 +88,12 @@ class ViewForLiquidation extends ViewRecord
                             ->label('Status')
                             ->badge()
                             ->color(fn(string $state): string => match ($state) {
-                                'pending' => 'warning',
-                                'approved' => 'success',
-                                'released' => 'info',
+                                'pending'    => 'warning',
+                                'approved'   => 'success',
+                                'released'   => 'info',
                                 'liquidated' => 'primary',
-                                'rejected' => 'danger',
-                                default => 'gray',
+                                'rejected'   => 'danger',
+                                default      => 'gray',
                             }),
                     ])
                     ->columns(4),
@@ -109,8 +104,8 @@ class ViewForLiquidation extends ViewRecord
                         RepeatableEntry::make('cashRequest.activityLists')
                             ->label('')
                             ->getStateUsing(fn($record) => $record->cashRequest->activityLists()
-                                ->where('status', '!=', 'rejected')
-                                ->get())
+                                    ->where('status', '!=', 'rejected')
+                                    ->get())
                             ->schema([
                                 Actions::make([
                                     InfolistAction::make('rejectActivity')
@@ -131,8 +126,8 @@ class ViewForLiquidation extends ViewRecord
                                                 ->required()
                                                 ->maxLength(65535),
                                         ])
-                                        ->visible(fn($record): bool => $this->canProcess($this->record) && $record->status !== 'rejected')
-                                        ->action(fn(array $data, $record) => $this->rejectActivity($record, $data)),
+                                        ->visible(fn($record): bool => ForLiquidationService::canProcess($this->record) && $record->status !== Status::REJECTED->value)
+                                        ->action(fn(array $data, $record) => ForLiquidationService::rejectActivity($record, $data)),
                                 ])
                                     ->alignment(Alignment::End)
                                     ->fullWidth()
@@ -151,10 +146,6 @@ class ViewForLiquidation extends ViewRecord
                                 TextEntry::make('purpose')
                                     ->label('Purpose'),
 
-                                TextEntry::make('nature_of_request')
-                                    ->label('Nature of Request')
-                                    ->badge(),
-
                                 TextEntry::make('requesting_amount')
                                     ->label('Requesting Amount')
                                     ->money('PHP'),
@@ -169,8 +160,8 @@ class ViewForLiquidation extends ViewRecord
                                     ->badge()
                                     ->color(fn(string $state): string => match ($state) {
                                         'rejected' => 'danger',
-                                        'pending' => 'warning',
-                                        default => 'gray',
+                                        'pending'  => 'warning',
+                                        default    => 'gray',
                                     }),
 
                                 TextEntry::make('rejection_remarks')
@@ -225,10 +216,6 @@ class ViewForLiquidation extends ViewRecord
                             ->label('Receipt Amount')
                             ->money('PHP'),
 
-                        // TextEntry::make('total_user')
-                        //     ->label('Total Used')
-                        //     ->money('PHP'),
-
                         TextEntry::make('total_liquidated')
                             ->label('Total Liquidated')
                             ->money('PHP'),
@@ -256,11 +243,11 @@ class ViewForLiquidation extends ViewRecord
                     ->schema([
                         TextEntry::make('receipt_images')
                             ->label('Receipts')
-                            ->state($this->getReceiptImageState())
+                            ->state(ForLiquidationService::getReceiptImageState())
                             ->columnSpanFull()
                             ->html(),
                     ])
-                    ->visible(fn(ForLiquidation $record) => !empty($this->getReceiptEntries($record))),
+                    ->visible(fn(ForLiquidation $record) => ! empty(ForLiquidationService::getReceiptEntries($record))),
 
                 Section::make('Disbursement Method')
                     ->collapsible()
@@ -277,29 +264,29 @@ class ViewForLiquidation extends ViewRecord
 
                         TextEntry::make('check_branch_name')
                             ->label('Check Branch Name')
-                            ->visible(fn($record) => $record->disbursement_type === DisbursementType::CHECK->value)
+                            ->visible(fn($record) => $record->isCheckDisbursement())
                             ->placeholder('-'),
 
                         TextEntry::make('check_no')
                             ->label('Check No.')
-                            ->visible(fn($record) => $record->disbursement_type === DisbursementType::CHECK->value)
+                            ->visible(fn($record) => $record->isCheckDisbursement())
                             ->placeholder('-'),
 
                         TextEntry::make('voucher_no')
                             ->label('Voucher No.')
-                            ->visible(fn($record) => $record->disbursement_type === DisbursementType::CHECK->value)
+                            ->visible(fn($record) => $record->isCheckDisbursement())
                             ->placeholder('-'),
 
                         TextEntry::make('cut_off_date')
                             ->label('Cut-off Date')
                             ->date()
-                            ->visible(fn($record) => $record->disbursement_type === DisbursementType::PAYROLL->value)
+                            ->visible(fn($record) => $record->isPayrollDisbursement())
                             ->placeholder('-'),
 
                         TextEntry::make('payroll_credit')
                             ->label('Payroll Credit')
                             ->money('PHP')
-                            ->visible(fn($record) => $record->disbursement_type === DisbursementType::PAYROLL->value)
+                            ->visible(fn($record) => $record->isPayrollDisbursement())
                             ->placeholder('-'),
 
                         TextEntry::make('disbursementAddedBy.name')
@@ -336,186 +323,9 @@ class ViewForLiquidation extends ViewRecord
             ]);
     }
 
-    /**
-     * Load receipt media entries for the liquidation, with per-record caching.
-     */
-    private function getReceiptEntries(ForLiquidation $record): array
-    {
-        static $cache = [];
-
-        if (!array_key_exists($record->id, $cache)) {
-            $cache[$record->id] = LiquidationReceipt::query()
-                ->where('liquidation_id', $record->id)
-                ->get()
-                ->flatMap(function (LiquidationReceipt $receipt) {
-                    return $receipt->getMedia('liquidation-receipts')->map(fn($media) => [
-                        'url' => $media->getUrl(),
-                        'amount' => $receipt->receipt_amount,
-                        'receipt_number' => $receipt->receipt_number,
-                        'remarks' => $receipt->remarks,
-                    ]);
-                })
-                ->filter()
-                ->values()
-                ->all();
-        }
-
-        return $cache[$record->id];
-    }
-
-    /**
-     * Build a closure that renders receipt images and details as HTML.
-     * @return \Closure
-     */
-    public function getReceiptImageState(): \Closure
-    {
-        return function (ForLiquidation $record) {
-            $receipts = $this->getReceiptEntries($record);
-
-            if (empty($receipts)) {
-                return 'No receipt images uploaded.';
-            }
-
-            $html = '<div style="display:flex;flex-wrap:wrap;gap:10px;">';
-
-            foreach ($receipts as $receipt) {
-                $safeUrl = e($receipt['url']);
-                $amount = number_format((float)($receipt['amount'] ?? 0), 2);
-                $receiptNumber = filled($receipt['receipt_number']) ? e($receipt['receipt_number']) : 'N/A';
-                $remarks = filled($receipt['remarks']) ? e($receipt['remarks']) : 'N/A';
-
-                $html .= '<div style="width:220px;border:1px solid #e5e7eb;border-radius:8px;padding:10px;background:#fff;">'
-                    . '<a href="'
-                    . $safeUrl
-                    . '" target="_blank" rel="noopener noreferrer">'
-                    . '<img src="'
-                    . $safeUrl
-                    . '" alt="Receipt image" style="width:100%;max-height:180px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;" />'
-                    . '</a>'
-                    . '<div style="margin-top:8px;font-size:12px;line-height:1.45;">'
-                    . '<div><strong>Amount:</strong> PHP ' . $amount . '</div>'
-                    . '<div><strong>Receipt No:</strong> ' . $receiptNumber . '</div>'
-                    . '<div><strong>Remarks:</strong> ' . $remarks . '</div>'
-                    . '</div>'
-                    . '</div>';
-            }
-
-            $html .= '</div>';
-
-            return new HtmlString($html);
-        };
-    }
-
-    private function canProcess(ForLiquidation $record): bool
-    {
-        return $record->cashRequest->status === Status::RELEASED->value
-            && $record->cashRequest->status_remarks === StatusRemarks::LIQUIDATION_RECEIPT_SUBMITTED->value && $record->is_override;
-    }
-
-    private function liquidateRequest(ForLiquidation $record): void
-    {
-        $user = Auth::user();
-
-        $record->cashRequest->update([
-            'status' => Status::LIQUIDATED->value,
-            'status_remarks' => StatusRemarks::LIQUIDATED->value,
-            'date_liquidated' => Carbon::now(),
-        ]);
-
-        activity()
-            ->causedBy($user)
-            ->performedOn($record->cashRequest ?? $record)
-            ->event('liquidated')
-            ->withProperties([
-                'request_no' => $record->cashRequest->request_no,
-                'activity_name' => $record->cashRequest->activity_name,
-                'requesting_amount' => $record->cashRequest->requesting_amount,
-                'previous_status' => Status::RELEASED->value,
-                'new_status' => Status::LIQUIDATED->value,
-                'status_remarks' => StatusRemarks::LIQUIDATED->value,
-            ])
-            ->log("Cash request {$record->cashRequest->request_no} was liquidated by {$user->name} ({$user->position})");
-
-        Notification::make()
-            ->title('Liquidation approved.')
-            ->success()
-            ->send();
-    }
-
-    private function rejectLiquidation(ForLiquidation $record, array $data): void
-    {
-        $user = Auth::user();
-
-        $record->update([
-            'remarks' => $data['rejection_remarks'],
-        ]);
-
-        $record->cashRequest->update([
-            'status' => Status::RELEASED->value,
-            'status_remarks' => StatusRemarks::FOR_LIQUIDATION->value,
-            'reason_for_rejection' => $data['rejection_remarks'],
-        ]);
-
-        activity()
-            ->causedBy($user)
-            ->performedOn($record->cashRequest ?? $record)
-            ->event('rejected')
-            ->withProperties([
-                'request_no' => $record->cashRequest->request_no,
-                'activity_name' => $record->cashRequest->activity_name,
-                'requesting_amount' => $record->cashRequest->requesting_amount,
-                'previous_status' => Status::RELEASED->value,
-                'new_status' => Status::RELEASED->value,
-                'status_remarks' => StatusRemarks::FOR_LIQUIDATION->value,
-                'reason_for_rejection' => $data['rejection_remarks'],
-            ])
-            ->log("Liquidation receipts for cash request {$record->cashRequest->request_no} were rejected by {$user->name} ({$user->position})");
-
-        Notification::make()
-            ->title('Liquidation rejected.')
-            ->success()
-            ->send();
-    }
-
-    private function overrideRequest(ForLiquidation $record, array $data): void
-    {
-        $user = Auth::user();
-        [$totalReceipts, $requestingAmount, $amountToReturn, $amountToReimburse] = $this->getLiquidationTotals($record);
-
-        // Update the record status and save rejection reason
-        $record->update([
-            'is_override' => true,
-            'remarks' => $data['override_remarks'] ?? $record->remarks,
-            'receipt_amount' => $totalReceipts,
-            'total_liquidated' => $totalReceipts,
-            'missing_amount' => $amountToReturn,
-            'total_change' => $amountToReimburse,
-        ]);
-
-        // Log activity
-        activity()
-            ->causedBy($user)
-            ->performedOn($record)
-            ->event('override')
-            ->withProperties([
-                'request_no' => $record->request_no,
-                'activity_name' => $record->activity_name,
-                'requesting_amount' => $record->requesting_amount,
-                'previous_status' => Status::PENDING->value,
-                'new_status' => Status::IN_PROGRESS->value,
-                'status_remarks' => $record->status_remarks,
-            ])
-            ->log("Cash request {$record->request_no} was override by {$user->name} ({$user->position})");
-
-        Notification::make()
-            ->title('Cash Request Override!')
-            ->success()
-            ->send();
-    }
-
     private function getOverrideFormSchema(ForLiquidation $record): array
     {
-        [$totalReceipts, $requestingAmount, $amountToReturn, $amountToReimburse, $diff] = $this->getLiquidationTotals($record);
+        [$totalReceipts, $requestingAmount, $amountToReturn, $amountToReimburse, $diff] = ForLiquidationService::getLiquidationTotals($record);
 
         if (abs($diff) < 0.01) {
             return [];
@@ -542,100 +352,5 @@ class ViewForLiquidation extends ViewRecord
                 ->maxLength(65535),
             $amountField,
         ];
-    }
-
-    private function getLiquidationTotals(ForLiquidation $record): array
-    {
-        $totalReceipts = (float)LiquidationReceipt::query()
-            ->where('liquidation_id', $record->id)
-            ->sum('receipt_amount');
-        $requestingAmount = (float)($record->cashRequest?->requesting_amount ?? 0);
-        $diff = round($totalReceipts - $requestingAmount, 2);
-
-        $amountToReimburse = $diff > 0 ? $diff : 0.0;
-        $amountToReturn = $diff < 0 ? abs($diff) : 0.0;
-
-        return [$totalReceipts, $requestingAmount, $amountToReturn, $amountToReimburse, $diff];
-    }
-
-    private function canOverride(ForLiquidation $record): bool
-    {
-        if ($record->is_override) {
-            return false;
-        }
-
-        $user = Auth::user();
-
-        if (!$user) {
-            return false;
-        }
-
-        if ($user->isSuperAdmin()) {
-            return true;
-        }
-
-        try {
-            return $user->hasPermissionTo('can-override-liquidation-receipt');
-        } catch (\Spatie\Permission\Exceptions\PermissionDoesNotExist $e) {
-            return false;
-        }
-    }
-
-    private function isTreasuryManager(): bool
-    {
-        $user = Auth::user();
-
-        if (!$user) {
-            return false;
-        }
-
-        if ($user->isSuperAdmin()) {
-            return true;
-        }
-
-        return $user->roles()
-            ->where('name', 'treasury_manager')
-            ->exists();
-    }
-
-    private function rejectActivity($record, array $data): void
-    {
-        DB::transaction(function () use ($record, $data): void {
-            $record->update([
-                'status' => 'rejected',
-                'rejection_remarks' => $data['rejection_remarks'],
-            ]);
-
-            $cashRequest = $record->cashRequest ?? $this->record->cashRequest;
-            $total = $cashRequest->activityLists()
-                ->where('status', '!=', 'rejected')
-                ->sum('requesting_amount');
-
-            $cashRequest->update([
-                'requesting_amount' => (float) $total,
-            ]);
-
-            $hasRemainingActivities = $cashRequest->activityLists()
-                ->where(function ($query) {
-                    $query->whereNull('status')
-                        ->orWhere('status', '!=', 'rejected');
-                })
-                ->exists();
-
-            if (!$hasRemainingActivities) {
-                $statusRemarks = app(StatusRemarkResolver::class)->rejectByPermissions(Auth::user(), 'treasury');
-
-                $cashRequest->update([
-                    'status' => Status::REJECTED->value,
-                    'status_remarks' => $statusRemarks,
-                    'reason_for_rejection' => $data['rejection_remarks'],
-                ]);
-            }
-        });
-
-        Notification::make()
-            ->title('Activity rejected')
-            ->success()
-            ->send();
     }
 }

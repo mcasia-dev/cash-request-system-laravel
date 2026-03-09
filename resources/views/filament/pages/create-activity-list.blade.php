@@ -3,7 +3,7 @@
         {{ $this->form }}
         <x-filament::button type="submit" wire:loading.attr="disabled" wire:target="create">
             <span wire:loading.remove wire:target="create">
-                Create Activity
+                Create Request
             </span>
 
             <span wire:loading wire:target="create">Saving...</span>

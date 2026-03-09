@@ -7,12 +7,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 
 class ForApprovalRequest extends Model implements HasMedia
 {
-    use InteractsWithMedia;
+    use InteractsWithMedia, LogsActivity;
 
     protected $table = "cash_requests";
 
@@ -40,6 +41,7 @@ class ForApprovalRequest extends Model implements HasMedia
         'cc_expiration',
         'date_liquidated',
         'date_released',
+        'proposed_due_date',
         'due_date',
         'status',
         'status_remarks',
@@ -51,18 +53,19 @@ class ForApprovalRequest extends Model implements HasMedia
         'payroll_credit',
         'disbursement_added_by',
         'is_override',
-        'is_approved_by_treasury_manager'
+        'is_approved_by_treasury_manager',
     ];
 
     protected $casts = [
-        'is_override' => 'boolean',
+        'is_override'                     => 'boolean',
         'is_approved_by_treasury_manager' => 'boolean',
-        'activity_date' => 'date',
-        'due_date' => 'date',
-        'cut_off_date' => 'date',
-        'payroll_date' => 'date',
-        'date_liquidated' => 'datetime',
-        'date_released' => 'datetime',
+        'activity_date'                   => 'date',
+        'proposed_due_date'               => 'date',
+        'due_date'                        => 'date',
+        'cut_off_date'                    => 'date',
+        'payroll_date'                    => 'date',
+        'date_liquidated'                 => 'datetime',
+        'date_released'                   => 'datetime',
     ];
 
     public function registerMediaCollections(): void

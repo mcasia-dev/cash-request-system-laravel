@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Enums\CashRequest\DisbursementType;
+use App\Interface\HasDisbursementType;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -10,7 +12,7 @@ use Spatie\Activitylog\LogOptions;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 
-class PaymentProcess extends Model implements HasMedia
+class PaymentProcess extends Model implements HasMedia, HasDisbursementType
 {
     use InteractsWithMedia;
 
@@ -40,29 +42,31 @@ class PaymentProcess extends Model implements HasMedia
         'cc_expiration',
         'date_liquidated',
         'date_released',
+        'proposed_due_date',
         'due_date',
         'status',
         'status_remarks',
+        'disbursement_type',
         'check_branch_name',
         'check_no',
         'cut_off_date',
         'payroll_date',
         'payroll_credit',
-        'disbursement_type',
         'disbursement_added_by',
         'is_override',
-        'is_approved_by_treasury_manager'
+        'is_approved_by_treasury_manager',
     ];
 
     protected $casts = [
-        'is_override' => 'boolean',
+        'is_override'                     => 'boolean',
         'is_approved_by_treasury_manager' => 'boolean',
-        'activity_date' => 'date',
-        'due_date' => 'date',
-        'cut_off_date' => 'date',
-        'payroll_date' => 'date',
-        'date_liquidated' => 'datetime',
-        'date_released' => 'datetime',
+        'activity_date'                   => 'date',
+        'proposed_due_date'               => 'date',
+        'due_date'                        => 'date',
+        'cut_off_date'                    => 'date',
+        'payroll_date'                    => 'date',
+        'date_liquidated'                 => 'datetime',
+        'date_released'                   => 'datetime',
     ];
 
     public function registerMediaCollections(): void
@@ -77,7 +81,7 @@ class PaymentProcess extends Model implements HasMedia
 
     public function forCashRelease(): HasOne
     {
-        return $this->hasOne(ForCashRelease::class);
+        return $this->hasOne(ForCashRelease::class, 'cash_request_id');
     }
 
     public function activityLists(): HasMany
@@ -93,6 +97,16 @@ class PaymentProcess extends Model implements HasMedia
     public function disbursementAddedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'disbursement_added_by');
+    }
+
+    public function isCheckDisbursement()
+    {
+        return $this->disbursement_type === DisbursementType::CHECK->value;
+    }
+
+    public function isPayrollDisbursement()
+    {
+        return $this->disbursement_type === DisbursementType::PAYROLL->value;
     }
 
     public function getActivitylogOptions(): LogOptions
