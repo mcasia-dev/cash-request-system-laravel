@@ -111,9 +111,9 @@ class Register extends BaseRegister
         return TextInput::make('contact_number')
             ->label('Mobile Number (+63)')
             ->tel()
-            ->rules(['required'])
-            ->placeholder('9123456789')
-            ->maxLength(10)
+            ->rules(['required', 'regex:/^(09\d{9}|\+639\d{9}|639\d{9})$/'])
+            ->placeholder('09123456789')
+            ->maxLength(11)
             ->unique($this->getUserModel());
     }
 

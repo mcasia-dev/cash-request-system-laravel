@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Filament\Resources\ForApprovalRequestResource\Pages;
 
 use App\Filament\Resources\ForApprovalRequestResource;
@@ -16,6 +17,7 @@ use Filament\Infolists\Infolist;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Support\Enums\Alignment;
 use Illuminate\Support\Facades\Auth;
+use Njxqlus\Filament\Components\Infolists\LightboxSpatieMediaLibraryImageEntry;
 
 class ViewForApprovalRequest extends ViewRecord
 {
@@ -77,12 +79,12 @@ class ViewForApprovalRequest extends ViewRecord
                         TextEntry::make('status')
                             ->badge()
                             ->color(fn(string $state): string => match ($state) {
-                                'pending'    => 'warning',
-                                'approved'   => 'success',
-                                'released'   => 'info',
+                                'pending' => 'warning',
+                                'approved' => 'success',
+                                'released' => 'info',
                                 'liquidated' => 'primary',
-                                'rejected'   => 'danger',
-                                default      => 'gray',
+                                'rejected' => 'danger',
+                                default => 'gray',
                             }),
 
                         TextEntry::make('status_remarks')
@@ -139,8 +141,8 @@ class ViewForApprovalRequest extends ViewRecord
                                     ->label('Requesting Amount')
                                     ->money('PHP'),
 
-                                SpatieMediaLibraryImageEntry::make('attachment')
-                                    ->label('Attached File/Image')
+                                LightboxSpatieMediaLibraryImageEntry::make('attachment')
+                                    ->label('Attached File/Images')
                                     ->collection('attachments')
                                     ->columnSpanFull(),
 
@@ -149,8 +151,8 @@ class ViewForApprovalRequest extends ViewRecord
                                     ->badge()
                                     ->color(fn(string $state): string => match ($state) {
                                         'rejected' => 'danger',
-                                        'pending'  => 'warning',
-                                        default    => 'gray',
+                                        'pending' => 'warning',
+                                        default => 'gray',
                                     }),
 
                                 TextEntry::make('rejection_remarks')
@@ -173,7 +175,7 @@ class ViewForApprovalRequest extends ViewRecord
         return function ($record): bool {
             $user = Auth::user();
 
-            if (! $user) {
+            if (!$user) {
                 return false;
             }
 

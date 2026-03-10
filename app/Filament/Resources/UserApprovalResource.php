@@ -7,6 +7,7 @@ use App\Enums\User\Status;
 use App\Filament\Resources\UserApprovalResource\Pages;
 use App\Jobs\ApproveUserRegistrationJob;
 use App\Jobs\RejectUserRegistrationJob;
+use App\Models\ForApprovalUser;
 use App\Models\User;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Form;
@@ -24,7 +25,7 @@ use Illuminate\Support\Facades\Auth;
 
 class UserApprovalResource extends Resource
 {
-    protected static ?string $model = User::class;
+    protected static ?string $model = ForApprovalUser::class;
     protected static ?string $navigationGroup = 'Administrator';
     protected static ?string $slug = 'user-request-approval';
     protected static ?string $navigationLabel = 'User Request (For Approval)';
@@ -32,10 +33,10 @@ class UserApprovalResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-shield-check';
     protected ?string $pollingInterval = '5s';
 
+
     public static function getNavigationBadge(): ?string
     {
-        $query = static::getModel()::query()
-            ->where('status', Status::PENDING->value);
+        $query = static::getModel()::query();
 
         if (!Auth::user()->hasAnyRole(['super_admin', 'Super Admin'])) {
             $query->where('department_id', Auth::user()->department_id);
@@ -56,8 +57,7 @@ class UserApprovalResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery()
-            ->where('status', Status::PENDING->value);
+        $query = parent::getEloquentQuery();
 
         if (!Auth::user()->hasAnyRole(['super_admin', 'Super Admin'])) {
             $query->where('department_id', Auth::user()->department_id);

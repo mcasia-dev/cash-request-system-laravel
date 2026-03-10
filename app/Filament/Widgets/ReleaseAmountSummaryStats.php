@@ -3,19 +3,43 @@
 namespace App\Filament\Widgets;
 
 use App\Enums\CashRequest\Status;
+use App\Filament\Widgets\Concerns\HasDashboardReportLinks;
 use App\Models\ForCashRelease;
 use Leandrocfe\FilamentApexCharts\Widgets\ApexChartWidget;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Auth;
 
 class ReleaseAmountSummaryStats extends ApexChartWidget
 {
+    use HasDashboardReportLinks;
+
     protected static ?string $chartId = 'releaseAmountSummaryStatsChart';
 
     protected static ?string $heading = 'Total Amount Released';
-    protected int|string|array $columnSpan = ['default' => 'full', 'md' => 1];
     protected static ?int $contentHeight = 320;
+    protected int|string|array $columnSpan = ['default' => 'full', 'md' => 1];
     protected static ?int $sort = 3;
+
+    public static function canView(): bool
+    {
+        $user = Auth::user();
+
+        if (!$user) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        return $user->hasRole('treasury_staff') || $user->hasRole('treasury_manager');
+    }
+
+    protected function getSubheading(): null|string|Htmlable|\Illuminate\Contracts\View\View
+    {
+        return $this->renderReportLinks('release-amount-summary');
+    }
 
     protected function getOptions(): array
     {
@@ -23,11 +47,11 @@ class ReleaseAmountSummaryStats extends ApexChartWidget
 
         $liquidatedAmount = (float)(clone $baseQuery)
             ->whereHas('cashRequest', fn(Builder $query): Builder => $query->where('status', Status::LIQUIDATED->value))
-            ->sum('requesting_amount');
+            ->sum('cash_requests.requesting_amount');
 
         $unliquidatedAmount = (float)(clone $baseQuery)
             ->whereHas('cashRequest', fn(Builder $query): Builder => $query->where('status', Status::RELEASED->value))
-            ->sum('requesting_amount');
+            ->sum('cash_requests.requesting_amount');
 
         $totalReleasedAmount = $liquidatedAmount + $unliquidatedAmount;
 
@@ -65,7 +89,7 @@ class ReleaseAmountSummaryStats extends ApexChartWidget
                     ],
                 ],
             ],
-            'subtitle' => [
+            'title' => [
                 'text' => 'Total: ' . $this->formatCurrency($totalReleasedAmount),
                 'align' => 'left',
                 'style' => [
@@ -129,7 +153,7 @@ class ReleaseAmountSummaryStats extends ApexChartWidget
             return false;
         }
 
-        return $user->isSuperAdmin() || $user->hasRole('admin');
+        return $user->isSuperAdmin() || $user->hasRole('treasury_manager');
     }
 
     private function formatCurrency(float|int|string|null $amount): string

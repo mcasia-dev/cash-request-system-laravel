@@ -54,11 +54,14 @@ class ForApprovalRequest extends Model implements HasMedia
         'disbursement_added_by',
         'is_override',
         'is_approved_by_treasury_manager',
+        'is_approved_the_authority_to_deduct',
+        'dv_number'
     ];
 
     protected $casts = [
         'is_override'                     => 'boolean',
         'is_approved_by_treasury_manager' => 'boolean',
+        'is_approved_the_authority_to_deduct' => 'boolean',
         'activity_date'                   => 'date',
         'proposed_due_date'               => 'date',
         'due_date'                        => 'date',

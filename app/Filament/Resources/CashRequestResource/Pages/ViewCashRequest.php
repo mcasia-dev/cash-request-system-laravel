@@ -1,9 +1,11 @@
 <?php
+
 namespace App\Filament\Resources\CashRequestResource\Pages;
 
 use App\Enums\CashRequest\Status;
 use App\Filament\Resources\CashRequestResource;
 use App\Models\LiquidationReceipt;
+use App\Models\PaymentProcess;
 use Carbon\Carbon;
 use Facades\App\Services\CashRequest\CashRequestService;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -12,6 +14,7 @@ use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
 use Filament\Resources\Pages\ViewRecord;
+use Njxqlus\Filament\Components\Infolists\LightboxSpatieMediaLibraryImageEntry;
 
 class ViewCashRequest extends ViewRecord
 {
@@ -44,24 +47,24 @@ class ViewCashRequest extends ViewRecord
                         TextEntry::make('status')
                             ->badge()
                             ->color(fn(string $state): string => match ($state) {
-                                'pending'    => 'warning',
-                                'approved'   => 'success',
-                                'released'   => 'info',
+                                'pending' => 'warning',
+                                'approved' => 'success',
+                                'released' => 'info',
                                 'liquidated' => 'primary',
-                                'rejected'   => 'danger',
-                                default      => 'gray',
+                                'rejected' => 'danger',
+                                default => 'gray',
                             }),
 
                         TextEntry::make('status_remarks')
                             ->label('Status Remarks')
                             ->badge()
                             ->color(fn($record): string => match ($record->status) {
-                                'pending'    => 'warning',
-                                'approved'   => 'success',
-                                'released'   => 'info',
+                                'pending' => 'warning',
+                                'approved' => 'success',
+                                'released' => 'info',
                                 'liquidated' => 'primary',
-                                'rejected'   => 'danger',
-                                default      => 'gray',
+                                'rejected' => 'danger',
+                                default => 'gray',
                             }),
 
                         TextEntry::make('reason_for_rejection')
@@ -97,8 +100,8 @@ class ViewCashRequest extends ViewRecord
                                     ->label('Requesting Amount')
                                     ->money('PHP'),
 
-                                SpatieMediaLibraryImageEntry::make('attachment')
-                                    ->label('Attached File/Image')
+                                LightboxSpatieMediaLibraryImageEntry::make('attachment')
+                                    ->label('Attached File/Images')
                                     ->collection('attachments')
                                     ->columnSpanFull(),
 
@@ -108,8 +111,8 @@ class ViewCashRequest extends ViewRecord
                                     ->color(fn(string $state): string => match ($state) {
                                         'rejected' => 'danger',
                                         'approved' => 'success',
-                                        'pending'  => 'warning',
-                                        default    => 'gray',
+                                        'pending' => 'warning',
+                                        default => 'gray',
                                     }),
 
                                 TextEntry::make('rejection_remarks')
@@ -120,44 +123,44 @@ class ViewCashRequest extends ViewRecord
                             ->columns(3),
                     ]),
 
-                Section::make('Payment Details')
-                    ->collapsible()
-                    ->collapsed()
-                    ->schema([
-                        TextEntry::make('nature_of_payment')
-                            ->label('Payment Type'),
-
-                        TextEntry::make('payee'),
-
-                        TextEntry::make('payment_to')
-                            ->label('Payment To'),
-
-                        TextEntry::make('bank_name')
-                            ->label('Bank'),
-
-                        TextEntry::make('bank_account_no')
-                            ->label('Account Number'),
-
-                        TextEntry::make('account_type')
-                            ->label('Account Type'),
-
-                        TextEntry::make('cc_holder_name')
-                            ->label('Card Holder Name')
-                            ->visible(fn($record) => filled($record->cc_holder_name)),
-
-                        TextEntry::make('cc_number')
-                            ->label('Card Number')
-                            ->visible(fn($record) => filled($record->cc_number)),
-
-                        TextEntry::make('cc_type')
-                            ->label('Card Type')
-                            ->visible(fn($record) => filled($record->cc_type)),
-
-                        TextEntry::make('cc_expiration')
-                            ->label('Card Expiration')
-                            ->visible(fn($record) => filled($record->cc_expiration)),
-                    ])
-                    ->columns(2),
+//                Section::make('Payment Details')
+//                    ->collapsible()
+//                    ->collapsed()
+//                    ->schema([
+//                        TextEntry::make('nature_of_payment')
+//                            ->label('Payment Type'),
+//
+//                        TextEntry::make('payee'),
+//
+//                        TextEntry::make('payment_to')
+//                            ->label('Payment To'),
+//
+//                        TextEntry::make('bank_name')
+//                            ->label('Bank'),
+//
+//                        TextEntry::make('bank_account_no')
+//                            ->label('Account Number'),
+//
+//                        TextEntry::make('account_type')
+//                            ->label('Account Type'),
+//
+//                        TextEntry::make('cc_holder_name')
+//                            ->label('Card Holder Name')
+//                            ->visible(fn($record) => filled($record->cc_holder_name)),
+//
+//                        TextEntry::make('cc_number')
+//                            ->label('Card Number')
+//                            ->visible(fn($record) => filled($record->cc_number)),
+//
+//                        TextEntry::make('cc_type')
+//                            ->label('Card Type')
+//                            ->visible(fn($record) => filled($record->cc_type)),
+//
+//                        TextEntry::make('cc_expiration')
+//                            ->label('Card Expiration')
+//                            ->visible(fn($record) => filled($record->cc_expiration)),
+//                    ])
+//                    ->columns(2),
 
                 Section::make('Approval and Processing')
                     ->collapsible()
@@ -166,15 +169,15 @@ class ViewCashRequest extends ViewRecord
                         TextEntry::make('approved_by')
                             ->label('Approved By')
                             ->state(function ($record) {
-                                $activity = CashRequestService::getLatestActivity($record, 'approved');
+                                $activity = CashRequestService::getLatestActivity(PaymentProcess::find($record->id), 'approved');
 
                                 return $activity?->causer?->name ?? 'N/A';
                             }),
 
                         TextEntry::make('approved_at')
                             ->label('Approved At')
-                            ->state(fn($record) => CashRequestService::getLatestActivity($record, 'approved')?->created_at)
-                            ->dateTime(),
+                            ->state(fn($record) => CashRequestService::getLatestActivity(PaymentProcess::find($record->id), 'approved')?->created_at)
+                            ->dateTime('F d, Y - h:i A'),
 
                         TextEntry::make('processed_by')
                             ->label('Processed By')
@@ -183,7 +186,7 @@ class ViewCashRequest extends ViewRecord
                         TextEntry::make('date_processed')
                             ->label('Date Processed')
                             ->state(fn($record) => $record->forCashRelease?->date_processed)
-                            ->dateTime(),
+                            ->dateTime('F d, Y - h:i A'),
                     ])
                     ->columns(2),
 
@@ -191,6 +194,15 @@ class ViewCashRequest extends ViewRecord
                     ->collapsible()
                     ->collapsed()
                     ->schema([
+                        TextEntry::make('forCashRelease.releasing_date')
+                            ->label('Releasing Date')
+                            ->formatStateUsing(function ($record) {
+                                return "{$record->forCashRelease?->releasing_date?->format('F d, Y')} "
+                                    . Carbon::parse($record->forCashRelease?->releasing_time_from)?->format('h:i A')
+                                    . ' - '
+                                    . Carbon::parse($record->forCashRelease?->releasing_time_to)?->format('h:i A');
+                            }),
+
                         TextEntry::make('due_date')
                             ->label('Liquidation Due Date')
                             ->date(),
@@ -199,17 +211,7 @@ class ViewCashRequest extends ViewRecord
                             ->label('Date Released')
                             ->date(),
 
-                            TextEntry::make('forCashRelease.releasing_date')
-                            ->label('Releasing Date')
-                            ->formatStateUsing(function ($record) {
-                                info($record);
-                                return "{$record->forCashRelease?->releasing_date?->format('F d, Y')} "
-                                    . Carbon::parse($record->forCashRelease?->releasing_time_from)?->format('h:i A')
-                                    . ' - '
-                                    . Carbon::parse($record->forCashRelease?->releasing_time_to)?->format('h:i A');
-                            }),
-
-                            TextEntry::make('date_liquidated')
+                        TextEntry::make('date_liquidated')
                             ->label('Date Liquidated')
                             ->date(),
                     ])
@@ -245,17 +247,7 @@ class ViewCashRequest extends ViewRecord
                         TextEntry::make('liquidated_at')
                             ->label('Liquidated At')
                             ->state(fn($record) => CashRequestService::getLatestActivity($record, 'liquidated')?->created_at)
-                            ->dateTime(),
-
-                        TextEntry::make('receipt_count')
-                            ->label('Receipt Count')
-                            ->state(function ($record) {
-                                $liquidation = CashRequestService::getLiquidationFor($record);
-
-                                return $liquidation
-                                    ? LiquidationReceipt::where('liquidation_id', $liquidation->id)->count()
-                                    : 0;
-                            }),
+                            ->dateTime('F d, Y - h:i A'),
 
                         TextEntry::make('total_receipts')
                             ->label('Total Receipts')
@@ -275,35 +267,6 @@ class ViewCashRequest extends ViewRecord
                     ])
                     ->columns(3)
                     ->visible(fn($record) => CashRequestService::getLiquidationFor($record) !== null),
-
-                Section::make('Additional Information')
-                    ->collapsible()
-                    ->collapsed()
-                    ->schema([
-                        TextEntry::make('status_remarks')
-                            ->label('Status Remarks')
-                            ->visible(fn($record) => $record->status != Status::LIQUIDATED->value)
-                            ->columnSpanFull(),
-
-                        TextEntry::make('reason_for_rejection')
-                            ->label('Reason for Rejection')
-                            ->visible(fn($record) => filled($record->reason_for_rejection))
-                            ->columnSpanFull(),
-
-                        TextEntry::make('reason_for_cancelling')
-                            ->label('Reason for Cancelling')
-                            ->visible(fn($record) => filled($record->reason_for_cancelling))
-                            ->columnSpanFull(),
-
-                        TextEntry::make('created_at')
-                            ->label('Created At')
-                            ->dateTime(),
-
-                        TextEntry::make('updated_at')
-                            ->label('Last Updated')
-                            ->dateTime(),
-                    ])
-                    ->columns(2),
             ]);
     }
 }

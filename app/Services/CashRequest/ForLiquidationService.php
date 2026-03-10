@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Services\CashRequest;
 
 use App\Enums\CashRequest\Status;
@@ -21,16 +22,16 @@ class ForLiquidationService
     {
         static $cache = [];
 
-        if (! array_key_exists($record->id, $cache)) {
+        if (!array_key_exists($record->id, $cache)) {
             $cache[$record->id] = LiquidationReceipt::query()
                 ->where('liquidation_id', $record->id)
                 ->get()
                 ->flatMap(function (LiquidationReceipt $receipt) {
                     return $receipt->getMedia('liquidation-receipts')->map(fn($media) => [
-                        'url'            => $media->getUrl(),
-                        'amount'         => $receipt->receipt_amount,
+                        'url' => $media->getUrl(),
+                        'amount' => $receipt->receipt_amount,
                         'receipt_number' => $receipt->receipt_number,
-                        'remarks'        => $receipt->remarks,
+                        'remarks' => $receipt->remarks,
                     ]);
                 })
                 ->filter()
@@ -57,12 +58,12 @@ class ForLiquidationService
             $html = '<div style="display:flex;flex-wrap:wrap;gap:10px;">';
 
             foreach ($receipts as $receipt) {
-                $safeUrl       = e($receipt['url']);
-                $amount        = number_format((float) ($receipt['amount'] ?? 0), 2);
+                $safeUrl = e($receipt['url']);
+                $amount = number_format((float)($receipt['amount'] ?? 0), 2);
                 $receiptNumber = filled($receipt['receipt_number']) ? e($receipt['receipt_number']) : 'N/A';
-                $remarks       = filled($receipt['remarks']) ? e($receipt['remarks']) : 'N/A';
+                $remarks = filled($receipt['remarks']) ? e($receipt['remarks']) : 'N/A';
 
-                $html .= '<div style="width:220px;border:1px solid #e5e7eb;border-radius:8px;padding:10px;background:#fff;">'
+                $html .= '<div style="width:220px;border:1px solid #e5e7eb;border-radius:8px;padding:10px;background:#fff;color:#111827;">'
                     . '<a href="'
                     . $safeUrl
                     . '" target="_blank" rel="noopener noreferrer">'
@@ -87,7 +88,15 @@ class ForLiquidationService
     public function canProcess(ForLiquidation $record): bool
     {
         return $record->cashRequest->status === Status::RELEASED->value
-        && $record->cashRequest->status_remarks === StatusRemarks::LIQUIDATION_RECEIPT_SUBMITTED->value && $record->is_override;
+            && $record->cashRequest->status_remarks === StatusRemarks::LIQUIDATION_RECEIPT_SUBMITTED->value && $record->is_override;
+    }
+
+    public function canApprove($record): bool
+    {
+        return $record->cashRequest->status === Status::RELEASED->value
+            && $record->cashRequest->status_remarks === StatusRemarks::LIQUIDATION_RECEIPT_SUBMITTED->value
+            && $record->is_override
+            && !$record->is_approved_by_treasury_manager;
     }
 
     public function liquidateRequest(ForLiquidation $record): void
@@ -95,8 +104,8 @@ class ForLiquidationService
         $user = Auth::user();
 
         $record->cashRequest->update([
-            'status'          => Status::LIQUIDATED->value,
-            'status_remarks'  => StatusRemarks::LIQUIDATED->value,
+            'status' => Status::LIQUIDATED->value,
+            'status_remarks' => StatusRemarks::LIQUIDATED->value,
             'date_liquidated' => Carbon::now(),
         ]);
 
@@ -105,12 +114,12 @@ class ForLiquidationService
             ->performedOn($record->cashRequest ?? $record)
             ->event('liquidated')
             ->withProperties([
-                'request_no'        => $record->cashRequest->request_no,
-                'activity_name'     => $record->cashRequest->activity_name,
+                'request_no' => $record->cashRequest->request_no,
+                'activity_name' => $record->cashRequest->activity_name,
                 'requesting_amount' => $record->cashRequest->requesting_amount,
-                'previous_status'   => Status::RELEASED->value,
-                'new_status'        => Status::LIQUIDATED->value,
-                'status_remarks'    => StatusRemarks::LIQUIDATED->value,
+                'previous_status' => Status::RELEASED->value,
+                'new_status' => Status::LIQUIDATED->value,
+                'status_remarks' => StatusRemarks::LIQUIDATED->value,
             ])
             ->log("Cash request {$record->cashRequest->request_no} was liquidated by {$user->name} ({$user->position})");
 
@@ -129,8 +138,8 @@ class ForLiquidationService
         ]);
 
         $record->cashRequest->update([
-            'status'               => Status::RELEASED->value,
-            'status_remarks'       => StatusRemarks::FOR_LIQUIDATION->value,
+            'status' => Status::RELEASED->value,
+            'status_remarks' => StatusRemarks::FOR_LIQUIDATION->value,
             'reason_for_rejection' => $data['rejection_remarks'],
         ]);
 
@@ -139,12 +148,12 @@ class ForLiquidationService
             ->performedOn($record->cashRequest ?? $record)
             ->event('rejected')
             ->withProperties([
-                'request_no'           => $record->cashRequest->request_no,
-                'activity_name'        => $record->cashRequest->activity_name,
-                'requesting_amount'    => $record->cashRequest->requesting_amount,
-                'previous_status'      => Status::RELEASED->value,
-                'new_status'           => Status::RELEASED->value,
-                'status_remarks'       => StatusRemarks::FOR_LIQUIDATION->value,
+                'request_no' => $record->cashRequest->request_no,
+                'activity_name' => $record->cashRequest->activity_name,
+                'requesting_amount' => $record->cashRequest->requesting_amount,
+                'previous_status' => Status::RELEASED->value,
+                'new_status' => Status::RELEASED->value,
+                'status_remarks' => StatusRemarks::FOR_LIQUIDATION->value,
                 'reason_for_rejection' => $data['rejection_remarks'],
             ])
             ->log("Liquidation receipts for cash request {$record->cashRequest->request_no} were rejected by {$user->name} ({$user->position})");
@@ -157,17 +166,17 @@ class ForLiquidationService
 
     public function overrideRequest(ForLiquidation $record, array $data): void
     {
-        $user                                                                    = Auth::user();
+        $user = Auth::user();
         [$totalReceipts, $requestingAmount, $amountToReturn, $amountToReimburse] = $this->getLiquidationTotals($record);
 
         // Update the record status and save rejection reason
         $record->update([
-            'is_override'      => true,
-            'remarks'          => $data['override_remarks'] ?? $record->remarks,
-            'receipt_amount'   => $totalReceipts,
+            'is_override' => true,
+            'remarks' => $data['override_remarks'] ?? $record->remarks,
+            'receipt_amount' => $totalReceipts,
             'total_liquidated' => $totalReceipts,
-            'missing_amount'   => $amountToReturn,
-            'total_change'     => $amountToReimburse,
+            'missing_amount' => $amountToReturn,
+            'total_change' => $amountToReimburse,
         ]);
 
         // Log activity
@@ -176,12 +185,12 @@ class ForLiquidationService
             ->performedOn($record)
             ->event('override')
             ->withProperties([
-                'request_no'        => $record->request_no,
-                'activity_name'     => $record->activity_name,
+                'request_no' => $record->request_no,
+                'activity_name' => $record->activity_name,
                 'requesting_amount' => $record->requesting_amount,
-                'previous_status'   => Status::PENDING->value,
-                'new_status'        => Status::IN_PROGRESS->value,
-                'status_remarks'    => $record->status_remarks,
+                'previous_status' => Status::PENDING->value,
+                'new_status' => Status::IN_PROGRESS->value,
+                'status_remarks' => $record->status_remarks,
             ])
             ->log("Cash request {$record->request_no} was override by {$user->name} ({$user->position})");
 
@@ -193,14 +202,14 @@ class ForLiquidationService
 
     public function getLiquidationTotals(ForLiquidation $record): array
     {
-        $totalReceipts = (float) LiquidationReceipt::query()
+        $totalReceipts = (float)LiquidationReceipt::query()
             ->where('liquidation_id', $record->id)
             ->sum('receipt_amount');
-        $requestingAmount = (float) ($record->cashRequest?->requesting_amount ?? 0);
-        $diff             = round($totalReceipts - $requestingAmount, 2);
+        $requestingAmount = (float)($record->cashRequest?->requesting_amount ?? 0);
+        $diff = round($totalReceipts - $requestingAmount, 2);
 
         $amountToReimburse = $diff > 0 ? $diff : 0.0;
-        $amountToReturn    = $diff < 0 ? abs($diff) : 0.0;
+        $amountToReturn = $diff < 0 ? abs($diff) : 0.0;
 
         return [$totalReceipts, $requestingAmount, $amountToReturn, $amountToReimburse, $diff];
     }
@@ -213,7 +222,7 @@ class ForLiquidationService
 
         $user = Auth::user();
 
-        if (! $user) {
+        if (!$user) {
             return false;
         }
 
@@ -232,7 +241,7 @@ class ForLiquidationService
     {
         $user = Auth::user();
 
-        if (! $user) {
+        if (!$user) {
             return false;
         }
 
@@ -249,17 +258,17 @@ class ForLiquidationService
     {
         DB::transaction(function () use ($record, $data): void {
             $record->update([
-                'status'            => 'rejected',
+                'status' => 'rejected',
                 'rejection_remarks' => $data['rejection_remarks'],
             ]);
 
             $cashRequest = $record->cashRequest ?? null;
-            $total       = $cashRequest->activityLists()
+            $total = $cashRequest->activityLists()
                 ->where('status', '!=', 'rejected')
                 ->sum('requesting_amount');
 
             $cashRequest->update([
-                'requesting_amount' => (float) $total,
+                'requesting_amount' => (float)$total,
             ]);
 
             $hasRemainingActivities = $cashRequest->activityLists()
@@ -269,12 +278,12 @@ class ForLiquidationService
                 })
                 ->exists();
 
-            if (! $hasRemainingActivities) {
+            if (!$hasRemainingActivities) {
                 $statusRemarks = app(StatusRemarkResolver::class)->rejectByPermissions(Auth::user(), 'treasury');
 
                 $cashRequest->update([
-                    'status'               => Status::REJECTED->value,
-                    'status_remarks'       => $statusRemarks,
+                    'status' => Status::REJECTED->value,
+                    'status_remarks' => $statusRemarks,
                     'reason_for_rejection' => $data['rejection_remarks'],
                 ]);
             }
@@ -282,6 +291,34 @@ class ForLiquidationService
 
         Notification::make()
             ->title('Activity rejected')
+            ->success()
+            ->send();
+    }
+
+    public function approveForLiquidationRequest($record): void
+    {
+        $user = Auth::user();
+
+        $record->update([
+            'is_approved_by_treasury_manager' => true,
+        ]);
+
+        activity()
+            ->causedBy($user)
+            ->performedOn($record->cashRequest ?? $record)
+            ->event('approved-for-liquidation')
+            ->withProperties([
+                'request_no' => $record->cashRequest->request_no,
+                'activity_name' => $record->cashRequest->activity_name,
+                'requesting_amount' => $record->cashRequest->requesting_amount,
+                'previous_status' => $record->cashRequest->status,
+                'new_status' => $record->cashRequest->status,
+                'status_remarks' => $record->status_remarks,
+            ])
+            ->log("Cash request {$record->cashRequest->request_no} was approved for liquidation by {$user->name} ({$user->position})");
+
+        Notification::make()
+            ->title('Approved')
             ->success()
             ->send();
     }

@@ -345,6 +345,7 @@ class PaymentProcessService
         return [
             'check_branch_name' => $data['check_branch_name'] ?? null,
             'check_no'          => $data['check_no'] ?? null,
+            'dv_number'         => $data['dv_number'] ?? null,
         ];
     }
 

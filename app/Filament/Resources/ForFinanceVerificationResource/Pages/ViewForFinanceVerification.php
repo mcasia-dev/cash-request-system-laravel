@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Filament\Resources\ForFinanceVerificationResource\Pages;
 
 use App\Filament\Resources\ForFinanceVerificationResource;
@@ -15,6 +16,7 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Support\Enums\Alignment;
+use Njxqlus\Filament\Components\Infolists\LightboxSpatieMediaLibraryImageEntry;
 
 class ViewForFinanceVerification extends ViewRecord
 {
@@ -84,12 +86,12 @@ class ViewForFinanceVerification extends ViewRecord
                         TextEntry::make('status')
                             ->badge()
                             ->color(fn(string $state): string => match ($state) {
-                                'pending'    => 'warning',
-                                'approved'   => 'success',
-                                'released'   => 'info',
+                                'pending' => 'warning',
+                                'approved' => 'success',
+                                'released' => 'info',
                                 'liquidated' => 'primary',
-                                'rejected'   => 'danger',
-                                default      => 'gray',
+                                'rejected' => 'danger',
+                                default => 'gray',
                             }),
                     ])
                     ->columns(3),
@@ -100,8 +102,8 @@ class ViewForFinanceVerification extends ViewRecord
                         RepeatableEntry::make('activityLists')
                             ->label('')
                             ->getStateUsing(fn($record) => $record->activityLists()
-                                    ->where('status', '!=', 'rejected')
-                                    ->get())
+                                ->where('status', '!=', 'rejected')
+                                ->get())
                             ->schema([
                                 Actions::make([
                                     InfolistAction::make('rejectActivity')
@@ -146,8 +148,8 @@ class ViewForFinanceVerification extends ViewRecord
                                     ->label('Requesting Amount')
                                     ->money('PHP'),
 
-                                SpatieMediaLibraryImageEntry::make('attachment')
-                                    ->label('Attached File/Image')
+                                LightboxSpatieMediaLibraryImageEntry::make('attachment')
+                                    ->label('Attached File/Images')
                                     ->collection('attachments')
                                     ->columnSpanFull(),
 
@@ -156,8 +158,8 @@ class ViewForFinanceVerification extends ViewRecord
                                     ->badge()
                                     ->color(fn(string $state): string => match ($state) {
                                         'rejected' => 'danger',
-                                        'pending'  => 'warning',
-                                        default    => 'gray',
+                                        'pending' => 'warning',
+                                        default => 'gray',
                                     }),
 
                                 TextEntry::make('rejection_remarks')

@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use Filament\Tables;
 use Filament\Forms\Form;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use App\Models\ForCashRelease;
 use App\Models\ForLiquidation;
@@ -11,6 +12,7 @@ use Filament\Resources\Resource;
 use App\Enums\CashRequest\Status;
 use Filament\Tables\Columns\TextColumn;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
 use App\Filament\Resources\ForLiquidationResource\Pages;
 
 class ForLiquidationResource extends Resource
@@ -116,7 +118,23 @@ class ForLiquidationResource extends Resource
                     ->searchable(),
             ])
             ->filters([
-                //
+                SelectFilter::make('status')
+                    ->options([
+                        Status::APPROVED->value => 'Approved',
+                        Status::REJECTED->value => 'Rejected',
+                        Status::CANCELLED->value => 'Cancelled',
+                        Status::LIQUIDATED->value => 'Liquidated',
+                        Status::RELEASED->value => 'Released',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        $value = $data['value'] ?? null;
+
+                        if (blank($value)) {
+                            return $query;
+                        }
+
+                        return $query->whereHas('cashRequest', fn(Builder $cashRequestQuery) => $cashRequestQuery->where('status', $value));
+                    }),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),

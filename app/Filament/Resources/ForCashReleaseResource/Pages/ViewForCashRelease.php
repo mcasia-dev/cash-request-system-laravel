@@ -1,10 +1,12 @@
 <?php
+
 namespace App\Filament\Resources\ForCashReleaseResource\Pages;
 
 use App\Enums\CashRequest\Status;
 use App\Filament\Resources\ForCashReleaseResource;
 use App\Models\CashRequest;
 use App\Models\ForCashRelease;
+use Carbon\Carbon;
 use Facades\App\Services\CashRequest\ForCashReleaseService;
 use Filament\Actions\Action;
 use Filament\Actions\StaticAction;
@@ -20,6 +22,7 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Support\Enums\Alignment;
+use Njxqlus\Filament\Components\Infolists\LightboxSpatieMediaLibraryImageEntry;
 
 class ViewForCashRelease extends ViewRecord
 {
@@ -41,7 +44,7 @@ class ViewForCashRelease extends ViewRecord
                     'wire:loading.attr' => 'disabled',
                 ])
                 ->visible(fn($record) => ForCashReleaseService::getStatus($record))
-                ->disabled(fn($record) => (int) ($record->update_releasing_date_attempt ?? 0) >= 3),
+                ->disabled(fn($record) => (int)($record->update_releasing_date_attempt ?? 0) >= 3),
 
             // APPROVED BUTTON
             Action::make('Release')
@@ -106,12 +109,12 @@ class ViewForCashRelease extends ViewRecord
                             ->label('Status')
                             ->badge()
                             ->color(fn(string $state): string => match ($state) {
-                                'pending'    => 'warning',
-                                'approved'   => 'success',
-                                'released'   => 'info',
+                                'pending' => 'warning',
+                                'approved' => 'success',
+                                'released' => 'info',
                                 'liquidated' => 'primary',
-                                'rejected'   => 'danger',
-                                default      => 'gray',
+                                'rejected' => 'danger',
+                                default => 'gray',
                             }),
 
                         TextEntry::make('cashRequest.reason_for_rejection')
@@ -127,14 +130,14 @@ class ViewForCashRelease extends ViewRecord
                 Section::make('Activity Information')
                     ->collapsible()
                     ->getStateUsing(fn($record) => $record->activityLists()
-                            ->where('status', '!=', 'rejected')
-                            ->get())
+                        ->where('status', '!=', 'rejected')
+                        ->get())
                     ->schema([
                         RepeatableEntry::make('cashRequest.activityLists')
                             ->label('')
                             ->getStateUsing(fn($record) => $record->cashRequest->activityLists()
-                                    ->where('status', '!=', 'rejected')
-                                    ->get())
+                                ->where('status', '!=', 'rejected')
+                                ->get())
                             ->schema([
                                 Actions::make([
                                     InfolistAction::make('rejectActivity')
@@ -182,8 +185,8 @@ class ViewForCashRelease extends ViewRecord
                                     ->label('Requesting Amount')
                                     ->money('PHP'),
 
-                                SpatieMediaLibraryImageEntry::make('attachment')
-                                    ->label('Attached File/Image')
+                                LightboxSpatieMediaLibraryImageEntry::make('attachment')
+                                    ->label('Attached File/Images')
                                     ->collection('attachments')
                                     ->columnSpanFull(),
 
@@ -192,8 +195,8 @@ class ViewForCashRelease extends ViewRecord
                                     ->badge()
                                     ->color(fn(string $state): string => match ($state) {
                                         'rejected' => 'danger',
-                                        'pending'  => 'warning',
-                                        default    => 'gray',
+                                        'pending' => 'warning',
+                                        default => 'gray',
                                     }),
 
                                 TextEntry::make('rejection_remarks')
@@ -254,12 +257,14 @@ class ViewForCashRelease extends ViewRecord
                     ->collapsible()
                     ->collapsed()
                     ->schema([
-                        TextEntry::make('cashRequest.created_at')
-                            ->label('Date Requested')
-                            ->date(),
                         TextEntry::make('releasing_date')
                             ->label('Releasing Date')
-                            ->date(),
+                            ->formatStateUsing(function ($record) {
+                                return "{$record?->releasing_date?->format('F d, Y')} "
+                                    . Carbon::parse($record?->releasing_time_from)?->format('h:i A')
+                                    . ' - '
+                                    . Carbon::parse($record?->releasing_time_to)?->format('h:i A');
+                            }),
 
                         TextEntry::make('cashRequest.due_date')
                             ->label('Liquidation Due Date')
@@ -272,9 +277,6 @@ class ViewForCashRelease extends ViewRecord
                         TextEntry::make('cashRequest.date_liquidated')
                             ->label('Date Liquidated')
                             ->date(),
-
-                        TextEntry::make('update_releasing_date_attempt')
-                            ->label('Releasing Date Update Attempts'),
                     ])
                     ->columns(3),
             ]);
@@ -301,6 +303,6 @@ class ViewForCashRelease extends ViewRecord
                 ->label('Releasing Time To')
                 ->required()
                 ->default(fn($record) => $record->releasing_time_to ?? now()),
-        ];  
+        ];
     }
 }

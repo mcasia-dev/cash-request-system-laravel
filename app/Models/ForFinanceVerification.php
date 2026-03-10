@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -53,18 +52,21 @@ class ForFinanceVerification extends Model implements HasMedia
         'disbursement_added_by',
         'is_override',
         'is_approved_by_treasury_manager',
+        'is_approved_the_authority_to_deduct',
+        'dv_number',
     ];
 
     protected $casts = [
-        'is_override'                     => 'boolean',
-        'is_approved_by_treasury_manager' => 'boolean',
-        'activity_date'                   => 'date',
-        'proposed_due_date'               => 'date',
-        'due_date'                        => 'date',
-        'cut_off_date'                    => 'date',
-        'payroll_date'                    => 'date',
-        'date_liquidated'                 => 'datetime',
-        'date_released'                   => 'datetime',
+        'is_override'                         => 'boolean',
+        'is_approved_by_treasury_manager'     => 'boolean',
+        'is_approved_the_authority_to_deduct' => 'boolean',
+        'activity_date'                       => 'date',
+        'proposed_due_date'                   => 'date',
+        'due_date'                            => 'date',
+        'cut_off_date'                        => 'date',
+        'payroll_date'                        => 'date',
+        'date_liquidated'                     => 'datetime',
+        'date_released'                       => 'datetime',
     ];
 
     public function registerMediaCollections(): void

@@ -38,7 +38,7 @@ Schedule::call(function () {
             $query->where('status', Status::RELEASED->value)
                 ->where('status_remarks', StatusRemarks::FOR_LIQUIDATION->value)
                 ->whereNotNull('due_date')
-                ->whereDate('due_date', '>', $today);
+                ->whereDate('due_date', '<', $today);
         })
         ->with('cashRequest:id,due_date')
         ->chunkById(200, function ($liquidations) use ($today) {
@@ -46,14 +46,14 @@ Schedule::call(function () {
             foreach ($liquidations as $liquidation) {
                 $dueDate = $liquidation->cashRequest?->due_date;
 
-                if (! $dueDate) {
+                if (!$dueDate) {
                     continue;
                 }
 
                 // $agingDays = Carbon::parse($dueDate)->diffInDays($today);
                 $agingDays = $dueDate->diffInDays($today);
 
-                if ((int) $liquidation->aging !== $agingDays) {
+                if ((int)$liquidation->aging !== $agingDays) {
                     $liquidation->update(['aging' => $agingDays]);
                 }
             }
@@ -90,10 +90,10 @@ Schedule::call(function () {
         ->with('cashRequest:id,status,status_remarks,date_released')
         ->chunkById(200, function ($releases) use ($now) {
             foreach ($releases as $release) {
-                $releaseDate   = $release->releasing_date;
+                $releaseDate = $release->releasing_date;
                 $releaseTimeTo = $release->releasing_time_to;
 
-                if (! $releaseDate || ! $releaseTimeTo) {
+                if (!$releaseDate || !$releaseTimeTo) {
                     continue;
                 }
 
@@ -103,8 +103,8 @@ Schedule::call(function () {
 
                 if ($now->greaterThan($releaseWindowEnd)) {
                     $release->cashRequest->update([
-                        'status'                => Status::CANCELLED->value,
-                        'status_remarks'        => StatusRemarks::UNCLAIMED->value,
+                        'status' => Status::CANCELLED->value,
+                        'status_remarks' => StatusRemarks::UNCLAIMED->value,
                         'reason_for_cancelling' => 'No claim was made within the scheduled release window.',
                     ]);
                 }

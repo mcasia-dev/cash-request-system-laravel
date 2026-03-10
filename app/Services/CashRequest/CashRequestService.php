@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Services\CashRequest;
 
 use App\Enums\CashRequest\Status;
@@ -14,14 +15,14 @@ class CashRequestService
     /**
      * Get the liquidation record for the given cash request, with a simple in-memory cache.
      *
-     * @param CashRequest $record
+     * @param $record
      * @return ForLiquidation|null
      */
-    public function getLiquidationFor(CashRequest $record): ?ForLiquidation
+    public function getLiquidationFor($record): ?ForLiquidation
     {
         static $cache = [];
 
-        if (! array_key_exists($record->id, $cache)) {
+        if (!array_key_exists($record->id, $cache)) {
             $cache[$record->id] = ForLiquidation::where('cash_request_id', $record->id)->first();
         }
 
@@ -31,16 +32,16 @@ class CashRequestService
     /**
      * Get the most recent activity for the given cash request and event, with a simple cache.
      *
-     * @param CashRequest $record
+     * @param $record
      * @param string $event
      * @return Activity|null
      */
-    public function getLatestActivity(CashRequest $record, string $event): ?Activity
+    public function getLatestActivity($record, string $event): ?Activity
     {
         static $cache = [];
-        $key          = $record->id . '|' . $event;
+        $key = $record->id . '|' . $event;
 
-        if (! array_key_exists($key, $cache)) {
+        if (!array_key_exists($key, $cache)) {
             $cache[$key] = Activity::query()
                 ->where('subject_type', $record::class)
                 ->where('subject_id', $record->id)
@@ -53,7 +54,7 @@ class CashRequestService
         return $cache[$key];
     }
 
-     /**
+    /**
      * Build the liquidation action closure to save receipts and update status.
      * @return \Closure
      */
@@ -68,7 +69,7 @@ class CashRequestService
                     ->first() ?? 'Liquidation submission failed.';
 
                 Notification::make()
-                    ->title((string) $message)
+                    ->title((string)$message)
                     ->danger()
                     ->send();
 
@@ -79,7 +80,7 @@ class CashRequestService
 
     public static function canCancel($record): bool
     {
-        return ($record->status === Status::PENDING->value || $record->status === Status::IN_PROGRESS->value) && ! $record->is_override && $record->status_remarks != null;
+        return ($record->status === Status::PENDING->value || $record->status === Status::IN_PROGRESS->value) && !$record->is_override && $record->status_remarks != null;
     }
 
     /**

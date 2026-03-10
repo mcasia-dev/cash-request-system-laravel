@@ -9,12 +9,27 @@ use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
 use Illuminate\Database\Eloquent\Builder;
 use Filament\Tables\Columns\TextColumn;
+use Illuminate\Support\Facades\Auth;
 
 class UnliquidatedCashRequestsTable extends BaseWidget
 {
     protected static ?string $heading = 'Unliquidated Cash Requests';
-    protected static ?int $sort = 6;
-    protected int|string|array $columnSpan = ['default' => 'full', 'md' => 1];
+    protected static ?int $sort = 5;
+    protected int|string|array $columnSpan = ['default' => 'full', 'md' => 2];
+
+    public static function canView(): bool
+    {
+        $user = Auth::user();
+
+        if (!$user) {
+            return false;
+        }
+
+        return $user->isSuperAdmin()
+            || $user->hasRole('treasury_staff')
+            || $user->hasRole('treasury_manager')
+            || $user->hasRole('department_head');
+    }
 
     public function table(Table $table): Table
     {

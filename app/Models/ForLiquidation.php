@@ -22,11 +22,13 @@ class ForLiquidation extends Model implements HasMedia, HasDisbursementType
         'total_change',
         'missing_amount',
         'aging',
-        'is_override'
+        'is_override',
+        'is_approved_by_treasury_manager'
     ];
 
     protected $casts = [
         'is_override' => 'boolean',
+        'is_approved_by_treasury_manager'
     ];
 
     public function cashRequest(): BelongsTo

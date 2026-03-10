@@ -3,20 +3,45 @@
 namespace App\Filament\Widgets;
 
 use App\Enums\NatureOfRequestEnum;
+use App\Filament\Widgets\Concerns\HasDashboardReportLinks;
 use App\Models\ForCashRelease;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Auth;
 use Leandrocfe\FilamentApexCharts\Widgets\ApexChartWidget;
 
 class MyReleaseNaturePercentageChart extends ApexChartWidget
 {
+    use HasDashboardReportLinks;
+
     protected static ?string $chartId = 'myReleaseNaturePercentageChart';
 
     protected static ?string $heading = 'Release Percentage by Type';
     protected static ?int $contentHeight = 320;
     protected int|string|array $columnSpan = ['default' => 'full', 'md' => 1];
     protected static ?int $sort = 4;
+    public ?string $filter = 'month';
+
+    public static function canView(): bool
+    {
+        $user = Auth::user();
+
+        if (!$user) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        return $user->hasRole('treasury_staff') || $user->hasRole('treasury_manager');
+    }
+
+    protected function getSubheading(): null|string|Htmlable|\Illuminate\Contracts\View\View
+    {
+        return $this->renderReportLinks('release-nature-percentage', (string) ($this->filter ?? 'month'));
+    }
 
     protected function getFilters(): ?array
     {
@@ -27,6 +52,11 @@ class MyReleaseNaturePercentageChart extends ApexChartWidget
             'quarter' => 'This Quarter',
             'year' => 'This Year',
         ];
+    }
+
+    protected function getDefaultFilter(): ?string
+    {
+        return 'month';
     }
 
     protected function getOptions(): array
@@ -83,7 +113,7 @@ class MyReleaseNaturePercentageChart extends ApexChartWidget
             return false;
         }
 
-        return $user->isSuperAdmin() || $user->hasRole('admin');
+        return $user->isSuperAdmin() || $user->hasRole('treasury_manager');
     }
 
     private function resolveDateRange(string $filter): array
@@ -158,7 +188,7 @@ class MyReleaseNaturePercentageChart extends ApexChartWidget
             'tooltip' => [
                 'theme' => 'light',
             ],
-            'subtitle' => [
+            'title' => [
                 'text' => 'Total released requests: ' . $total,
                 'align' => 'left',
                 'style' => [
