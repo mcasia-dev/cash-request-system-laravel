@@ -5,7 +5,7 @@ namespace App\Filament\Resources;
 use App\Enums\CashRequest\Status;
 use App\Enums\CashRequest\StatusRemarks;
 use App\Filament\Resources\ForCashReleaseResource\Pages;
-use App\Models\ForCashRelease;
+use App\Models\CashRequest\ForCashRelease;
 use Carbon\Carbon;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\Model;
 class ForCashReleaseResource extends Resource
 {
     protected static ?string $model = ForCashRelease::class;
-    protected static ?string $navigationGroup = 'For Approval';
+    protected static ?string $navigationGroup = 'Cash Requests';
     protected static ?string $navigationIcon = 'heroicon-o-banknotes';
     protected ?string $pollingInterval = '5s';
 

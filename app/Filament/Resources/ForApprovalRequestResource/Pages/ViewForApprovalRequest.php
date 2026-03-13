@@ -1,8 +1,10 @@
 <?php
+
 namespace App\Filament\Resources\ForApprovalRequestResource\Pages;
 
 use App\Filament\Resources\ForApprovalRequestResource;
-use App\Services\CashRequestApprovalFlowService;
+use App\Filament\Support\RendersAttachmentPreview;
+use App\Services\CashRequest\CashRequestApprovalFlowService;
 use Facades\App\Services\CashRequest\ForApprovalRequestService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
@@ -10,7 +12,6 @@ use Filament\Infolists\Components\Actions;
 use Filament\Infolists\Components\Actions\Action as InfolistAction;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section;
-use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
 use Filament\Resources\Pages\ViewRecord;
@@ -19,6 +20,8 @@ use Illuminate\Support\Facades\Auth;
 
 class ViewForApprovalRequest extends ViewRecord
 {
+    use RendersAttachmentPreview;
+
     protected static string $resource = ForApprovalRequestResource::class;
 
     /**
@@ -77,12 +80,12 @@ class ViewForApprovalRequest extends ViewRecord
                         TextEntry::make('status')
                             ->badge()
                             ->color(fn(string $state): string => match ($state) {
-                                'pending'    => 'warning',
-                                'approved'   => 'success',
-                                'released'   => 'info',
+                                'pending' => 'warning',
+                                'approved' => 'success',
+                                'released' => 'info',
                                 'liquidated' => 'primary',
-                                'rejected'   => 'danger',
-                                default      => 'gray',
+                                'rejected' => 'danger',
+                                default => 'gray',
                             }),
 
                         TextEntry::make('status_remarks')
@@ -139,9 +142,10 @@ class ViewForApprovalRequest extends ViewRecord
                                     ->label('Requesting Amount')
                                     ->money('PHP'),
 
-                                SpatieMediaLibraryImageEntry::make('attachment')
-                                    ->label('Attached File/Image')
-                                    ->collection('attachments')
+                                TextEntry::make('attachment')
+                                    ->label('Attached File/Images')
+                                    ->state(fn($record) => $this->renderAttachmentsHtml($record))
+                                    ->html()
                                     ->columnSpanFull(),
 
                                 TextEntry::make('status')
@@ -149,8 +153,8 @@ class ViewForApprovalRequest extends ViewRecord
                                     ->badge()
                                     ->color(fn(string $state): string => match ($state) {
                                         'rejected' => 'danger',
-                                        'pending'  => 'warning',
-                                        default    => 'gray',
+                                        'pending' => 'warning',
+                                        default => 'gray',
                                     }),
 
                                 TextEntry::make('rejection_remarks')
@@ -173,7 +177,7 @@ class ViewForApprovalRequest extends ViewRecord
         return function ($record): bool {
             $user = Auth::user();
 
-            if (! $user) {
+            if (!$user) {
                 return false;
             }
 

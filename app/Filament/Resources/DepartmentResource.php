@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\DepartmentResource\Pages;
@@ -14,18 +15,15 @@ use Illuminate\Support\Facades\Auth;
 
 class DepartmentResource extends Resource
 {
-    protected static ?string $model           = Department::class;
+    protected static ?string $model = Department::class;
     protected static ?string $navigationGroup = 'Administrator';
-    protected static ?string $navigationIcon  = 'heroicon-o-building-office-2';
+    protected static ?string $navigationIcon = 'heroicon-o-building-office-2';
 
     public static function form(Form $form): Form
     {
         return $form
             ->schema([
                 TextInput::make('department_name')
-                    ->required(),
-
-                TextInput::make('department_head')
                     ->required(),
 
                 Hidden::make('added_by')
@@ -39,16 +37,6 @@ class DepartmentResource extends Resource
             ->columns([
                 TextColumn::make('department_name')
                     ->label('Department Name')
-                    ->searchable()
-                    ->sortable(),
-
-                TextColumn::make('department_head')
-                    ->label('Department Head')
-                    ->searchable()
-                    ->sortable(),
-
-                TextColumn::make('added_by')
-                    ->label('Added By')
                     ->searchable()
                     ->sortable(),
 
@@ -86,9 +74,9 @@ class DepartmentResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index'  => Pages\ListDepartments::route('/'),
+            'index' => Pages\ListDepartments::route('/'),
             'create' => Pages\CreateDepartment::route('/create'),
-            'edit'   => Pages\EditDepartment::route('/{record}/edit'),
+            'edit' => Pages\EditDepartment::route('/{record}/edit'),
         ];
     }
 }

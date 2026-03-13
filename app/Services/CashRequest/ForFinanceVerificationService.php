@@ -1,9 +1,10 @@
 <?php
+
 namespace App\Services\CashRequest;
 
 use App\Enums\CashRequest\Status;
 use App\Enums\CashRequest\StatusRemarks;
-use App\Jobs\RejectCashRequestJob;
+use App\Jobs\CashRequest\RejectCashRequestJob;
 use App\Services\Remarks\StatusRemarkResolver;
 use Filament\Notifications\Actions\Action as NotificationAction;
 use Filament\Notifications\Notification;
@@ -28,13 +29,13 @@ class ForFinanceVerificationService
      */
     public function approveRequest($record, array $data)
     {
-        $user                     = Auth::user();
+        $user = Auth::user();
         $approved_remarks_by_role = app(StatusRemarkResolver::class)->approveByPermissions($user, 'finance');
 
         // Update the record status
         $record->update([
-            'voucher_no'     => $data['voucher_no'],
-            'status'         => Status::IN_PROGRESS->value,
+            'voucher_no' => $data['voucher_no'],
+            'status' => Status::IN_PROGRESS->value,
             'status_remarks' => StatusRemarks::FOR_PAYMENT_PROCESSING->value,
         ]);
 
@@ -44,12 +45,12 @@ class ForFinanceVerificationService
             ->performedOn($record)
             ->event('approved')
             ->withProperties([
-                'request_no'        => $record->request_no,
-                'activity_name'     => $record->activity_name,
+                'request_no' => $record->request_no,
+                'activity_name' => $record->activity_name,
                 'requesting_amount' => $record->requesting_amount,
-                'previous_status'   => Status::IN_PROGRESS->value,
-                'new_status'        => Status::IN_PROGRESS->value,
-                'status_remarks'    => $approved_remarks_by_role,
+                'previous_status' => Status::IN_PROGRESS->value,
+                'new_status' => Status::IN_PROGRESS->value,
+                'status_remarks' => $approved_remarks_by_role,
             ])
             ->log("Cash request {$record->request_no} was verified and approved by {$user->name} ({$user->position})");
 
@@ -83,13 +84,13 @@ class ForFinanceVerificationService
      */
     public function rejectRequest($record, array $data)
     {
-        $user           = Auth::user();
+        $user = Auth::user();
         $status_remarks = app(StatusRemarkResolver::class)->rejectByPermissions($user, 'finance');
 
         // Update the record status and save rejection reason
         $record->update([
-            'status'               => Status::REJECTED->value,
-            'status_remarks'       => $status_remarks,
+            'status' => Status::REJECTED->value,
+            'status_remarks' => $status_remarks,
             'reason_for_rejection' => $data['rejection_reason'],
         ]);
 
@@ -99,12 +100,12 @@ class ForFinanceVerificationService
             ->performedOn($record)
             ->event('rejected')
             ->withProperties([
-                'request_no'           => $record->request_no,
-                'activity_name'        => $record->activity_name,
-                'requesting_amount'    => $record->requesting_amount,
-                'previous_status'      => Status::IN_PROGRESS->value,
-                'new_status'           => Status::REJECTED->value,
-                'status_remarks'       => $status_remarks,
+                'request_no' => $record->request_no,
+                'activity_name' => $record->activity_name,
+                'requesting_amount' => $record->requesting_amount,
+                'previous_status' => Status::IN_PROGRESS->value,
+                'new_status' => Status::REJECTED->value,
+                'status_remarks' => $status_remarks,
                 'reason_for_rejection' => $data['rejection_reason'],
             ])
             ->log("Cash request {$record->request_no} was rejected by {$user->name} ({$user->position})");
@@ -125,17 +126,17 @@ class ForFinanceVerificationService
     {
         DB::transaction(function () use ($record, $data): void {
             $record->update([
-                'status'            => 'rejected',
+                'status' => 'rejected',
                 'rejection_remarks' => $data['rejection_remarks'],
             ]);
 
             $cashRequest = $record->cashRequest;
-            $total       = $cashRequest->activityLists()
+            $total = $cashRequest->activityLists()
                 ->where('status', '!=', 'rejected')
                 ->sum('requesting_amount');
 
             $cashRequest->update([
-                'requesting_amount' => (float) $total,
+                'requesting_amount' => (float)$total,
             ]);
 
             $hasRemainingActivities = $cashRequest->activityLists()
@@ -145,12 +146,12 @@ class ForFinanceVerificationService
                 })
                 ->exists();
 
-            if (! $hasRemainingActivities) {
+            if (!$hasRemainingActivities) {
                 $statusRemarks = app(StatusRemarkResolver::class)->rejectByPermissions(Auth::user(), 'finance');
 
                 $cashRequest->update([
-                    'status'               => Status::REJECTED->value,
-                    'status_remarks'       => $statusRemarks,
+                    'status' => Status::REJECTED->value,
+                    'status_remarks' => $statusRemarks,
                     'reason_for_rejection' => $data['rejection_remarks'],
                 ]);
             }

@@ -2,9 +2,9 @@
 
 namespace App\Filament\Resources;
 
-use App\Enums\NatureOfRequestEnum;
+use App\Enums\CashRequest\NatureOfRequestEnum;
 use App\Filament\Resources\ApprovalRuleResource\Pages;
-use App\Models\ApprovalRule;
+use App\Models\CashRequest\ApprovalRule;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -18,13 +18,13 @@ use Filament\Tables\Table;
 
 class ApprovalRuleResource extends Resource
 {
-    protected static ?string $model           = ApprovalRule::class;
+    protected static ?string $model = ApprovalRule::class;
     protected static ?string $navigationGroup = 'Administrator';
-    protected static ?string $slug            = 'approval-rules';
+    protected static ?string $slug = 'approval-rules';
     protected static ?string $navigationLabel = 'Approval Rules';
-    protected static ?string $label           = 'Approval Rule';
-    protected static ?string $pluralLabel     = 'Approval Rules';
-    protected static ?string $navigationIcon  = 'heroicon-o-adjustments-horizontal';
+    protected static ?string $label = 'Approval Rule';
+    protected static ?string $pluralLabel = 'Approval Rules';
+    protected static ?string $navigationIcon = 'heroicon-o-adjustments-horizontal';
 
     public static function form(Form $form): Form
     {
@@ -64,12 +64,12 @@ class ApprovalRuleResource extends Resource
                         Select::make('role_name')
                             ->label('Approver Role')
                             ->options([
-                                'department_head'        => 'Department Head',
-                                'president'              => 'President',
-                                'sales_channel_manager'  => 'Sales Channel Manager',
+                                'department_head' => 'Department Head',
+                                'president' => 'President',
+                                'sales_channel_manager' => 'Sales Channel Manager',
                                 'national_sales_manager' => 'National Sales Manager',
-                                'treasury_manager'       => 'Treasury Manager',
-                                'treasury_supervisor'    => 'Treasury Supervisor',
+                                'treasury_manager' => 'Treasury Manager',
+                                'treasury_supervisor' => 'Treasury Supervisor',
                             ])
                             ->required()
                             ->disableOptionsWhenSelectedInSiblingRepeaterItems()
@@ -95,12 +95,12 @@ class ApprovalRuleResource extends Resource
                 TextColumn::make('min_amount')
                     ->label('Min Amount')
                     ->sortable()
-                    ->formatStateUsing(fn($state) => 'PHP ' . number_format((float) $state, 2)),
+                    ->formatStateUsing(fn($state) => 'PHP ' . number_format((float)$state, 2)),
 
                 TextColumn::make('max_amount')
                     ->label('Max Amount')
                     ->sortable()
-                    ->formatStateUsing(fn($state) => $state === null ? 'No Limit' : 'PHP ' . number_format((float) $state, 2)),
+                    ->formatStateUsing(fn($state) => $state === null ? 'No Limit' : 'PHP ' . number_format((float)$state, 2)),
 
                 IconColumn::make('is_active')
                     ->label('Active')
@@ -136,9 +136,9 @@ class ApprovalRuleResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index'  => Pages\ListApprovalRules::route('/'),
+            'index' => Pages\ListApprovalRules::route('/'),
             'create' => Pages\CreateApprovalRule::route('/create'),
-            'edit'   => Pages\EditApprovalRule::route('/{record}/edit'),
+            'edit' => Pages\EditApprovalRule::route('/{record}/edit'),
         ];
     }
 }

@@ -2,8 +2,7 @@
 
 namespace App\Policies;
 
-use Illuminate\Auth\Access\Response;
-use App\Models\PaymentProcess;
+use App\Models\CashRequest\PaymentProcess;
 use App\Models\User;
 
 class PaymentProcessPolicy

@@ -2,8 +2,7 @@
 
 namespace App\Policies;
 
-use Illuminate\Auth\Access\Response;
-use App\Models\ApprovalRule;
+use App\Models\CashRequest\ApprovalRule;
 use App\Models\User;
 
 class ApprovalRulePolicy

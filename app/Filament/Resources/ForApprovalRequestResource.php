@@ -4,8 +4,8 @@ namespace App\Filament\Resources;
 
 use App\Enums\CashRequest\Status;
 use App\Filament\Resources\ForApprovalRequestResource\Pages;
-use App\Models\ForApprovalRequest;
-use App\Services\CashRequestApprovalFlowService;
+use App\Models\CashRequest\ForApprovalRequest;
+use App\Services\CashRequest\CashRequestApprovalFlowService;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -18,6 +18,7 @@ class ForApprovalRequestResource extends Resource
 {
     protected static ?string $model = ForApprovalRequest::class;
     protected static ?string $navigationGroup = 'Cash Requests';
+    protected static ?string $navigationLabel = 'For Approval';
     protected static ?string $navigationIcon = 'heroicon-o-document-check';
     protected ?string $pollingInterval = '5s';
 

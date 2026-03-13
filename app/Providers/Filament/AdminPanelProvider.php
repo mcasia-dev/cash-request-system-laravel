@@ -8,12 +8,13 @@ use App\Filament\Pages\Auth\CustomLogin;
 use App\Filament\Pages\Auth\EditProfile;
 use App\Filament\Pages\Auth\Register;
 use App\Filament\Pages\Dashboard;
-use App\Filament\Resources\CashRequestResource\Widgets\SampleChart;
 use App\Filament\Widgets\MyApprovalDecisionPieChart;
 use App\Filament\Widgets\MyReleaseNaturePercentageChart;
+use App\Filament\Widgets\RecentActivityFeed;
 use App\Filament\Widgets\ReleaseAmountSummaryStats;
+use App\Filament\Widgets\RequestsByStatusChart;
 use App\Filament\Widgets\RequestCountOverviewStats;
-use App\Filament\Widgets\SampleGraphChart;
+use App\Filament\Widgets\TopActiveUsersChart;
 use App\Filament\Widgets\UnliquidatedCashRequestsTable;
 use App\Http\Middleware\ForceLogoutAfterRegistration;
 use Filament\Http\Middleware\Authenticate;
@@ -24,7 +25,6 @@ use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
 use Filament\View\PanelsRenderHook;
-use Filament\Widgets;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -66,9 +66,12 @@ class AdminPanelProvider extends PanelProvider
             ->widgets([
 //                \App\Filament\Widgets\UserInfoClockWidget::class,
                 RequestCountOverviewStats::class,
+                RequestsByStatusChart::class,
+                TopActiveUsersChart::class,
                 ReleaseAmountSummaryStats::class,
                 MyReleaseNaturePercentageChart::class,
                 MyApprovalDecisionPieChart::class,
+                RecentActivityFeed::class,
                 UnliquidatedCashRequestsTable::class,
                 NotesWidget::class,
             ])
@@ -111,7 +114,7 @@ class AdminPanelProvider extends PanelProvider
                 FilamentLogViewer::make()
                     ->navigationGroup('Logs')
                     ->navigationLabel('System Logs')
-                    ->authorize(fn (): bool => Auth::user()->isSuperAdmin()),
+                    ->authorize(fn(): bool => Auth::user()->isSuperAdmin()),
             ])
             ->renderHook(
                 PanelsRenderHook::BODY_END,

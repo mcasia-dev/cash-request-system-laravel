@@ -1,7 +1,8 @@
 <?php
+
 namespace App\Services\Ocr;
 
-use App\Models\LiquidationReceipt;
+use App\Models\CashRequest\LiquidationReceipt;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
 use Filament\Notifications\Notification;
@@ -46,13 +47,13 @@ class OcrSpaceService
             'image_path' => $absoluteImagePath,
         ]);
 
-        $apiKey = (string) config('ocr-space.ocr_space_api_key');
+        $apiKey = (string)config('ocr-space.ocr_space_api_key');
 
         if ($apiKey === '') {
             throw new RuntimeException('OCR API key is not configured.');
         }
 
-        if (! is_readable($absoluteImagePath)) {
+        if (!is_readable($absoluteImagePath)) {
             throw new RuntimeException('Receipt image is not readable.');
         }
 
@@ -66,13 +67,13 @@ class OcrSpaceService
                 ])
                 ->attach('file', file_get_contents($absoluteImagePath), basename($absoluteImagePath))
                 ->post(config('ocr-space.ocr_space_endpoint'), [
-                    'scale'                        => 'true',
-                    'isOverlayRequired'            => 'false',
-                    'isCreateSearchablePdf'        => 'false',
-                    'detectOrientation'            => 'false',
+                    'scale' => 'true',
+                    'isOverlayRequired' => 'false',
+                    'isCreateSearchablePdf' => 'false',
+                    'detectOrientation' => 'false',
                     'isSearchablePdfHideTextLayer' => 'false',
-                    'OCREngine'                    => '2',
-                    'isTable'                      => 'true',
+                    'OCREngine' => '2',
+                    'isTable' => 'true',
                 ]);
         } catch (Throwable $exception) {
             $message = $exception->getMessage();
@@ -91,21 +92,21 @@ class OcrSpaceService
         if ($response->failed()) {
             Log::error('OCR.space request failed', [
                 'status' => $response->status(),
-                'body'   => $response->body(),
+                'body' => $response->body(),
             ]);
             throw new RuntimeException('OCR request failed.');
         }
 
         $payload = $response->json();
 
-        if (! is_array($payload)) {
+        if (!is_array($payload)) {
             Log::error('OCR.space invalid payload', [
                 'payload_type' => gettype($payload),
             ]);
             throw new RuntimeException('Invalid OCR response payload.');
         }
 
-        if ((bool) ($payload['IsErroredOnProcessing'] ?? false)) {
+        if ((bool)($payload['IsErroredOnProcessing'] ?? false)) {
             $message = $payload['ErrorMessage'] ?? 'OCR failed to process the image.';
 
             if (is_array($message)) {
@@ -113,9 +114,9 @@ class OcrSpaceService
             }
 
             Log::warning('OCR.space processing error', [
-                'message' => (string) $message,
+                'message' => (string)$message,
             ]);
-            throw new RuntimeException((string) $message);
+            throw new RuntimeException((string)$message);
         }
 
         $text = collect($payload['ParsedResults'] ?? [])
@@ -183,7 +184,7 @@ class OcrSpaceService
         ];
 
         foreach ($lines as $line) {
-            $line = trim((string) $line);
+            $line = trim((string)$line);
 
             if ($line === '') {
                 continue;
@@ -193,17 +194,17 @@ class OcrSpaceService
                 if (preg_match($pattern, $line, $matches) === 1) {
                     $normalized = $this->normalizeReceiptNumber($matches[1]);
 
-                    if (! preg_match('/\d/', $normalized)) {
+                    if (!preg_match('/\d/', $normalized)) {
                         Log::warning('OCR receipt number candidate rejected (no digit)', [
                             'candidate' => $normalized,
-                            'line'      => $line,
+                            'line' => $line,
                         ]);
                         continue;
                     }
 
                     Log::info('OCR receipt number extracted', [
                         'receipt_number' => $normalized,
-                        'line'           => $line,
+                        'line' => $line,
                     ]);
 
                     return $normalized;
@@ -221,23 +222,23 @@ class OcrSpaceService
      */
     public function normalizeReceiptNumber(string $raw): string
     {
-        return strtoupper((string) preg_replace('/[^A-Z0-9\-\/]/i', '', $raw));
+        return strtoupper((string)preg_replace('/[^A-Z0-9\-\/]/i', '', $raw));
     }
 
     public function getReceiptState($state, Set $set, Get $get, ?string $receiptFieldPath = null): bool
     {
-        $path         = null;
+        $path = null;
         $absolutePath = null;
 
         if ($state instanceof TemporaryUploadedFile) {
-            $path         = $state->getFilename();
+            $path = $state->getFilename();
             $absolutePath = $state->getRealPath();
         } elseif (is_array($state)) {
-            $first        = reset($state);
-            $path         = is_string($first) ? $first : null;
+            $first = reset($state);
+            $path = is_string($first) ? $first : null;
             $absolutePath = is_string($first) ? Storage::disk('public')->path($first) : null;
         } elseif (is_string($state)) {
-            $path         = $state;
+            $path = $state;
             $absolutePath = Storage::disk('public')->path($path);
         }
 
@@ -250,16 +251,16 @@ class OcrSpaceService
 
         try {
             Log::info('Liquidation upload validation started', [
-                'user_id'      => Auth::id(),
+                'user_id' => Auth::id(),
                 'receipt_path' => $path,
             ]);
 
-            $text          = $this->extractTextFromImage($absolutePath);
+            $text = $this->extractTextFromImage($absolutePath);
             $receiptNumber = $this->extractReceiptNumber($text);
 
             if (blank($receiptNumber)) {
                 Log::error('Liquidation upload validation failed: receipt number not detected', [
-                    'user_id'      => Auth::id(),
+                    'user_id' => Auth::id(),
                     'receipt_path' => $path,
                 ]);
 
@@ -273,7 +274,7 @@ class OcrSpaceService
                 return false;
             }
 
-            $items           = collect($get('../../liquidation_items') ?? []);
+            $items = collect($get('../../liquidation_items') ?? []);
             $duplicateInForm = $items
                 ->pluck('receipt_number')
                 ->filter()
@@ -286,11 +287,11 @@ class OcrSpaceService
 
             if ($duplicateInForm || $duplicateInDb) {
                 Log::error('Liquidation upload validation failed: duplicate receipt number', [
-                    'user_id'           => Auth::id(),
-                    'receipt_path'      => $path,
-                    'receipt_number'    => $receiptNumber,
+                    'user_id' => Auth::id(),
+                    'receipt_path' => $path,
+                    'receipt_number' => $receiptNumber,
                     'duplicate_in_form' => $duplicateInForm,
-                    'duplicate_in_db'   => (bool) $duplicateInDb,
+                    'duplicate_in_db' => (bool)$duplicateInDb,
                 ]);
 
                 $this->clearInvalidReceiptUpload($state, $path, $set, $receiptFieldPath);
@@ -319,15 +320,15 @@ class OcrSpaceService
             $set('receipt_number', $receiptNumber);
 
             Log::info('Liquidation upload validation passed', [
-                'user_id'        => Auth::id(),
-                'receipt_path'   => $path,
+                'user_id' => Auth::id(),
+                'receipt_path' => $path,
                 'receipt_number' => $receiptNumber,
             ]);
         } catch (Throwable $exception) {
             Log::error('Liquidation upload validation exception', [
-                'user_id'      => Auth::id(),
+                'user_id' => Auth::id(),
                 'receipt_path' => $path,
-                'error'        => $exception->getMessage(),
+                'error' => $exception->getMessage(),
             ]);
 
             $this->clearInvalidReceiptUpload($state, $path, $set, $receiptFieldPath);

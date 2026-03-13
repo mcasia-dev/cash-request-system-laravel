@@ -149,7 +149,7 @@ class ViewUserApproval extends ViewRecord
      */
     public function getApproveAction(): \Closure
     {
-        return function (User $record) {
+        return function ($record) {
             $approver = Auth::user();
             $previousStatus = $record->status;
 
@@ -185,7 +185,7 @@ class ViewUserApproval extends ViewRecord
      */
     public function getRejectAction(): \Closure
     {
-        return function (User $record, array $data) {
+        return function ($record, array $data) {
             $approver = Auth::user();
             $previousStatus = $record->status;
 

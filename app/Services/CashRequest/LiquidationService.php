@@ -3,9 +3,9 @@
 namespace App\Services\CashRequest;
 
 use App\Enums\CashRequest\StatusRemarks;
-use App\Models\CashRequest;
-use App\Models\ForLiquidation;
-use App\Models\LiquidationReceipt;
+use App\Models\CashRequest\CashRequest;
+use App\Models\CashRequest\ForLiquidation;
+use App\Models\CashRequest\LiquidationReceipt;
 use App\Models\User;
 use App\Services\Ocr\OcrSpaceService;
 use Filament\Notifications\Actions\Action as NotificationAction;
@@ -21,7 +21,8 @@ class LiquidationService
 {
     public function __construct(
         private readonly OcrSpaceService $ocrSpaceService
-    ) {
+    )
+    {
     }
 
     /**

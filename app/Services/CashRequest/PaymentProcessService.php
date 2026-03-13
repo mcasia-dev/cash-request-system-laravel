@@ -1,13 +1,14 @@
 <?php
+
 namespace App\Services\CashRequest;
 
 use App\Enums\CashRequest\DisbursementType;
+use App\Enums\CashRequest\NatureOfRequestEnum;
 use App\Enums\CashRequest\Status;
 use App\Enums\CashRequest\StatusRemarks;
-use App\Enums\NatureOfRequestEnum;
-use App\Jobs\ApproveCashRequestByTreasuryJob;
-use App\Jobs\RejectCashRequestJob;
-use App\Models\ForCashRelease;
+use App\Jobs\CashRequest\ApproveCashRequestByTreasuryJob;
+use App\Jobs\CashRequest\RejectCashRequestJob;
+use App\Models\CashRequest\ForCashRelease;
 use App\Models\User;
 use App\Services\Remarks\StatusRemarkResolver;
 use App\Traits\AdjustDueDateToBusinessDayTrait;
@@ -36,7 +37,7 @@ class PaymentProcessService
 
     public function canApproveRequest(mixed $record)
     {
-        if (! ($this->getStatus($record) && $this->isTreasuryManager() && $record->is_override && ! $record->is_approved_by_treasury_manager)) {
+        if (!($this->getStatus($record) && $this->isTreasuryManager() && $record->is_override && !$record->is_approved_by_treasury_manager)) {
             return false;
         }
 
@@ -45,7 +46,7 @@ class PaymentProcessService
 
     public function canApproveRequestWithRemarks(mixed $record): bool
     {
-        if (! ($this->getStatus($record) && $this->isTreasuryStaff() && $record->is_override && $record->is_approved_by_treasury_manager)) {
+        if (!($this->getStatus($record) && $this->isTreasuryStaff() && $record->is_override && $record->is_approved_by_treasury_manager)) {
             return false;
         }
 
@@ -58,7 +59,7 @@ class PaymentProcessService
 
     private function approveCashAdvanceRequest(mixed $record, array $data = [])
     {
-        $user           = Auth::user();
+        $user = Auth::user();
         $status_remarks = app(StatusRemarkResolver::class)->approveByPermissions($user, 'treasury');
 
         if ($record->is_override) {
@@ -82,18 +83,18 @@ class PaymentProcessService
         }
 
         ForCashRelease::updateOrCreate(['cash_request_id' => $record->id], [
-            'cash_request_id'     => $record->id,
-            'processed_by'        => $user->id,
-            'releasing_date'      => $record->forCashRelease?->proposed_releasing_date ?? null,
+            'cash_request_id' => $record->id,
+            'processed_by' => $user->id,
+            'releasing_date' => $record->forCashRelease?->proposed_releasing_date ?? null,
             'releasing_time_from' => $record->forCashRelease?->proposed_releasing_time_from ?? null,
-            'releasing_time_to'   => $record->forCashRelease?->proposed_releasing_time_to ?? null,
-            'date_processed'      => Carbon::now(),
+            'releasing_time_to' => $record->forCashRelease?->proposed_releasing_time_to ?? null,
+            'date_processed' => Carbon::now(),
         ]);
 
         $record->update([
-            'due_date'                        => $record->proposed_due_date ?? null,
-            'status'                          => Status::APPROVED->value,
-            'status_remarks'                  => $status_remarks,
+            'due_date' => $record->proposed_due_date ?? null,
+            'status' => Status::APPROVED->value,
+            'status_remarks' => $status_remarks,
             'is_approved_by_treasury_manager' => true,
         ]);
 
@@ -103,12 +104,12 @@ class PaymentProcessService
             ->performedOn($record)
             ->event('approved')
             ->withProperties([
-                'request_no'        => $record->request_no,
-                'activity_name'     => $record->activity_name,
+                'request_no' => $record->request_no,
+                'activity_name' => $record->activity_name,
                 'requesting_amount' => $record->requesting_amount,
-                'previous_status'   => $record->status,
-                'new_status'        => $record->status,
-                'status_remarks'    => $record->status_remarks,
+                'previous_status' => $record->status,
+                'new_status' => $record->status,
+                'status_remarks' => $record->status_remarks,
             ])
             ->log("Cash request {$record->request_no} was approved by {$user->name} ({$user->position})");
 
@@ -144,12 +145,12 @@ class PaymentProcessService
             ->performedOn($record)
             ->event('approved')
             ->withProperties([
-                'request_no'        => $record->request_no,
-                'activity_name'     => $record->activity_name,
+                'request_no' => $record->request_no,
+                'activity_name' => $record->activity_name,
                 'requesting_amount' => $record->requesting_amount,
-                'previous_status'   => $record->status,
-                'new_status'        => $record->status,
-                'status_remarks'    => $record->status_remarks,
+                'previous_status' => $record->status,
+                'new_status' => $record->status,
+                'status_remarks' => $record->status_remarks,
             ])
             ->log("Cash request {$record->request_no} was approved by {$user->name} ({$user->position})");
 
@@ -185,30 +186,30 @@ class PaymentProcessService
      */
     public function approveCashRequestWithReleaseForm($record, array $data)
     {
-        $user           = Auth::user();
+        $user = Auth::user();
         $status_remarks = app(StatusRemarkResolver::class)->approveByPermissions($user, 'treasury');
-        $releasingDate  = $data['releasing_date'] ?? $data['payroll_date'] ?? null;
-        $timeFrom       = $data['releasing_time_from'] ?? null;
-        $timeTo         = $data['releasing_time_to'] ?? null;
+        $releasingDate = $data['releasing_date'] ?? $data['payroll_date'] ?? null;
+        $timeFrom = $data['releasing_time_from'] ?? null;
+        $timeTo = $data['releasing_time_to'] ?? null;
 
         ForCashRelease::updateOrCreate(['cash_request_id' => $record->id], [
-            'cash_request_id'     => $record->id,
-            'processed_by'        => $user->id,
-            'remarks'             => $data['remarks'],
-            'releasing_date'      => $releasingDate,
+            'cash_request_id' => $record->id,
+            'processed_by' => $user->id,
+            'remarks' => $data['remarks'],
+            'releasing_date' => $releasingDate,
             'releasing_time_from' => $timeFrom,
-            'releasing_time_to'   => $timeTo,
-            'date_processed'      => Carbon::now(),
+            'releasing_time_to' => $timeTo,
+            'date_processed' => Carbon::now(),
         ]);
 
         $agingDays = $this->getAgingDaysFromSettings();
-        $due_date  = self::adjustDueDateToWeekday(Carbon::parse($releasingDate)->addDays($agingDays));
+        $due_date = self::adjustDueDateToWeekday(Carbon::parse($releasingDate)->addDays($agingDays));
 
         // Update the record status
         $record->update([
-            'status'         => Status::APPROVED->value,
+            'status' => Status::APPROVED->value,
             'status_remarks' => $status_remarks,
-            'due_date'       => $due_date,
+            'due_date' => $due_date,
         ]);
 
         // Log activity
@@ -217,12 +218,12 @@ class PaymentProcessService
             ->performedOn($record)
             ->event('approved')
             ->withProperties([
-                'request_no'        => $record->request_no,
-                'activity_name'     => $record->activity_name,
+                'request_no' => $record->request_no,
+                'activity_name' => $record->activity_name,
                 'requesting_amount' => $record->requesting_amount,
-                'previous_status'   => Status::IN_PROGRESS->value,
-                'new_status'        => Status::APPROVED->value,
-                'status_remarks'    => $status_remarks,
+                'previous_status' => Status::IN_PROGRESS->value,
+                'new_status' => Status::APPROVED->value,
+                'status_remarks' => $status_remarks,
             ])
             ->log("Cash request {$record->request_no} was approved by {$user->name} ({$user->position})");
 
@@ -258,13 +259,13 @@ class PaymentProcessService
      */
     public function rejectCashRequest($record, array $data)
     {
-        $user           = Auth::user();
+        $user = Auth::user();
         $status_remarks = app(StatusRemarkResolver::class)->rejectByPermissions($user, 'treasury');
 
         // Update the record status and save rejection reason
         $record->update([
-            'status'               => Status::REJECTED->value,
-            'status_remarks'       => $status_remarks,
+            'status' => Status::REJECTED->value,
+            'status_remarks' => $status_remarks,
             'reason_for_rejection' => $data['rejection_reason'],
         ]);
 
@@ -274,12 +275,12 @@ class PaymentProcessService
             ->performedOn($record)
             ->event('rejected')
             ->withProperties([
-                'request_no'           => $record->request_no,
-                'activity_name'        => $record->activity_name,
-                'requesting_amount'    => $record->requesting_amount,
-                'previous_status'      => Status::PENDING->value,
-                'new_status'           => Status::REJECTED->value,
-                'status_remarks'       => $status_remarks,
+                'request_no' => $record->request_no,
+                'activity_name' => $record->activity_name,
+                'requesting_amount' => $record->requesting_amount,
+                'previous_status' => Status::PENDING->value,
+                'new_status' => Status::REJECTED->value,
+                'status_remarks' => $status_remarks,
                 'reason_for_rejection' => $data['rejection_reason'],
             ])
             ->log("Cash request {$record->request_no} was rejected by {$user->name} ({$user->position})");
@@ -319,14 +320,14 @@ class PaymentProcessService
     public function saveDisbursementType(mixed $record, array $data): void
     {
         $basePayload = [
-            'disbursement_type'     => $data['disbursement_type'],
+            'disbursement_type' => $data['disbursement_type'],
             'disbursement_added_by' => Auth::id(),
         ];
 
         $typePayload = match ($data['disbursement_type']) {
-            DisbursementType::CHECK->value   => $this->getCheckDisbursementPayload($data),
+            DisbursementType::CHECK->value => $this->getCheckDisbursementPayload($data),
             DisbursementType::PAYROLL->value => $this->getPayrollDisbursementPayload($data),
-            default                          => [],
+            default => [],
         };
 
         $record->update(array_merge($basePayload, $typePayload));
@@ -344,7 +345,8 @@ class PaymentProcessService
     {
         return [
             'check_branch_name' => $data['check_branch_name'] ?? null,
-            'check_no'          => $data['check_no'] ?? null,
+            'check_no' => $data['check_no'] ?? null,
+            'dv_number' => $data['dv_number'] ?? null,
         ];
     }
 
@@ -354,25 +356,25 @@ class PaymentProcessService
     public function getPayrollDisbursementPayload(array $data): array
     {
         return [
-            'cut_off_date'   => $data['cut_off_date'],
-            'payroll_credit' => $data['payroll_credit'],
+            'dv_number' => $data['dv_number'] ?? null,
+            'cut_off_date' => $data['cut_off_date'],
         ];
     }
 
     public function canSetDisbursement($record)
     {
         if ($record->nature_of_request == NatureOfRequestEnum::CASH_ADVANCE->value) {
-            return $record->disbursement_added_by == null && $this->isTreasuryStaff() && ! $record->is_override;
+            return $record->disbursement_added_by == null && $this->isTreasuryStaff() && !$record->is_override;
         }
 
         // It will only show if the nature of request is cash advance,
         // the disbursement_added_by is null, the role of current user is Treasury Staff,
         // already override and already verified/approved by the Treasury Manager.
         return $record->nature_of_request === NatureOfRequestEnum::CASH_ADVANCE->value
-        && $record->disbursement_added_by == null
-        && $this->isTreasuryStaff()
-        && $record->is_override
-        && $record->is_approved_by_treasury_manager;
+            && $record->disbursement_added_by == null
+            && $this->isTreasuryStaff()
+            && $record->is_override
+            && $record->is_approved_by_treasury_manager;
     }
 
     public function overrideRequest($record, array $data = [])
@@ -389,9 +391,9 @@ class PaymentProcessService
             ForCashRelease::updateOrCreate(
                 ['cash_request_id' => $record->id],
                 [
-                    'proposed_releasing_date'      => $data['proposed_releasing_date'] ?? null,
+                    'proposed_releasing_date' => $data['proposed_releasing_date'] ?? null,
                     'proposed_releasing_time_from' => $data['proposed_releasing_time_from'] ?? null,
-                    'proposed_releasing_time_to'   => $data['proposed_releasing_time_to'] ?? null,
+                    'proposed_releasing_time_to' => $data['proposed_releasing_time_to'] ?? null,
                 ]
             );
         }
@@ -404,12 +406,12 @@ class PaymentProcessService
             ->performedOn($record)
             ->event('override')
             ->withProperties([
-                'request_no'        => $record->request_no,
-                'activity_name'     => $record->activity_name,
+                'request_no' => $record->request_no,
+                'activity_name' => $record->activity_name,
                 'requesting_amount' => $record->requesting_amount,
-                'previous_status'   => Status::PENDING->value,
-                'new_status'        => Status::IN_PROGRESS->value,
-                'status_remarks'    => $record->status_remarks,
+                'previous_status' => Status::PENDING->value,
+                'new_status' => Status::IN_PROGRESS->value,
+                'status_remarks' => $record->status_remarks,
             ])
             ->log("Cash request {$record->request_no} was override by {$user->name} ({$user->position})");
 
@@ -428,7 +430,7 @@ class PaymentProcessService
 
     public function updateProposedDates($record, array $data): void
     {
-        if ($record->nature_of_request !== NatureOfRequestEnum::CASH_ADVANCE->value || ! $record->is_override) {
+        if ($record->nature_of_request !== NatureOfRequestEnum::CASH_ADVANCE->value || !$record->is_override) {
             return;
         }
 
@@ -439,9 +441,9 @@ class PaymentProcessService
         ForCashRelease::updateOrCreate(
             ['cash_request_id' => $record->id],
             [
-                'proposed_releasing_date'      => $data['proposed_releasing_date'] ?? null,
+                'proposed_releasing_date' => $data['proposed_releasing_date'] ?? null,
                 'proposed_releasing_time_from' => $data['proposed_releasing_time_from'] ?? null,
-                'proposed_releasing_time_to'   => $data['proposed_releasing_time_to'] ?? null,
+                'proposed_releasing_time_to' => $data['proposed_releasing_time_to'] ?? null,
             ]
         );
 
@@ -455,7 +457,7 @@ class PaymentProcessService
     {
         $user = Auth::user();
 
-        if (! $user) {
+        if (!$user) {
             return false;
         }
 
@@ -472,7 +474,7 @@ class PaymentProcessService
     {
         $user = Auth::user();
 
-        if (! $user) {
+        if (!$user) {
             return false;
         }
 
@@ -572,7 +574,7 @@ class PaymentProcessService
 
         $user = Auth::user();
 
-        if (! $user) {
+        if (!$user) {
             return false;
         }
 
@@ -591,17 +593,17 @@ class PaymentProcessService
     {
         DB::transaction(function () use ($record, $data): void {
             $record->update([
-                'status'            => 'rejected',
+                'status' => 'rejected',
                 'rejection_remarks' => $data['rejection_remarks'],
             ]);
 
             $cashRequest = $record->cashRequest ?? null;
-            $total       = $cashRequest->activityLists()
+            $total = $cashRequest->activityLists()
                 ->where('status', '!=', 'rejected')
                 ->sum('requesting_amount');
 
             $cashRequest->update([
-                'requesting_amount' => (float) $total,
+                'requesting_amount' => (float)$total,
             ]);
 
             $hasRemainingActivities = $cashRequest->activityLists()
@@ -611,12 +613,12 @@ class PaymentProcessService
                 })
                 ->exists();
 
-            if (! $hasRemainingActivities) {
+            if (!$hasRemainingActivities) {
                 $statusRemarks = app(StatusRemarkResolver::class)->rejectByPermissions(Auth::user(), 'treasury');
 
                 $cashRequest->update([
-                    'status'               => Status::REJECTED->value,
-                    'status_remarks'       => $statusRemarks,
+                    'status' => Status::REJECTED->value,
+                    'status_remarks' => $statusRemarks,
                     'reason_for_rejection' => $data['rejection_remarks'],
                 ]);
             }

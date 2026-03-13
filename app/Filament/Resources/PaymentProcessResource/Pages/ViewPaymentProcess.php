@@ -1,9 +1,11 @@
 <?php
+
 namespace App\Filament\Resources\PaymentProcessResource\Pages;
 
 use App\Enums\CashRequest\DisbursementType;
-use App\Enums\NatureOfRequestEnum;
+use App\Enums\CashRequest\NatureOfRequestEnum;
 use App\Filament\Resources\PaymentProcessResource;
+use App\Filament\Support\RendersAttachmentPreview;
 use Carbon\Carbon;
 use Facades\App\Services\CashRequest\PaymentProcessService;
 use Filament\Actions\Action;
@@ -19,7 +21,6 @@ use Filament\Infolists\Components\Actions;
 use Filament\Infolists\Components\Actions\Action as InfolistAction;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section;
-use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
 use Filament\Resources\Pages\ViewRecord;
@@ -27,6 +28,8 @@ use Filament\Support\Enums\Alignment;
 
 class ViewPaymentProcess extends ViewRecord
 {
+    use RendersAttachmentPreview;
+
     protected static string $resource = PaymentProcessResource::class;
 
     /**
@@ -49,7 +52,11 @@ class ViewPaymentProcess extends ViewRecord
                 ->extraAttributes([
                     'wire:loading.attr' => 'disabled',
                 ])
-                ->action(fn($record, array $data) => PaymentProcessService::saveDisbursementType($record, $data)),
+                ->action(function ($record, array $data): void {
+                    $data['disbursement_type'] ??= $this->resolveDisbursementType($record);
+
+                    PaymentProcessService::saveDisbursementType($record, $data);
+                }),
 
             // OVERRIDE BUTTON
             Action::make('override')
@@ -151,12 +158,12 @@ class ViewPaymentProcess extends ViewRecord
                         TextEntry::make('status')
                             ->badge()
                             ->color(fn(string $state): string => match ($state) {
-                                'pending'    => 'warning',
-                                'approved'   => 'success',
-                                'released'   => 'info',
+                                'pending' => 'warning',
+                                'approved' => 'success',
+                                'released' => 'info',
                                 'liquidated' => 'primary',
-                                'rejected'   => 'danger',
-                                default      => 'gray',
+                                'rejected' => 'danger',
+                                default => 'gray',
                             }),
 
                         TextEntry::make('status_remarks')
@@ -194,8 +201,8 @@ class ViewPaymentProcess extends ViewRecord
                         RepeatableEntry::make('activityLists')
                             ->label('')
                             ->getStateUsing(fn($record) => $record->activityLists()
-                                    ->where('status', '!=', 'rejected')
-                                    ->get())
+                                ->where('status', '!=', 'rejected')
+                                ->get())
                             ->schema([
                                 Actions::make([
                                     InfolistAction::make('rejectActivity')
@@ -243,9 +250,10 @@ class ViewPaymentProcess extends ViewRecord
                                     ->label('Requesting Amount')
                                     ->money('PHP'),
 
-                                SpatieMediaLibraryImageEntry::make('attachment')
-                                    ->label('Attached File/Image')
-                                    ->collection('attachments')
+                                TextEntry::make('attachment')
+                                    ->label('Attached File/Images')
+                                    ->state(fn($record) => $this->renderAttachmentsHtml($record))
+                                    ->html()
                                     ->columnSpanFull(),
 
                                 TextEntry::make('status')
@@ -253,8 +261,8 @@ class ViewPaymentProcess extends ViewRecord
                                     ->badge()
                                     ->color(fn(string $state): string => match ($state) {
                                         'rejected' => 'danger',
-                                        'pending'  => 'warning',
-                                        default    => 'gray',
+                                        'pending' => 'warning',
+                                        default => 'gray',
                                     }),
 
                                 TextEntry::make('rejection_remarks')
@@ -293,15 +301,14 @@ class ViewPaymentProcess extends ViewRecord
                             ->visible(fn($record) => $record->isCheckDisbursement())
                             ->placeholder('-'),
 
+                        TextEntry::make('dv_number')
+                            ->label('DV Number')
+                            ->visible(fn($record) => $record->isCheckDisbursement() || $record->isPayrollDisbursement())
+                            ->placeholder('-'),
+
                         TextEntry::make('cut_off_date')
                             ->label('Cut-off Date')
                             ->date()
-                            ->visible(fn($record) => $record->isPayrollDisbursement())
-                            ->placeholder('-'),
-
-                        TextEntry::make('payroll_credit')
-                            ->label('Payroll Credit')
-                            ->money('PHP')
                             ->visible(fn($record) => $record->isPayrollDisbursement())
                             ->placeholder('-'),
 
@@ -329,7 +336,7 @@ class ViewPaymentProcess extends ViewRecord
                 ->default(fn($record) => $record->forCashRelease?->proposed_releasing_date ?? now())
                 ->minDate(now()->toDateString())
                 ->afterStateUpdated(function ($state, Set $set) use ($agingDays): void {
-                    if (! $state) {
+                    if (!$state) {
                         return;
                     }
 
@@ -349,7 +356,7 @@ class ViewPaymentProcess extends ViewRecord
             DatePicker::make('proposed_due_date')
                 ->label('Proposed Due Date')
                 ->required()
-                ->readonly(fn () => PaymentProcessService::canEditProposedDueDate())
+                ->readonly(fn() => PaymentProcessService::canEditProposedDueDate())
                 ->default(function (Get $get, $record) use ($agingDays) {
                     $releasingDate = $get('proposed_releasing_date') ?? $record->forCashRelease?->proposed_releasing_date ?? now();
 
@@ -375,15 +382,17 @@ class ViewPaymentProcess extends ViewRecord
                 Select::make('disbursement_type')
                     ->label('Disbursement Type')
                     ->options(DisbursementType::filamentOptions())
-                    ->required()
-                    ->rules('required')
+                    ->default(fn($record) => $this->resolveDisbursementType($record))
+                    ->required(fn($record) => !$this->isForDepositModeOfTransfer($record))
+                    ->dehydrated()
+                    ->hidden(fn($record) => $this->isForDepositModeOfTransfer($record))
                     ->live(),
 
                 TextInput::make('amount')
                     ->label('Amount')
-                    ->numeric()
+                    ->prefix('₱')
                     ->readonly()
-                    ->default(fn($record) => $record->requesting_amount),
+                    ->default(fn($record) => number_format($record->requesting_amount, 2)),
             ],
             $this->getCheckDisbursementTypeSchema(),
             $this->getPayrollDisbursementTypeSchema()
@@ -408,6 +417,11 @@ class ViewPaymentProcess extends ViewRecord
                 ->visible(fn(Get $get) => $get('disbursement_type') === DisbursementType::CHECK->value)
                 ->required(fn(Get $get) => $get('disbursement_type') === DisbursementType::CHECK->value),
 
+            TextInput::make('dv_number')
+                ->label('DV Number')
+                ->visible(fn(Get $get) => $get('disbursement_type') === DisbursementType::CHECK->value)
+                ->required(fn(Get $get) => $get('disbursement_type') === DisbursementType::CHECK->value),
+
             TextInput::make('voucher_no')
                 ->label('Voucher No.')
                 ->default(fn($record) => $record->voucher_no)
@@ -425,6 +439,11 @@ class ViewPaymentProcess extends ViewRecord
     private function getPayrollDisbursementTypeSchema(): array
     {
         return [
+            TextInput::make('dv_number')
+                ->label('DV Number')
+                ->visible(fn(Get $get) => $get('disbursement_type') === DisbursementType::PAYROLL->value)
+                ->required(fn(Get $get) => $get('disbursement_type') === DisbursementType::PAYROLL->value),
+
             DatePicker::make('cut_off_date')
                 ->label('Payroll Credit Date')
                 ->visible(fn(Get $get) => $get('disbursement_type') === DisbursementType::PAYROLL->value)
@@ -490,5 +509,21 @@ class ViewPaymentProcess extends ViewRecord
                 ->required()
                 ->default(now()),
         ];
+    }
+
+    private function resolveDisbursementType($record): ?string
+    {
+        if ($this->isForDepositModeOfTransfer($record)) {
+            return DisbursementType::PAYROLL->value;
+        }
+
+        return $record->disbursement_type;
+    }
+
+    private function isForDepositModeOfTransfer($record): bool
+    {
+        $modeOfTransfer = strtolower(trim(str_replace('_', ' ', (string)($record->mode_of_transfer ?? ''))));
+
+        return $modeOfTransfer === 'for deposit';
     }
 }

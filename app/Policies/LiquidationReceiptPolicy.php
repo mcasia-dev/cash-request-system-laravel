@@ -2,8 +2,7 @@
 
 namespace App\Policies;
 
-use Illuminate\Auth\Access\Response;
-use App\Models\LiquidationReceipt;
+use App\Models\CashRequest\LiquidationReceipt;
 use App\Models\User;
 
 class LiquidationReceiptPolicy

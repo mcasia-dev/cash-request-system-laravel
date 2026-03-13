@@ -2,7 +2,7 @@
 
 namespace App\Policies;
 
-use App\Models\CashRequest;
+use App\Models\CashRequest\CashRequest;
 use App\Models\User;
 
 class CashRequestPolicy
