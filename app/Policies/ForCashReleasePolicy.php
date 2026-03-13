@@ -2,8 +2,7 @@
 
 namespace App\Policies;
 
-use Illuminate\Auth\Access\Response;
-use App\Models\ForCashRelease;
+use App\Models\CashRequest\ForCashRelease;
 use App\Models\User;
 
 class ForCashReleasePolicy

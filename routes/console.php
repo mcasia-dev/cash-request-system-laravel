@@ -2,9 +2,8 @@
 
 use App\Enums\CashRequest\Status;
 use App\Enums\CashRequest\StatusRemarks;
-use App\Models\CashRequest;
-use App\Models\ForCashRelease;
-use App\Models\ForLiquidation;
+use App\Models\CashRequest\ForCashRelease;
+use App\Models\CashRequest\ForLiquidation;
 use Carbon\Carbon;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;

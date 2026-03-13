@@ -2,8 +2,7 @@
 
 namespace App\Policies;
 
-use Illuminate\Auth\Access\Response;
-use App\Models\ActivityList;
+use App\Models\CashRequest\ActivityList;
 use App\Models\User;
 
 class ActivityListPolicy

@@ -4,8 +4,9 @@ namespace App\Filament\Resources\ForCashReleaseResource\Pages;
 
 use App\Enums\CashRequest\Status;
 use App\Filament\Resources\ForCashReleaseResource;
-use App\Models\CashRequest;
-use App\Models\ForCashRelease;
+use App\Filament\Support\RendersAttachmentPreview;
+use App\Models\CashRequest\CashRequest;
+use App\Models\CashRequest\ForCashRelease;
 use Carbon\Carbon;
 use Facades\App\Services\CashRequest\ForCashReleaseService;
 use Filament\Actions\Action;
@@ -17,15 +18,15 @@ use Filament\Infolists\Components\Actions;
 use Filament\Infolists\Components\Actions\Action as InfolistAction;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section;
-use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Support\Enums\Alignment;
-use Njxqlus\Filament\Components\Infolists\LightboxSpatieMediaLibraryImageEntry;
 
 class ViewForCashRelease extends ViewRecord
 {
+    use RendersAttachmentPreview;
+
     protected static string $resource = ForCashReleaseResource::class;
 
     protected function getHeaderActions(): array
@@ -185,9 +186,10 @@ class ViewForCashRelease extends ViewRecord
                                     ->label('Requesting Amount')
                                     ->money('PHP'),
 
-                                LightboxSpatieMediaLibraryImageEntry::make('attachment')
+                                TextEntry::make('attachment')
                                     ->label('Attached File/Images')
-                                    ->collection('attachments')
+                                    ->state(fn($record) => $this->renderAttachmentsHtml($record))
+                                    ->html()
                                     ->columnSpanFull(),
 
                                 TextEntry::make('status')

@@ -38,7 +38,7 @@ class UserApprovalResource extends Resource
     {
         $query = static::getModel()::query();
 
-        if (!Auth::user()->hasAnyRole(['super_admin', 'Super Admin'])) {
+        if (!Auth::user()->isSuperAdmin()) {
             $query->where('department_id', Auth::user()->department_id);
         }
 

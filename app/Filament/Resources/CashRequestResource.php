@@ -1,12 +1,13 @@
 <?php
+
 namespace App\Filament\Resources;
 
+use App\Enums\CashRequest\NatureOfRequestEnum;
 use App\Enums\CashRequest\Status;
 use App\Enums\CashRequest\StatusRemarks;
-use App\Enums\NatureOfRequestEnum;
 use App\Filament\Resources\ActivityListResource\Pages\CreateActivityListWithTable;
 use App\Filament\Resources\CashRequestResource\Pages;
-use App\Models\CashRequest;
+use App\Models\CashRequest\CashRequest;
 use App\Services\Ocr\OcrSpaceService;
 use Facades\App\Services\CashRequest\CashRequestService;
 use Filament\Forms\Components\DatePicker;
@@ -36,10 +37,10 @@ use Illuminate\Support\HtmlString;
 
 class CashRequestResource extends Resource
 {
-    protected static ?string $model           = CashRequest::class;
+    protected static ?string $model = CashRequest::class;
     protected static ?string $navigationGroup = 'Cash Requests';
-    protected static ?string $navigationIcon  = 'heroicon-o-document-text';
-    protected ?string $pollingInterval        = '5s';
+    protected static ?string $navigationIcon = 'heroicon-o-document-text';
+    protected ?string $pollingInterval = '5s';
 
     public static function getEloquentQuery(): Builder
     {
@@ -106,9 +107,9 @@ class CashRequestResource extends Resource
                     ->label('Nature of Request')
                     ->badge()
                     ->color(fn($state) => match ($state) {
-                        NatureOfRequestEnum::PETTY_CASH->value   => 'primary',
+                        NatureOfRequestEnum::PETTY_CASH->value => 'primary',
                         NatureOfRequestEnum::CASH_ADVANCE->value => 'success',
-                        default                                  => 'secondary'
+                        default => 'secondary'
                     })
                     ->searchable()
                     ->sortable(),
@@ -134,14 +135,14 @@ class CashRequestResource extends Resource
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
-                        Status::PENDING->value     => 'warning',
+                        Status::PENDING->value => 'warning',
                         Status::IN_PROGRESS->value => 'info',
-                        Status::APPROVED->value    => 'success',
-                        Status::RELEASED->value    => 'primary',
-                        Status::LIQUIDATED->value  => 'gray',
-                        Status::REJECTED->value    => 'danger',
-                        Status::CANCELLED->value   => 'gray',
-                        default                    => 'secondary',
+                        Status::APPROVED->value => 'success',
+                        Status::RELEASED->value => 'primary',
+                        Status::LIQUIDATED->value => 'gray',
+                        Status::REJECTED->value => 'danger',
+                        Status::CANCELLED->value => 'gray',
+                        default => 'secondary',
                     })
                     ->searchable(),
 
@@ -211,11 +212,11 @@ class CashRequestResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index'             => Pages\ListCashRequests::route('/'),
-            'create'            => CreateActivityListWithTable::route('/create'),
-            'edit'              => Pages\EditCashRequest::route('/{record}/edit'),
-            'view'              => Pages\ViewCashRequest::route('/{record}/view'),
-            'track-status'      => Pages\TrackRequestStatus::route('/{record}/track-status'),
+            'index' => Pages\ListCashRequests::route('/'),
+            'create' => CreateActivityListWithTable::route('/create'),
+            'edit' => Pages\EditCashRequest::route('/{record}/edit'),
+            'view' => Pages\ViewCashRequest::route('/{record}/view'),
+            'track-status' => Pages\TrackRequestStatus::route('/{record}/track-status'),
             'track-status-text' => Pages\TrackRequestStatusText::route('/{record}/track-status-text'),
         ];
     }
@@ -244,7 +245,7 @@ class CashRequestResource extends Resource
                         ->afterStateUpdated(function ($state, Set $set, Get $get, FileUpload $component): void {
                             $isValid = app(OcrSpaceService::class)->getReceiptState($state, $set, $get, $component->getStatePath());
 
-                            if (! $isValid) {
+                            if (!$isValid) {
                                 $component->state([]);
                             }
                         })
@@ -285,7 +286,7 @@ class CashRequestResource extends Resource
             ->label('Total Receipt Amount')
             ->content(function (Get $get) {
                 $total = collect($get('liquidation_items'))
-                    ->sum(fn($item) => (float) ($item['amount'] ?? 0));
+                    ->sum(fn($item) => (float)($item['amount'] ?? 0));
 
                 return number_format($total, 2, '.', ',');
             });
@@ -295,7 +296,7 @@ class CashRequestResource extends Resource
     {
         return Placeholder::make('amount_to_liquidate')
             ->label('Amount to Liquidate')
-            ->content(fn() => number_format((float) $record->requesting_amount, 2, '.', ','));
+            ->content(fn() => number_format((float)$record->requesting_amount, 2, '.', ','));
     }
 
     private static function getAmountToReimbursePlaceholder($record)
@@ -304,15 +305,15 @@ class CashRequestResource extends Resource
             ->label('Amount to Reimburse')
             ->visible(function (Get $get) use ($record): bool {
                 $total = collect($get('liquidation_items'))
-                    ->sum(fn($item) => (float) ($item['amount'] ?? 0));
+                    ->sum(fn($item) => (float)($item['amount'] ?? 0));
 
-                return $total > (float) $record->requesting_amount;
+                return $total > (float)$record->requesting_amount;
             })
             ->content(function (Get $get) use ($record) {
                 $total = collect($get('liquidation_items'))
-                    ->sum(fn($item) => (float) ($item['amount'] ?? 0));
+                    ->sum(fn($item) => (float)($item['amount'] ?? 0));
 
-                $reimburse = $total - (float) $record->requesting_amount;
+                $reimburse = $total - (float)$record->requesting_amount;
 
                 $formatted = number_format($reimburse, 2, '.', ',');
 
@@ -326,15 +327,15 @@ class CashRequestResource extends Resource
             ->label('Cash Return')
             ->visible(function (Get $get) use ($record): bool {
                 $total = collect($get('liquidation_items'))
-                    ->sum(fn($item) => (float) ($item['amount'] ?? 0));
+                    ->sum(fn($item) => (float)($item['amount'] ?? 0));
 
-                return $total < (float) $record->requesting_amount;
+                return $total < (float)$record->requesting_amount;
             })
             ->content(function (Get $get) use ($record) {
                 $total = collect($get('liquidation_items'))
-                    ->sum(fn($item) => (float) ($item['amount'] ?? 0));
+                    ->sum(fn($item) => (float)($item['amount'] ?? 0));
 
-                $missing = (float) $record->requesting_amount - $total;
+                $missing = (float)$record->requesting_amount - $total;
 
                 $formatted = number_format($missing, 2, '.', ',');
 

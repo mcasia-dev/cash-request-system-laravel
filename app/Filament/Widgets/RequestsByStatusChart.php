@@ -4,7 +4,7 @@ namespace App\Filament\Widgets;
 
 use App\Enums\CashRequest\Status;
 use App\Filament\Widgets\Concerns\HasDashboardReportLinks;
-use App\Models\CashRequest;
+use App\Models\CashRequest\CashRequest;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Auth;
 use Leandrocfe\FilamentApexCharts\Widgets\ApexChartWidget;

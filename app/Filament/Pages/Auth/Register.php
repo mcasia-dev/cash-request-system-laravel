@@ -89,21 +89,33 @@ class Register extends BaseRegister
             ->required()
             ->searchable()
             ->live()
+            ->afterStateHydrated(function ($state, callable $set) {
+                $set('department_head_name', $this->resolveDepartmentHeadName($state));
+            })
             ->afterStateUpdated(function ($state, callable $set) {
-                if ($state) {
-                    $departmentHead = Department::find($state)->department_head ?? null;
-                    $set('department_head', $departmentHead);
-                }
+                $set('department_head_name', $this->resolveDepartmentHeadName($state));
             });
     }
 
     protected function getDepartmentHeadFormComponent()
     {
-        return TextInput::make('department_head')
+        return TextInput::make('department_head_name')
             ->label('Department Head')
-            ->default(fn($get) => $get('department') ? Department::find($get('department'))->department_head ?? null : null)
-            ->required()
-            ->disabled();
+            ->placeholder('No department head assigned')
+            ->disabled()
+            ->dehydrated(false);
+    }
+
+    protected function resolveDepartmentHeadName($departmentId): ?string
+    {
+        if (blank($departmentId)) {
+            return null;
+        }
+
+        return User::query()
+            ->role('department_head')
+            ->where('department_id', $departmentId)
+            ->value('name');
     }
 
     protected function getPhoneFormComponent(): Component

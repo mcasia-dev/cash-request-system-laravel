@@ -4,11 +4,11 @@ namespace App\Filament\Widgets;
 
 use App\Enums\CashRequest\Status;
 use App\Filament\Widgets\Concerns\HasDashboardReportLinks;
-use App\Models\ForCashRelease;
-use Leandrocfe\FilamentApexCharts\Widgets\ApexChartWidget;
-use Illuminate\Database\Eloquent\Builder;
+use App\Models\CashRequest\ForCashRelease;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
+use Leandrocfe\FilamentApexCharts\Widgets\ApexChartWidget;
 
 class ReleaseAmountSummaryStats extends ApexChartWidget
 {

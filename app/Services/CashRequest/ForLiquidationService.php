@@ -4,8 +4,8 @@ namespace App\Services\CashRequest;
 
 use App\Enums\CashRequest\Status;
 use App\Enums\CashRequest\StatusRemarks;
-use App\Models\ForLiquidation;
-use App\Models\LiquidationReceipt;
+use App\Models\CashRequest\ForLiquidation;
+use App\Models\CashRequest\LiquidationReceipt;
 use App\Services\Remarks\StatusRemarkResolver;
 use Carbon\Carbon;
 use Filament\Notifications\Notification;

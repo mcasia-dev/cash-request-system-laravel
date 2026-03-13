@@ -1,9 +1,10 @@
 <?php
+
 namespace App\Filament\Resources;
 
-use App\Enums\NatureOfRequestEnum;
+use App\Enums\CashRequest\NatureOfRequestEnum;
 use App\Filament\Resources\ActivityListResource\Pages;
-use App\Models\ActivityList;
+use App\Models\CashRequest\ActivityList;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
@@ -18,7 +19,7 @@ use Illuminate\Support\Facades\Auth;
 
 class ActivityListResource extends Resource
 {
-    protected static ?string $model         = ActivityList::class;
+    protected static ?string $model = ActivityList::class;
     protected static bool $shouldRegisterNavigation = false;
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
 
@@ -116,9 +117,9 @@ class ActivityListResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index'  => Pages\ListActivityLists::route('/'),
+            'index' => Pages\ListActivityLists::route('/'),
             'create' => Pages\CreateActivityListWithTable::route('/create'),
-            'edit'   => Pages\EditActivityList::route('/{record}/edit'),
+            'edit' => Pages\EditActivityList::route('/{record}/edit'),
         ];
     }
 }

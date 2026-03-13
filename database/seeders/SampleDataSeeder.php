@@ -2,13 +2,11 @@
 
 namespace Database\Seeders;
 
-use App\Enums\NatureOfRequestEnum;
-use App\Models\CashRequest;
+use App\Enums\CashRequest\NatureOfRequestEnum;
+use App\Models\CashRequest\CashRequest;
 use App\Models\Department;
 use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
-use Spatie\Activitylog\Models\Activity;
 
 class SampleDataSeeder extends Seeder
 {

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\ForFinanceVerificationResource\Pages;
 
 use App\Filament\Resources\ForFinanceVerificationResource;
+use App\Filament\Support\RendersAttachmentPreview;
 use Facades\App\Services\CashRequest\ForFinanceVerificationService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
@@ -11,15 +12,15 @@ use Filament\Infolists\Components\Actions;
 use Filament\Infolists\Components\Actions\Action as InfolistAction;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section;
-use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Support\Enums\Alignment;
-use Njxqlus\Filament\Components\Infolists\LightboxSpatieMediaLibraryImageEntry;
 
 class ViewForFinanceVerification extends ViewRecord
 {
+    use RendersAttachmentPreview;
+
     protected static string $resource = ForFinanceVerificationResource::class;
 
     /**
@@ -148,9 +149,10 @@ class ViewForFinanceVerification extends ViewRecord
                                     ->label('Requesting Amount')
                                     ->money('PHP'),
 
-                                LightboxSpatieMediaLibraryImageEntry::make('attachment')
+                                TextEntry::make('attachment')
                                     ->label('Attached File/Images')
-                                    ->collection('attachments')
+                                    ->state(fn($record) => $this->renderAttachmentsHtml($record))
+                                    ->html()
                                     ->columnSpanFull(),
 
                                 TextEntry::make('status')

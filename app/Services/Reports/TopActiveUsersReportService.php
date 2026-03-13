@@ -2,7 +2,7 @@
 
 namespace App\Services\Reports;
 
-use App\Models\CashRequest;
+use App\Models\CashRequest\CashRequest;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Spatie\Activitylog\Models\Activity;
@@ -38,18 +38,18 @@ class TopActiveUsersReportService
 
     private function normalizeRows(Collection $rows): Collection
     {
-        $max = (int) ($rows->max('total') ?? 0);
+        $max = (int)($rows->max('total') ?? 0);
 
         return $rows->map(function ($row) use ($max): array {
-            $total = (int) $row->total;
-            $position = filled($row->position) ? (string) $row->position : 'N/A';
+            $total = (int)$row->total;
+            $position = filled($row->position) ? (string)$row->position : 'N/A';
 
             return [
-                'name' => (string) $row->name,
+                'name' => (string)$row->name,
                 'position' => $position,
-                'label' => (string) $row->name . " ({$position})",
+                'label' => (string)$row->name . " ({$position})",
                 'total' => $total,
-                'width' => $max > 0 ? max(12, (int) round(($total / $max) * 100)) : 0,
+                'width' => $max > 0 ? max(12, (int)round(($total / $max) * 100)) : 0,
             ];
         })->values();
     }

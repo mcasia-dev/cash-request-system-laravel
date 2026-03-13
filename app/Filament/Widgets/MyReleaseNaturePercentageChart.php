@@ -2,12 +2,12 @@
 
 namespace App\Filament\Widgets;
 
-use App\Enums\NatureOfRequestEnum;
+use App\Enums\CashRequest\NatureOfRequestEnum;
 use App\Filament\Widgets\Concerns\HasDashboardReportLinks;
-use App\Models\ForCashRelease;
+use App\Models\CashRequest\ForCashRelease;
 use Carbon\Carbon;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Leandrocfe\FilamentApexCharts\Widgets\ApexChartWidget;
 
@@ -40,7 +40,7 @@ class MyReleaseNaturePercentageChart extends ApexChartWidget
 
     protected function getSubheading(): null|string|Htmlable|\Illuminate\Contracts\View\View
     {
-        return $this->renderReportLinks('release-nature-percentage', (string) ($this->filter ?? 'month'));
+        return $this->renderReportLinks('release-nature-percentage', (string)($this->filter ?? 'month'));
     }
 
     protected function getFilters(): ?array

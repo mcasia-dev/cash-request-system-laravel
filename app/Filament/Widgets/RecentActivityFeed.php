@@ -3,8 +3,8 @@
 namespace App\Filament\Widgets;
 
 use App\Enums\CashRequest\StatusRemarks;
-use App\Models\CashRequest;
-use App\Models\PaymentProcess;
+use App\Models\CashRequest\CashRequest;
+use App\Models\CashRequest\PaymentProcess;
 use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\Auth;
 use Spatie\Activitylog\Models\Activity;

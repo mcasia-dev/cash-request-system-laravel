@@ -2,8 +2,8 @@
 
 namespace Database\Seeders;
 
-use App\Enums\NatureOfRequestEnum;
-use App\Models\ApprovalRule;
+use App\Enums\CashRequest\NatureOfRequestEnum;
+use App\Models\CashRequest\ApprovalRule;
 use Illuminate\Database\Seeder;
 
 class ApprovalRuleSeeder extends Seeder
@@ -46,7 +46,7 @@ class ApprovalRuleSeeder extends Seeder
     {
         $rule = ApprovalRule::query()->updateOrCreate(
             [
-                'nature'     => $nature,
+                'nature' => $nature,
                 'min_amount' => $minAmount,
                 'max_amount' => $maxAmount,
             ],
@@ -59,7 +59,7 @@ class ApprovalRuleSeeder extends Seeder
 
         foreach ($roles as $role) {
             $rule->approvalRuleSteps()->create([
-                'role_name'  => $role,
+                'role_name' => $role,
                 'step_order' => 1,
             ]);
         }

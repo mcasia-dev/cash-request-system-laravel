@@ -3,12 +3,12 @@
 namespace App\Filament\Widgets;
 
 use App\Enums\CashRequest\Status;
-use App\Models\ForLiquidation;
+use App\Models\CashRequest\ForLiquidation;
 use Filament\Tables;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
 use Illuminate\Database\Eloquent\Builder;
-use Filament\Tables\Columns\TextColumn;
 use Illuminate\Support\Facades\Auth;
 
 class UnliquidatedCashRequestsTable extends BaseWidget

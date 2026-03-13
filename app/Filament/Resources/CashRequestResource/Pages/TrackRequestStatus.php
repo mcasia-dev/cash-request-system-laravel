@@ -1,10 +1,10 @@
 <?php
+
 namespace App\Filament\Resources\CashRequestResource\Pages;
 
+use App\Enums\CashRequest\NatureOfRequestEnum;
 use App\Enums\CashRequest\StatusRemarks;
-use App\Enums\NatureOfRequestEnum;
 use App\Filament\Resources\CashRequestResource;
-use App\Models\CashRequest;
 use Filament\Resources\Pages\ViewRecord;
 use Spatie\Activitylog\Models\Activity;
 
@@ -14,7 +14,7 @@ use Spatie\Activitylog\Models\Activity;
 class TrackRequestStatus extends ViewRecord
 {
     protected static string $resource = CashRequestResource::class;
-    protected static string $view     = 'filament.resources.cash-request-resource.pages.track-request-status';
+    protected static string $view = 'filament.resources.cash-request-resource.pages.track-request-status';
 
     /**
      * Provide the page heading for the request status tracker.
@@ -78,12 +78,12 @@ class TrackRequestStatus extends ViewRecord
         $submittedAt = $record->created_at;
 
         return [
-            'title'       => 'Request Submitted',
-            'status'      => 'approved',
+            'title' => 'Request Submitted',
+            'status' => 'approved',
             'statusLabel' => 'Submitted',
-            'remarks'     => StatusRemarks::REQUEST_SUBMITTED->value,
-            'by'          => $record->user?->name ?? 'N/A',
-            'date'        => $submittedAt?->format('F d, Y h:i A') ?? 'N/A',
+            'remarks' => StatusRemarks::REQUEST_SUBMITTED->value,
+            'by' => $record->user?->name ?? 'N/A',
+            'date' => $submittedAt?->format('F d, Y h:i A') ?? 'N/A',
         ];
     }
 
@@ -110,12 +110,12 @@ class TrackRequestStatus extends ViewRecord
         }
 
         return [
-            'title'       => 'Department Head',
-            'status'      => 'pending',
+            'title' => 'Department Head',
+            'status' => 'pending',
             'statusLabel' => 'Pending',
-            'remarks'     => 'Waiting for review',
-            'by'          => 'N/A',
-            'date'        => 'N/A',
+            'remarks' => 'Waiting for review',
+            'by' => 'N/A',
+            'date' => 'N/A',
         ];
     }
 
@@ -131,12 +131,12 @@ class TrackRequestStatus extends ViewRecord
 
         if ($deptHeadRejected) {
             return [
-                'title'       => 'Treasury Department',
-                'status'      => 'stopped',
+                'title' => 'Treasury Department',
+                'status' => 'stopped',
                 'statusLabel' => 'Stopped',
-                'remarks'     => 'Process stopped due to Department Head rejection',
-                'by'          => 'N/A',
-                'date'        => 'N/A',
+                'remarks' => 'Process stopped due to Department Head rejection',
+                'by' => 'N/A',
+                'date' => 'N/A',
             ];
         }
 
@@ -164,12 +164,12 @@ class TrackRequestStatus extends ViewRecord
         ], true);
 
         return [
-            'title'       => 'Treasury Department',
-            'status'      => $isInTreasuryQueue ? 'pending' : 'upcoming',
+            'title' => 'Treasury Department',
+            'status' => $isInTreasuryQueue ? 'pending' : 'upcoming',
             'statusLabel' => $isInTreasuryQueue ? 'Pending' : 'Not yet started',
-            'remarks'     => $isInTreasuryQueue ? 'In treasury queue for review' : 'Waiting for Department Head approval',
-            'by'          => 'N/A',
-            'date'        => 'N/A',
+            'remarks' => $isInTreasuryQueue ? 'In treasury queue for review' : 'Waiting for Department Head approval',
+            'by' => 'N/A',
+            'date' => 'N/A',
         ];
     }
 
@@ -186,14 +186,14 @@ class TrackRequestStatus extends ViewRecord
 
         if ($approvals->isEmpty()) {
             return [[
-                'title'       => 'Approval',
-                'status'      => $record->status === 'rejected' ? 'rejected' : 'pending',
+                'title' => 'Approval',
+                'status' => $record->status === 'rejected' ? 'rejected' : 'pending',
                 'statusLabel' => $record->status === 'rejected' ? 'Rejected' : 'Pending',
-                'remarks'     => $record->status === 'rejected'
+                'remarks' => $record->status === 'rejected'
                     ? ($record->reason_for_rejection ?: 'Rejected during approval')
                     : 'Waiting for approver decision',
-                'by'          => 'N/A',
-                'date'        => 'N/A',
+                'by' => 'N/A',
+                'date' => 'N/A',
             ]];
         }
 
@@ -206,55 +206,55 @@ class TrackRequestStatus extends ViewRecord
 
             if ($approval->status === 'approved') {
                 return [
-                    'title'       => $title,
-                    'status'      => 'approved',
+                    'title' => $title,
+                    'status' => 'approved',
                     'statusLabel' => 'Approved',
-                    'remarks'     => $this->approvedRemarkByRole($approval->role_name),
-                    'by'          => $this->resolveApproverName($approval->approved_by),
-                    'date'        => $approval->acted_at?->format('F d, Y h:i A') ?? 'N/A',
+                    'remarks' => $this->approvedRemarkByRole($approval->role_name),
+                    'by' => $this->resolveApproverName($approval->approved_by),
+                    'date' => $approval->acted_at?->format('F d, Y h:i A') ?? 'N/A',
                 ];
             }
 
             if ($approval->status === 'declined') {
                 return [
-                    'title'       => $title,
-                    'status'      => 'rejected',
+                    'title' => $title,
+                    'status' => 'rejected',
                     'statusLabel' => 'Rejected',
-                    'remarks'     => $record->reason_for_rejection ?: $this->rejectedRemarkByRole($approval->role_name),
-                    'by'          => $this->resolveApproverName($approval->approved_by),
-                    'date'        => $approval->acted_at?->format('F d, Y h:i A') ?? 'N/A',
+                    'remarks' => $record->reason_for_rejection ?: $this->rejectedRemarkByRole($approval->role_name),
+                    'by' => $this->resolveApproverName($approval->approved_by),
+                    'date' => $approval->acted_at?->format('F d, Y h:i A') ?? 'N/A',
                 ];
             }
 
             if ($firstDeclinedIndex !== false && $index > $firstDeclinedIndex) {
                 return [
-                    'title'       => $title,
-                    'status'      => 'stopped',
+                    'title' => $title,
+                    'status' => 'stopped',
                     'statusLabel' => 'Stopped',
-                    'remarks'     => 'Process stopped due to approval rejection',
-                    'by'          => 'N/A',
-                    'date'        => 'N/A',
+                    'remarks' => 'Process stopped due to approval rejection',
+                    'by' => 'N/A',
+                    'date' => 'N/A',
                 ];
             }
 
             if ($firstPendingIndex !== false && $index > $firstPendingIndex) {
                 return [
-                    'title'       => $title,
-                    'status'      => 'upcoming',
+                    'title' => $title,
+                    'status' => 'upcoming',
                     'statusLabel' => 'Not yet started',
-                    'remarks'     => 'Waiting for previous approval step',
-                    'by'          => 'N/A',
-                    'date'        => 'N/A',
+                    'remarks' => 'Waiting for previous approval step',
+                    'by' => 'N/A',
+                    'date' => 'N/A',
                 ];
             }
 
             return [
-                'title'       => $title,
-                'status'      => 'pending',
+                'title' => $title,
+                'status' => 'pending',
                 'statusLabel' => 'Pending',
-                'remarks'     => 'Waiting for review',
-                'by'          => 'N/A',
-                'date'        => 'N/A',
+                'remarks' => 'Waiting for review',
+                'by' => 'N/A',
+                'date' => 'N/A',
             ];
         })->all();
     }
@@ -283,23 +283,23 @@ class TrackRequestStatus extends ViewRecord
 
         if ($this->hasDeclinedApprovalStep($record)) {
             return [
-                'title'       => 'Finance',
-                'status'      => 'stopped',
+                'title' => 'Finance',
+                'status' => 'stopped',
                 'statusLabel' => 'Stopped',
-                'remarks'     => 'Process stopped due to approval rejection',
-                'by'          => 'N/A',
-                'date'        => 'N/A',
+                'remarks' => 'Process stopped due to approval rejection',
+                'by' => 'N/A',
+                'date' => 'N/A',
             ];
         }
 
         if ($this->hasPendingApprovalStep($record)) {
             return [
-                'title'       => 'Finance',
-                'status'      => 'upcoming',
+                'title' => 'Finance',
+                'status' => 'upcoming',
                 'statusLabel' => 'Not yet started',
-                'remarks'     => 'Waiting for approval completion',
-                'by'          => 'N/A',
-                'date'        => 'N/A',
+                'remarks' => 'Waiting for approval completion',
+                'by' => 'N/A',
+                'date' => 'N/A',
             ];
         }
 
@@ -308,12 +308,12 @@ class TrackRequestStatus extends ViewRecord
         ], true);
 
         return [
-            'title'       => 'Finance',
-            'status'      => $isInQueue ? 'pending' : 'upcoming',
+            'title' => 'Finance',
+            'status' => $isInQueue ? 'pending' : 'upcoming',
             'statusLabel' => $isInQueue ? 'Pending' : 'Not yet started',
-            'remarks'     => $isInQueue ? 'In finance verification queue' : 'Waiting for approval completion',
-            'by'          => 'N/A',
-            'date'        => 'N/A',
+            'remarks' => $isInQueue ? 'In finance verification queue' : 'Waiting for approval completion',
+            'by' => 'N/A',
+            'date' => 'N/A',
         ];
     }
 
@@ -349,34 +349,34 @@ class TrackRequestStatus extends ViewRecord
 
         if ($financeRejected) {
             return [
-                'title'       => 'Treasury',
-                'status'      => 'stopped',
+                'title' => 'Treasury',
+                'status' => 'stopped',
                 'statusLabel' => 'Stopped',
-                'remarks'     => 'Process stopped due to finance rejection',
-                'by'          => 'N/A',
-                'date'        => 'N/A',
+                'remarks' => 'Process stopped due to finance rejection',
+                'by' => 'N/A',
+                'date' => 'N/A',
             ];
         }
 
         if ($this->hasDeclinedApprovalStep($record)) {
             return [
-                'title'       => 'Treasury',
-                'status'      => 'stopped',
+                'title' => 'Treasury',
+                'status' => 'stopped',
                 'statusLabel' => 'Stopped',
-                'remarks'     => 'Process stopped due to approval rejection',
-                'by'          => 'N/A',
-                'date'        => 'N/A',
+                'remarks' => 'Process stopped due to approval rejection',
+                'by' => 'N/A',
+                'date' => 'N/A',
             ];
         }
 
         if ($this->hasPendingApprovalStep($record)) {
             return [
-                'title'       => 'Treasury',
-                'status'      => 'upcoming',
+                'title' => 'Treasury',
+                'status' => 'upcoming',
                 'statusLabel' => 'Not yet started',
-                'remarks'     => 'Waiting for approval completion',
-                'by'          => 'N/A',
-                'date'        => 'N/A',
+                'remarks' => 'Waiting for approval completion',
+                'by' => 'N/A',
+                'date' => 'N/A',
             ];
         }
 
@@ -386,12 +386,12 @@ class TrackRequestStatus extends ViewRecord
         ], true);
 
         return [
-            'title'       => 'Treasury',
-            'status'      => $isInQueue ? 'pending' : 'upcoming',
+            'title' => 'Treasury',
+            'status' => $isInQueue ? 'pending' : 'upcoming',
             'statusLabel' => $isInQueue ? 'Pending' : 'Not yet started',
-            'remarks'     => $isInQueue ? 'In treasury queue for processing/releasing' : 'Waiting for finance approval',
-            'by'          => 'N/A',
-            'date'        => 'N/A',
+            'remarks' => $isInQueue ? 'In treasury queue for processing/releasing' : 'Waiting for finance approval',
+            'by' => 'N/A',
+            'date' => 'N/A',
         ];
     }
 
@@ -431,12 +431,12 @@ class TrackRequestStatus extends ViewRecord
     private function makeStep(string $title, string $status, string $statusLabel, Activity $activity): array
     {
         return [
-            'title'       => $title,
-            'status'      => $status,
+            'title' => $title,
+            'status' => $status,
             'statusLabel' => $statusLabel,
-            'remarks'     => $activity->properties['status_remarks'] ?? $statusLabel,
-            'by'          => $activity->causer?->name ?? 'N/A',
-            'date'        => $activity->created_at?->format('F d, Y h:i A') ?? 'N/A',
+            'remarks' => $activity->properties['status_remarks'] ?? $statusLabel,
+            'by' => $activity->causer?->name ?? 'N/A',
+            'date' => $activity->created_at?->format('F d, Y h:i A') ?? 'N/A',
         ];
     }
 
@@ -447,22 +447,22 @@ class TrackRequestStatus extends ViewRecord
     {
         return match ($state) {
             'approved' => [
-                'card'  => 'border-emerald-600',
+                'card' => 'border-emerald-600',
                 'title' => 'text-emerald-700',
                 'badge' => 'bg-emerald-600 text-white',
             ],
             'rejected' => [
-                'card'  => 'border-red-600',
+                'card' => 'border-red-600',
                 'title' => 'text-red-700',
                 'badge' => 'bg-red-600 text-white',
             ],
-            'pending'  => [
-                'card'  => 'border-amber-500',
+            'pending' => [
+                'card' => 'border-amber-500',
                 'title' => 'text-amber-700',
                 'badge' => 'bg-amber-500 text-white',
             ],
-            default    => [
-                'card'  => 'border-slate-300',
+            default => [
+                'card' => 'border-slate-300',
                 'title' => 'text-slate-700',
                 'badge' => 'bg-slate-300 text-slate-700',
             ],
@@ -475,14 +475,14 @@ class TrackRequestStatus extends ViewRecord
     private function approvedRemarkByRole(string $role): string
     {
         return match ($role) {
-            'super_admin'            => StatusRemarks::SUPER_ADMIN_APPROVED_REQUEST->value,
-            'department_head'        => StatusRemarks::DEPARTMENT_HEAD_APPROVED_REQUEST->value,
-            'president'              => StatusRemarks::PRESIDENT_APPROVED_REQUEST->value,
-            'treasury_manager'       => StatusRemarks::TREASURY_MANAGER_APPROVED_REQUEST->value,
-            'treasury_supervisor'    => StatusRemarks::TREASURY_SUPERVISOR_APPROVED_REQUEST->value,
-            'sales_channel_manager'  => StatusRemarks::SALES_CHANNEL_MANAGER_APPROVED_REQUEST->value,
+            'super_admin' => StatusRemarks::SUPER_ADMIN_APPROVED_REQUEST->value,
+            'department_head' => StatusRemarks::DEPARTMENT_HEAD_APPROVED_REQUEST->value,
+            'president' => StatusRemarks::PRESIDENT_APPROVED_REQUEST->value,
+            'treasury_manager' => StatusRemarks::TREASURY_MANAGER_APPROVED_REQUEST->value,
+            'treasury_supervisor' => StatusRemarks::TREASURY_SUPERVISOR_APPROVED_REQUEST->value,
+            'sales_channel_manager' => StatusRemarks::SALES_CHANNEL_MANAGER_APPROVED_REQUEST->value,
             'national_sales_manager' => StatusRemarks::NATIONAL_SALES_MANAGER_APPROVED_REQUEST->value,
-            default                  => str($role)->replace('_', ' ')->title()->append(' Approved Request')->toString(),
+            default => str($role)->replace('_', ' ')->title()->append(' Approved Request')->toString(),
         };
     }
 
@@ -492,14 +492,14 @@ class TrackRequestStatus extends ViewRecord
     private function rejectedRemarkByRole(string $role): string
     {
         return match ($role) {
-            'super_admin'            => StatusRemarks::SUPER_ADMIN_REJECTED_REQUEST->value,
-            'department_head'        => StatusRemarks::DEPARTMENT_HEAD_REJECTED_REQUEST->value,
-            'president'              => StatusRemarks::PRESIDENT_REJECTED_REQUEST->value,
-            'treasury_manager'       => StatusRemarks::TREASURY_MANAGER_REJECTED_REQUEST->value,
-            'treasury_supervisor'    => StatusRemarks::TREASURY_SUPERVISOR_REJECTED_REQUEST->value,
-            'sales_channel_manager'  => StatusRemarks::SALES_CHANNEL_MANAGER_REJECTED_REQUEST->value,
+            'super_admin' => StatusRemarks::SUPER_ADMIN_REJECTED_REQUEST->value,
+            'department_head' => StatusRemarks::DEPARTMENT_HEAD_REJECTED_REQUEST->value,
+            'president' => StatusRemarks::PRESIDENT_REJECTED_REQUEST->value,
+            'treasury_manager' => StatusRemarks::TREASURY_MANAGER_REJECTED_REQUEST->value,
+            'treasury_supervisor' => StatusRemarks::TREASURY_SUPERVISOR_REJECTED_REQUEST->value,
+            'sales_channel_manager' => StatusRemarks::SALES_CHANNEL_MANAGER_REJECTED_REQUEST->value,
             'national_sales_manager' => StatusRemarks::NATIONAL_SALES_MANAGER_REJECTED_REQUEST->value,
-            default                  => str($role)->replace('_', ' ')->title()->append(' Rejected Request')->toString(),
+            default => str($role)->replace('_', ' ')->title()->append(' Rejected Request')->toString(),
         };
     }
 
@@ -508,7 +508,7 @@ class TrackRequestStatus extends ViewRecord
      */
     private function resolveApproverName(?string $userId): string
     {
-        if (! $userId) {
+        if (!$userId) {
             return 'N/A';
         }
 

@@ -2,8 +2,7 @@
 
 namespace App\Policies;
 
-use Illuminate\Auth\Access\Response;
-use App\Models\ForLiquidation;
+use App\Models\CashRequest\ForLiquidation;
 use App\Models\User;
 
 class ForLiquidationPolicy

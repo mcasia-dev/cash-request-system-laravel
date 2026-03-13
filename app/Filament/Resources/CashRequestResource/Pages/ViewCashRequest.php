@@ -4,20 +4,21 @@ namespace App\Filament\Resources\CashRequestResource\Pages;
 
 use App\Enums\CashRequest\Status;
 use App\Filament\Resources\CashRequestResource;
-use App\Models\LiquidationReceipt;
-use App\Models\PaymentProcess;
+use App\Filament\Support\RendersAttachmentPreview;
+use App\Models\CashRequest\LiquidationReceipt;
+use App\Models\CashRequest\PaymentProcess;
 use Carbon\Carbon;
 use Facades\App\Services\CashRequest\CashRequestService;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section;
-use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
 use Filament\Resources\Pages\ViewRecord;
-use Njxqlus\Filament\Components\Infolists\LightboxSpatieMediaLibraryImageEntry;
 
 class ViewCashRequest extends ViewRecord
 {
+    use RendersAttachmentPreview;
+
     protected static string $resource = CashRequestResource::class;
 
     public function infolist(Infolist $infolist): Infolist
@@ -100,9 +101,10 @@ class ViewCashRequest extends ViewRecord
                                     ->label('Requesting Amount')
                                     ->money('PHP'),
 
-                                LightboxSpatieMediaLibraryImageEntry::make('attachment')
+                                TextEntry::make('attachment')
                                     ->label('Attached File/Images')
-                                    ->collection('attachments')
+                                    ->state(fn($record) => $this->renderAttachmentsHtml($record))
+                                    ->html()
                                     ->columnSpanFull(),
 
                                 TextEntry::make('status')

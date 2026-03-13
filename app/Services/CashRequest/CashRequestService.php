@@ -3,8 +3,7 @@
 namespace App\Services\CashRequest;
 
 use App\Enums\CashRequest\Status;
-use App\Models\CashRequest;
-use App\Models\ForLiquidation;
+use App\Models\CashRequest\ForLiquidation;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;

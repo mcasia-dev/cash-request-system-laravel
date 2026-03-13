@@ -3,7 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Filament\Widgets\Concerns\HasDashboardReportLinks;
-use App\Models\PaymentProcess;
+use App\Models\CashRequest\PaymentProcess;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Auth;
 use Leandrocfe\FilamentApexCharts\Widgets\ApexChartWidget;

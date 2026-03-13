@@ -35,13 +35,17 @@ class RoleSeeder extends Seeder
                 'guard_name' => 'web',
             ],
             [
+                'name' => 'hr_manager',
+                'guard_name' => 'web',
+            ],
+            [
                 'name' => 'treasury_manager',
                 'guard_name' => 'web',
             ],
-//            [
-//                'name'       => 'treasury_supervisor',
-//                'guard_name' => 'web',
-//            ],
+            [
+                'name' => 'accounting_manager',
+                'guard_name' => 'web',
+            ],
             [
                 'name' => 'treasury_staff',
                 'guard_name' => 'web',
@@ -50,6 +54,14 @@ class RoleSeeder extends Seeder
                 'name' => 'finance_staff',
                 'guard_name' => 'web',
             ],
+            [
+                'name' => 'hr_staff',
+                'guard_name' => 'web',
+            ],
+            [
+                'name' => 'accounting_staff',
+                'guard_name' => 'web',
+            ]
         ];
 
         foreach ($roles as $role) {

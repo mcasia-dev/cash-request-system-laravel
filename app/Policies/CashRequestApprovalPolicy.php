@@ -2,8 +2,7 @@
 
 namespace App\Policies;
 
-use Illuminate\Auth\Access\Response;
-use App\Models\CashRequestApproval;
+use App\Models\CashRequest\CashRequestApproval;
 use App\Models\User;
 
 class CashRequestApprovalPolicy

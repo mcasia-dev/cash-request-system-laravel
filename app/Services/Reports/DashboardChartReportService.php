@@ -2,15 +2,14 @@
 
 namespace App\Services\Reports;
 
+use App\Enums\CashRequest\NatureOfRequestEnum;
 use App\Enums\CashRequest\Status;
-use App\Enums\NatureOfRequestEnum;
-use App\Models\CashRequest;
-use App\Models\ForCashRelease;
-use App\Models\PaymentProcess;
+use App\Models\CashRequest\CashRequest;
+use App\Models\CashRequest\ForCashRelease;
+use App\Models\CashRequest\PaymentProcess;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\Auth;
 use InvalidArgumentException;
 use Spatie\Activitylog\Models\Activity;
 
@@ -52,14 +51,14 @@ class DashboardChartReportService
         $rows = [
             [
                 'label' => 'Liquidated',
-                'value' => (float) (clone $baseQuery)
-                    ->whereHas('cashRequest', fn (Builder $query): Builder => $query->where('status', Status::LIQUIDATED->value))
+                'value' => (float)(clone $baseQuery)
+                    ->whereHas('cashRequest', fn(Builder $query): Builder => $query->where('status', Status::LIQUIDATED->value))
                     ->sum('cash_requests.requesting_amount'),
             ],
             [
                 'label' => 'Unliquidated',
-                'value' => (float) (clone $baseQuery)
-                    ->whereHas('cashRequest', fn (Builder $query): Builder => $query->where('status', Status::RELEASED->value))
+                'value' => (float)(clone $baseQuery)
+                    ->whereHas('cashRequest', fn(Builder $query): Builder => $query->where('status', Status::RELEASED->value))
                     ->sum('cash_requests.requesting_amount'),
             ],
         ];
@@ -88,17 +87,17 @@ class DashboardChartReportService
                 ]);
             });
 
-        if (! $this->canSummarizeAllReleaseData($user)) {
+        if (!$this->canSummarizeAllReleaseData($user)) {
             $baseQuery->where('released_by', $user?->id);
         }
 
         $cashAdvanceCount = (clone $baseQuery)
-            ->whereHas('cashRequest', fn (Builder $query): Builder => $query->where('nature_of_request', NatureOfRequestEnum::CASH_ADVANCE->value))
+            ->whereHas('cashRequest', fn(Builder $query): Builder => $query->where('nature_of_request', NatureOfRequestEnum::CASH_ADVANCE->value))
             ->distinct()
             ->count('cash_request_id');
 
         $pettyCashCount = (clone $baseQuery)
-            ->whereHas('cashRequest', fn (Builder $query): Builder => $query->where('nature_of_request', NatureOfRequestEnum::PETTY_CASH->value))
+            ->whereHas('cashRequest', fn(Builder $query): Builder => $query->where('nature_of_request', NatureOfRequestEnum::PETTY_CASH->value))
             ->distinct()
             ->count('cash_request_id');
 
@@ -126,7 +125,7 @@ class DashboardChartReportService
             ->where('subject_type', PaymentProcess::class)
             ->whereIn('event', ['approved', 'rejected']);
 
-        if (! $this->canSummarizeAllApprovalData($user)) {
+        if (!$this->canSummarizeAllApprovalData($user)) {
             $baseQuery->causedBy($user);
         }
 
@@ -149,23 +148,24 @@ class DashboardChartReportService
         string $title,
         string $subtitle,
         string $metricLabel,
-        array $rows,
-        bool $currency = false,
-        bool $percentage = false,
-        array $extra = []
-    ): array {
-        $max = max(array_map(fn (array $row): float|int => (float) $row['value'], $rows) ?: [0]);
-        $total = array_sum(array_map(fn (array $row): float|int => (float) $row['value'], $rows));
+        array  $rows,
+        bool   $currency = false,
+        bool   $percentage = false,
+        array  $extra = []
+    ): array
+    {
+        $max = max(array_map(fn(array $row): float|int => (float)$row['value'], $rows) ?: [0]);
+        $total = array_sum(array_map(fn(array $row): float|int => (float)$row['value'], $rows));
 
         $normalizedRows = collect($rows)->map(function (array $row) use ($max, $currency, $percentage): array {
-            $value = (float) $row['value'];
+            $value = (float)$row['value'];
 
             return [
                 ...$row,
-                'width' => $max > 0 ? max(12, (int) round(($value / $max) * 100)) : 0,
+                'width' => $max > 0 ? max(12, (int)round(($value / $max) * 100)) : 0,
                 'formatted_value' => $currency
                     ? 'PHP ' . number_format($value, 2)
-                    : ($percentage ? number_format($value, 2) . '%' : number_format((int) $value)),
+                    : ($percentage ? number_format($value, 2) . '%' : number_format((int)$value)),
             ];
         })->all();
 
@@ -175,7 +175,7 @@ class DashboardChartReportService
             'subtitle' => $subtitle,
             'metricLabel' => $metricLabel,
             'rows' => $normalizedRows,
-            'total' => $currency ? 'PHP ' . number_format($total, 2) : ($percentage ? number_format($total, 2) . '%' : number_format((int) $total)),
+            'total' => $currency ? 'PHP ' . number_format($total, 2) : ($percentage ? number_format($total, 2) . '%' : number_format((int)$total)),
             'currency' => $currency,
             'percentage' => $percentage,
             'generatedAt' => now(),
@@ -192,11 +192,11 @@ class DashboardChartReportService
                 Status::LIQUIDATED->value,
             ]);
 
-        if (! $user) {
+        if (!$user) {
             return $query->whereRaw('1 = 0');
         }
 
-        if (! $this->canSummarizeAllReleaseData($user)) {
+        if (!$this->canSummarizeAllReleaseData($user)) {
             $query->where('for_cash_releases.released_by', $user->id);
         }
 
@@ -205,7 +205,7 @@ class DashboardChartReportService
 
     private function canSummarizeAllReleaseData(?User $user): bool
     {
-        if (! $user) {
+        if (!$user) {
             return false;
         }
 
@@ -214,7 +214,7 @@ class DashboardChartReportService
 
     private function canSummarizeAllApprovalData(?User $user): bool
     {
-        if (! $user) {
+        if (!$user) {
             return false;
         }
 

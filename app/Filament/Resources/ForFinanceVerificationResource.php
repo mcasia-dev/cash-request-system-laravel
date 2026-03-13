@@ -5,7 +5,7 @@ namespace App\Filament\Resources;
 use App\Enums\CashRequest\Status;
 use App\Enums\CashRequest\StatusRemarks;
 use App\Filament\Resources\ForFinanceVerificationResource\Pages;
-use App\Models\ForFinanceVerification;
+use App\Models\CashRequest\ForFinanceVerification;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;

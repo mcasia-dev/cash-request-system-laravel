@@ -1,12 +1,12 @@
 <?php
+
 namespace App\Services\CashRequest;
 
 use App\Enums\CashRequest\Status;
 use App\Enums\CashRequest\StatusRemarks;
-use App\Jobs\ApproveCashRequestJob;
-use App\Jobs\RejectCashRequestJob;
+use App\Jobs\CashRequest\ApproveCashRequestJob;
+use App\Jobs\CashRequest\RejectCashRequestJob;
 use App\Models\User;
-use App\Services\CashRequestApprovalFlowService;
 use App\Services\Remarks\StatusRemarkResolver;
 use Filament\Notifications\Actions\Action as NotificationAction;
 use Filament\Notifications\Notification;
@@ -22,11 +22,11 @@ class ForApprovalRequestService
     public function approveForApprovalRequest($record)
     {
         try {
-            $user                     = Auth::user();
-            $previousStatus           = $record->status;
-            $approvalResult           = app(CashRequestApprovalFlowService::class)->applyApproval($record, $user);
+            $user = Auth::user();
+            $previousStatus = $record->status;
+            $approvalResult = app(CashRequestApprovalFlowService::class)->applyApproval($record, $user);
             $approved_remarks_by_role = $approvalResult['approved_remarks_by_role'] ?? $approvalResult['status_remarks'];
-            $newStatus                = Status::IN_PROGRESS->value;
+            $newStatus = Status::IN_PROGRESS->value;
 
             // Log activity
             activity()
@@ -34,12 +34,12 @@ class ForApprovalRequestService
                 ->performedOn($record)
                 ->event('approved')
                 ->withProperties([
-                    'request_no'        => $record->request_no,
-                    'activity_name'     => $record->activity_name,
+                    'request_no' => $record->request_no,
+                    'activity_name' => $record->activity_name,
                     'requesting_amount' => $record->requesting_amount,
-                    'previous_status'   => $previousStatus,
-                    'new_status'        => $newStatus,
-                    'status_remarks'    => $approved_remarks_by_role,
+                    'previous_status' => $previousStatus,
+                    'new_status' => $newStatus,
+                    'status_remarks' => $approved_remarks_by_role,
                 ])
                 ->log("Cash request {$record->request_no} approval step was completed by {$user->name} ({$user->position})");
 
@@ -72,9 +72,9 @@ class ForApprovalRequestService
                 ->title(
                     $approvalResult['is_final_step']
                         ? (
-                        $record->fresh()->status_remarks === StatusRemarks::FOR_FINANCE_VERIFICATION->value
-                            ? 'Final approval completed. Sent to Finance Verification.'
-                            : 'Final approval completed. Sent to Payment Processing.'
+                    $record->fresh()->status_remarks === StatusRemarks::FOR_FINANCE_VERIFICATION->value
+                        ? 'Final approval completed. Sent to Finance Verification.'
+                        : 'Final approval completed. Sent to Payment Processing.'
                     )
                         : 'Approval step completed.'
                 )
@@ -96,10 +96,10 @@ class ForApprovalRequestService
     public function rejectForApprovalRequest($record, array $data)
     {
         try {
-            $user           = Auth::user();
+            $user = Auth::user();
             $previousStatus = $record->status;
             $status_remarks = app(CashRequestApprovalFlowService::class)->applyRejection($record, $user, $data['rejection_reason']);
-            $newStatus      = Status::REJECTED->value;
+            $newStatus = Status::REJECTED->value;
 
             // Log activity
             activity()
@@ -107,12 +107,12 @@ class ForApprovalRequestService
                 ->performedOn($record)
                 ->event('rejected')
                 ->withProperties([
-                    'request_no'           => $record->request_no,
-                    'activity_name'        => $record->activity_name,
-                    'requesting_amount'    => $record->requesting_amount,
-                    'previous_status'      => $previousStatus,
-                    'new_status'           => $newStatus,
-                    'status_remarks'       => $status_remarks,
+                    'request_no' => $record->request_no,
+                    'activity_name' => $record->activity_name,
+                    'requesting_amount' => $record->requesting_amount,
+                    'previous_status' => $previousStatus,
+                    'new_status' => $newStatus,
+                    'status_remarks' => $status_remarks,
                     'reason_for_rejection' => $data['rejection_reason'],
                 ])
                 ->log("Cash request {$record->request_no} was rejected by {$user->name} ({$user->position})");
@@ -178,23 +178,22 @@ class ForApprovalRequestService
             ->sendToDatabase($approvers);
     }
 
-    
 
     public function getRejectActivityAction(array $data, $record)
     {
         DB::transaction(function () use ($data, $record): void {
             $record->update([
-                'status'            => 'rejected',
+                'status' => 'rejected',
                 'rejection_remarks' => $data['rejection_remarks'],
             ]);
 
             $cashRequest = $record->cashRequest;
-            $total       = $cashRequest->activityLists()
+            $total = $cashRequest->activityLists()
                 ->where('status', '!=', 'rejected')
                 ->sum('requesting_amount');
 
             $cashRequest->update([
-                'requesting_amount' => (float) $total,
+                'requesting_amount' => (float)$total,
             ]);
 
             $hasRemainingActivities = $cashRequest->activityLists()
@@ -204,13 +203,13 @@ class ForApprovalRequestService
                 })
                 ->exists();
 
-            if (! $hasRemainingActivities) {
+            if (!$hasRemainingActivities) {
                 $statusRemarks = app(StatusRemarkResolver::class)
                     ->rejectByPermissions(Auth::user(), 'approval');
 
                 $cashRequest->update([
-                    'status'               => Status::REJECTED->value,
-                    'status_remarks'       => $statusRemarks,
+                    'status' => Status::REJECTED->value,
+                    'status_remarks' => $statusRemarks,
                     'reason_for_rejection' => $data['rejection_remarks'],
                 ]);
             }

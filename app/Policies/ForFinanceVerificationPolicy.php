@@ -2,8 +2,7 @@
 
 namespace App\Policies;
 
-use Illuminate\Auth\Access\Response;
-use App\Models\ForFinanceVerification;
+use App\Models\CashRequest\ForFinanceVerification;
 use App\Models\User;
 
 class ForFinanceVerificationPolicy

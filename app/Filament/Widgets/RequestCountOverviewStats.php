@@ -3,7 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Enums\CashRequest\Status;
-use App\Models\CashRequest;
+use App\Models\CashRequest\CashRequest;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 use Illuminate\Database\Eloquent\Builder;

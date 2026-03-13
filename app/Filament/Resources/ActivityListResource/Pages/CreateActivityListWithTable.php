@@ -1,15 +1,17 @@
 <?php
+
 namespace App\Filament\Resources\ActivityListResource\Pages;
 
+use App\Enums\CashRequest\ModeOfTransfer;
+use App\Enums\CashRequest\NatureOfRequestEnum;
 use App\Enums\CashRequest\Status;
 use App\Enums\CashRequest\StatusRemarks;
-use App\Enums\NatureOfRequestEnum;
 use App\Filament\Resources\ActivityListResource;
-use App\Models\ActivityList;
-use App\Models\ApprovalRule;
-use App\Models\CashRequest;
+use App\Models\CashRequest\ActivityList;
+use App\Models\CashRequest\ApprovalRule;
+use App\Models\CashRequest\CashRequest;
 use App\Models\User;
-use App\Services\CashRequestApprovalFlowService;
+use App\Services\CashRequest\CashRequestApprovalFlowService;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Placeholder;
@@ -41,13 +43,19 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
     use InteractsWithForms;
     use InteractsWithTable;
 
-    protected static string $resource        = ActivityListResource::class;
+    protected static string $resource = ActivityListResource::class;
     protected static ?string $navigationIcon = 'heroicon-o-document-text';
-    protected static string $view            = 'filament.pages.create-activity-list';
+    protected static string $view = 'filament.pages.create-activity-list';
 
-    public array $data                   = [];
-    public ?int $draftCashRequestId      = null;
+    public array $data = [];
+    public ?int $draftCashRequestId = null;
     public ?string $draftNatureOfRequest = null;
+    public ?string $draftModeOfTransfer = null;
+
+    public function getBreadcrumbs(): array
+    {
+        return [];
+    }
 
     public function mount(): void
     {
@@ -71,10 +79,28 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
                             ->required(fn() => blank($this->draftCashRequestId))
                             ->dehydrated(fn() => blank($this->draftCashRequestId)),
 
+                        Select::make('mode_of_transfer')
+                            ->label('Mode of Transfer')
+                            ->options(ModeOfTransfer::filamentOptions())
+                            ->visible(function (Get $get): bool {
+                                return blank($this->draftCashRequestId) && $this->isCashAdvanceNature($get('nature_of_request'));
+                            })
+                            ->required(function (Get $get): bool {
+                                return blank($this->draftCashRequestId) && $this->isCashAdvanceNature($get('nature_of_request'));
+                            })
+                            ->dehydrated(function (Get $get): bool {
+                                return blank($this->draftCashRequestId) && $this->isCashAdvanceNature($get('nature_of_request'));
+                            }),
+
                         Placeholder::make('selected_nature_of_request')
                             ->label('Selected Nature of Request')
                             ->visible(fn() => filled($this->draftCashRequestId))
-                            ->content(fn() => (string) $this->draftNatureOfRequest),
+                            ->content(fn() => (string)$this->draftNatureOfRequest),
+
+                        Placeholder::make('selected_mode_of_transfer')
+                            ->label('Selected Mode of Transfer')
+                            ->visible(fn() => filled($this->draftCashRequestId) && $this->isCashAdvanceNature())
+                            ->content(fn() => $this->resolveModeOfTransferLabel($this->draftModeOfTransfer)),
                     ]),
 
                 Section::make('Activity Details')
@@ -88,6 +114,8 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
                         DatePicker::make('activity_date')
                             ->label('Activity Date')
                             ->minDate(now()->toDateString())
+                            ->prefixIcon('heroicon-m-calendar')
+                            ->native(false)
                             ->required(),
 
                         TextInput::make('activity_venue')
@@ -120,7 +148,7 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
 
     public function create(): void
     {
-        $formData        = $this->form->getState();
+        $formData = $this->form->getState();
         $natureOfRequest = $formData['nature_of_request'] ?? $this->draftNatureOfRequest;
 
         if ($this->hasActiveRequestForNature($natureOfRequest, $this->draftCashRequestId)) {
@@ -133,18 +161,18 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
             return;
         }
 
-        $cashRequest = $this->getOrCreateDraftCashRequest($formData['nature_of_request'] ?? null);
+        $cashRequest = $this->getOrCreateDraftCashRequest($formData['nature_of_request'] ?? null, $formData['mode_of_transfer'] ?? null);
 
         $activityList = ActivityList::create([
-            'user_id'           => Auth::id(),
-            'cash_request_id'   => $cashRequest->id,
-            'control_no'        => Auth::user()->control_no,
-            'activity_name'     => $formData['activity_name'],
-            'activity_date'     => $formData['activity_date'],
-            'activity_venue'    => $formData['activity_venue'],
+            'user_id' => Auth::id(),
+            'cash_request_id' => $cashRequest->id,
+            'control_no' => Auth::user()->control_no,
+            'activity_name' => $formData['activity_name'],
+            'activity_date' => $formData['activity_date'],
+            'activity_venue' => $formData['activity_venue'],
             'requesting_amount' => $formData['requesting_amount'],
-            'purpose'           => $formData['purpose'],
-            'status'            => 'pending',
+            'purpose' => $formData['purpose'],
+            'status' => 'pending',
         ]);
 
         $this->form->model($activityList)->saveRelationships();
@@ -256,15 +284,15 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
 
     private function submitCashRequest(array $data = []): void
     {
-        $failureMessage       = 'Nothing to submit';
+        $failureMessage = 'Nothing to submit';
         $submittedCashRequest = null;
-        $submittedBy          = null;
+        $submittedBy = null;
 
         $submitted = DB::transaction(function () use (&$failureMessage, &$submittedCashRequest, &$submittedBy, $data): bool {
-            $user        = Auth::user();
+            $user = Auth::user();
             $cashRequest = $this->getDraftCashRequest();
 
-            if (! $cashRequest) {
+            if (!$cashRequest) {
                 $failureMessage = 'Nothing to submit';
 
                 return false;
@@ -281,8 +309,8 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
                 return false;
             }
 
-            $totalRequestingAmount = (float) $activities->sum('requesting_amount');
-            $maxAllowedAmount      = $this->getConfiguredMaxAmountForNature($cashRequest->nature_of_request);
+            $totalRequestingAmount = (float)$activities->sum('requesting_amount');
+            $maxAllowedAmount = $this->getConfiguredMaxAmountForNature($cashRequest->nature_of_request);
 
             if ($maxAllowedAmount !== null && $totalRequestingAmount > $maxAllowedAmount) {
                 $failureMessage = 'Total requesting amount must not be greater than PHP ' . number_format($maxAllowedAmount, 2) . '.';
@@ -297,10 +325,10 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
             }
 
             $cashRequest->update([
-                'requesting_amount'                   => $totalRequestingAmount,
-                'status'                              => Status::PENDING->value,
-                'status_remarks'                      => StatusRemarks::REQUEST_SUBMITTED->value,
-                'is_approved_the_authority_to_deduct' => (bool) ($data['is_approved_the_authority_to_deduct'] ?? false),
+                'requesting_amount' => $totalRequestingAmount,
+                'status' => Status::PENDING->value,
+                'status_remarks' => StatusRemarks::REQUEST_SUBMITTED->value,
+                'is_approved_the_authority_to_deduct' => (bool)($data['is_approved_the_authority_to_deduct'] ?? false),
             ]);
 
             try {
@@ -316,21 +344,21 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
                 ->performedOn($cashRequest)
                 ->event('created')
                 ->withProperties([
-                    'request_no'        => $cashRequest->request_no,
-                    'activity_name'     => $cashRequest->activity_name,
+                    'request_no' => $cashRequest->request_no,
+                    'activity_name' => $cashRequest->activity_name,
                     'requesting_amount' => $cashRequest->requesting_amount,
-                    'status'            => Status::PENDING->value,
-                    'status_remarks'    => StatusRemarks::REQUEST_SUBMITTED->value,
+                    'status' => Status::PENDING->value,
+                    'status_remarks' => StatusRemarks::REQUEST_SUBMITTED->value,
                 ])
                 ->log("Cash request {$cashRequest->request_no} was submitted by {$user->name} ({$user->position})");
 
             $submittedCashRequest = $cashRequest->fresh();
-            $submittedBy          = $user;
+            $submittedBy = $user;
 
             return true;
         });
 
-        if (! $submitted) {
+        if (!$submitted) {
             Notification::make()
                 ->title($failureMessage)
                 ->warning()
@@ -369,7 +397,7 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
             ->first();
     }
 
-    private function getOrCreateDraftCashRequest(?string $natureOfRequest): CashRequest
+    private function getOrCreateDraftCashRequest(?string $natureOfRequest, ?string $modeOfTransfer): CashRequest
     {
         $cashRequest = $this->getDraftCashRequest();
 
@@ -377,20 +405,27 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
             return $cashRequest;
         }
 
-        return CashRequest::create([
-            'user_id'           => Auth::id(),
+        $attributes = [
+            'user_id' => Auth::id(),
             'nature_of_request' => $natureOfRequest,
             'requesting_amount' => 0,
-            'status'            => Status::PENDING->value,
-        ]);
+            'status' => Status::PENDING->value,
+        ];
+
+        if (filled($modeOfTransfer)) {
+            $attributes['mode_of_transfer'] = $modeOfTransfer;
+        }
+
+        return CashRequest::create($attributes);
     }
 
     private function loadDraftCashRequestState(): void
     {
         $cashRequest = $this->getDraftCashRequest();
 
-        $this->draftCashRequestId   = $cashRequest?->id;
+        $this->draftCashRequestId = $cashRequest?->id;
         $this->draftNatureOfRequest = $cashRequest?->nature_of_request;
+        $this->draftModeOfTransfer = $cashRequest?->mode_of_transfer;
     }
 
     private function getConfiguredMaxAmountForNature(?string $nature)
@@ -426,6 +461,32 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
             )
             ->whereNotIn('status', [Status::LIQUIDATED->value, Status::CANCELLED->value, Status::REJECTED->value])
             ->exists();
+    }
+
+    private function isCashAdvanceNature(?string $natureFromForm = null): bool
+    {
+        $nature = $natureFromForm ?? $this->draftNatureOfRequest;
+
+        if (blank($nature)) {
+            return false;
+        }
+
+        $normalizedNature = strtolower(trim((string)$nature));
+
+        return $normalizedNature === NatureOfRequestEnum::CASH_ADVANCE->value
+            || $normalizedNature === 'cash_advance';
+    }
+
+    private function resolveModeOfTransferLabel(?string $modeOfTransfer): string
+    {
+        if (blank($modeOfTransfer)) {
+            return '-';
+        }
+
+        $normalizedMode = strtolower(trim(str_replace('_', ' ', $modeOfTransfer)));
+        $options = ModeOfTransfer::filamentOptions();
+
+        return $options[$normalizedMode] ?? ucwords($normalizedMode);
     }
 
     private function notifyApprovers(CashRequest $cashRequest, User $requestor): void

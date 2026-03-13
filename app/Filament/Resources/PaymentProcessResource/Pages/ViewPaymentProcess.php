@@ -3,8 +3,9 @@
 namespace App\Filament\Resources\PaymentProcessResource\Pages;
 
 use App\Enums\CashRequest\DisbursementType;
-use App\Enums\NatureOfRequestEnum;
+use App\Enums\CashRequest\NatureOfRequestEnum;
 use App\Filament\Resources\PaymentProcessResource;
+use App\Filament\Support\RendersAttachmentPreview;
 use Carbon\Carbon;
 use Facades\App\Services\CashRequest\PaymentProcessService;
 use Filament\Actions\Action;
@@ -24,10 +25,11 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Support\Enums\Alignment;
-use Njxqlus\Filament\Components\Infolists\LightboxSpatieMediaLibraryImageEntry;
 
 class ViewPaymentProcess extends ViewRecord
 {
+    use RendersAttachmentPreview;
+
     protected static string $resource = PaymentProcessResource::class;
 
     /**
@@ -50,7 +52,11 @@ class ViewPaymentProcess extends ViewRecord
                 ->extraAttributes([
                     'wire:loading.attr' => 'disabled',
                 ])
-                ->action(fn($record, array $data) => PaymentProcessService::saveDisbursementType($record, $data)),
+                ->action(function ($record, array $data): void {
+                    $data['disbursement_type'] ??= $this->resolveDisbursementType($record);
+
+                    PaymentProcessService::saveDisbursementType($record, $data);
+                }),
 
             // OVERRIDE BUTTON
             Action::make('override')
@@ -244,9 +250,10 @@ class ViewPaymentProcess extends ViewRecord
                                     ->label('Requesting Amount')
                                     ->money('PHP'),
 
-                                LightboxSpatieMediaLibraryImageEntry::make('attachment')
+                                TextEntry::make('attachment')
                                     ->label('Attached File/Images')
-                                    ->collection('attachments')
+                                    ->state(fn($record) => $this->renderAttachmentsHtml($record))
+                                    ->html()
                                     ->columnSpanFull(),
 
                                 TextEntry::make('status')
@@ -294,15 +301,14 @@ class ViewPaymentProcess extends ViewRecord
                             ->visible(fn($record) => $record->isCheckDisbursement())
                             ->placeholder('-'),
 
+                        TextEntry::make('dv_number')
+                            ->label('DV Number')
+                            ->visible(fn($record) => $record->isCheckDisbursement() || $record->isPayrollDisbursement())
+                            ->placeholder('-'),
+
                         TextEntry::make('cut_off_date')
                             ->label('Cut-off Date')
                             ->date()
-                            ->visible(fn($record) => $record->isPayrollDisbursement())
-                            ->placeholder('-'),
-
-                        TextEntry::make('payroll_credit')
-                            ->label('Payroll Credit')
-                            ->money('PHP')
                             ->visible(fn($record) => $record->isPayrollDisbursement())
                             ->placeholder('-'),
 
@@ -376,8 +382,10 @@ class ViewPaymentProcess extends ViewRecord
                 Select::make('disbursement_type')
                     ->label('Disbursement Type')
                     ->options(DisbursementType::filamentOptions())
-                    ->required()
-                    ->rules('required')
+                    ->default(fn($record) => $this->resolveDisbursementType($record))
+                    ->required(fn($record) => !$this->isForDepositModeOfTransfer($record))
+                    ->dehydrated()
+                    ->hidden(fn($record) => $this->isForDepositModeOfTransfer($record))
                     ->live(),
 
                 TextInput::make('amount')
@@ -431,6 +439,11 @@ class ViewPaymentProcess extends ViewRecord
     private function getPayrollDisbursementTypeSchema(): array
     {
         return [
+            TextInput::make('dv_number')
+                ->label('DV Number')
+                ->visible(fn(Get $get) => $get('disbursement_type') === DisbursementType::PAYROLL->value)
+                ->required(fn(Get $get) => $get('disbursement_type') === DisbursementType::PAYROLL->value),
+
             DatePicker::make('cut_off_date')
                 ->label('Payroll Credit Date')
                 ->visible(fn(Get $get) => $get('disbursement_type') === DisbursementType::PAYROLL->value)
@@ -496,5 +509,21 @@ class ViewPaymentProcess extends ViewRecord
                 ->required()
                 ->default(now()),
         ];
+    }
+
+    private function resolveDisbursementType($record): ?string
+    {
+        if ($this->isForDepositModeOfTransfer($record)) {
+            return DisbursementType::PAYROLL->value;
+        }
+
+        return $record->disbursement_type;
+    }
+
+    private function isForDepositModeOfTransfer($record): bool
+    {
+        $modeOfTransfer = strtolower(trim(str_replace('_', ' ', (string)($record->mode_of_transfer ?? ''))));
+
+        return $modeOfTransfer === 'for deposit';
     }
 }
