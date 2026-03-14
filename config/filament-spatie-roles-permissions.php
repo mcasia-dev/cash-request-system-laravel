@@ -186,6 +186,8 @@ return [
          */
         'model_directories' => [
             app_path('Models'),
+            app_path('Models/Reimbursement'),
+            app_path('Models/RevolvingFund'),
             //app_path('Domains/Forum')
         ],
 
