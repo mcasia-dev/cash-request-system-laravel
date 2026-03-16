@@ -7,7 +7,9 @@ use App\Filament\Support\RendersAttachmentPreview;
 use App\Services\RevolvingFund\ForApprovalReplenishmentService;
 use Facades\App\Services\RevolvingFund\ForApprovalReplenishmentService as ForApprovalReplenishmentFacade;
 use Filament\Actions\Action;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\CheckboxList;
+use Filament\Forms\Components\Toggle;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -32,33 +34,7 @@ class ViewForApprovalReplenishment extends ViewRecord
                 ->label('Approve')
                 ->color('success')
                 ->visible(fn($record) => $this->canCurrentUserReview($record))
-                ->form([
-                    CheckboxList::make('approved_item_ids')
-                        ->label('Approved Items')
-                        ->options(function (): array {
-                            return $this->record->replenishmentItems
-                                ->filter(fn($item) => $item->is_approved !== false)
-                                ->mapWithKeys(fn($item) => [
-                                    $item->id => "{$item->expense_name} (PHP " . number_format((float)$item->amount, 2) . ')',
-                                ])
-                                ->all();
-                        })
-                        ->default(function (): array {
-                            return $this->record->replenishmentItems
-                                ->filter(fn($item) => $item->is_approved === true)
-                                ->pluck('id')
-                                ->map(fn($id) => (string) $id)
-                                ->all();
-                        })
-                        ->columns(1)
-                        ->bulkToggleable()
-                        ->helperText('Items already marked as not approved are locked and removed from this list.'),
-
-                    Textarea::make('remarks')
-                        ->label('Reviewer Remarks')
-                        ->rows(4)
-                        ->helperText('Required if no item is approved.'),
-                ])
+                ->form(fn($record): array => $this->buildReviewFormSchema($record))
                 ->modalHeading('Review Replenishment Items')
                 ->modalSubmitActionLabel('Submit Review')
                 ->action(function ($record, array $data): void {
@@ -67,6 +43,8 @@ class ViewForApprovalReplenishment extends ViewRecord
                             $record,
                             $data['approved_item_ids'] ?? [],
                             $data['remarks'] ?? null,
+                            $data['step_form_data'] ?? [],
+                            (bool)($data['reject_request'] ?? false),
                         );
 
                         Notification::make()
@@ -235,6 +213,102 @@ class ViewForApprovalReplenishment extends ViewRecord
         }
 
         return app(ForApprovalReplenishmentService::class)->userCanReview($record, $user);
+    }
+
+    private function buildReviewFormSchema($record): array
+    {
+        $stepConfig = $this->getCurrentStepConfig($record);
+        $useItemSelection = (bool)($stepConfig['use_item_selection'] ?? true);
+        $canReject = (bool)($stepConfig['can_reject'] ?? true);
+        $schema = [];
+
+        if ($useItemSelection) {
+            $schema[] = CheckboxList::make('approved_item_ids')
+                ->label('Approved Items (Please check the item(s) you want to approve.)')
+                ->options(function () use ($record): array {
+                    return $record->replenishmentItems
+                        ->filter(fn($item) => $item->is_approved !== false)
+                        ->mapWithKeys(fn($item) => [
+                            $item->id => "{$item->expense_name} (PHP " . number_format((float)$item->amount, 2) . ')',
+                        ])
+                        ->all();
+                })
+                ->default(function () use ($record): array {
+                    return $record->replenishmentItems
+                        ->filter(fn($item) => $item->is_approved === true)
+                        ->pluck('id')
+                        ->map(fn($id) => (string)$id)
+                        ->all();
+                })
+                ->columns(1)
+                ->bulkToggleable()
+                ->helperText('Items already marked as not approved are locked and removed from this list.');
+        } elseif ($canReject) {
+            $schema[] = Toggle::make('reject_request')
+                ->label('Reject Request')
+                ->inline(false)
+                ->default(false)
+                ->helperText('Enable this to reject this step without item selection.');
+        }
+
+        foreach ($this->buildDynamicStepFormFields($stepConfig) as $field) {
+            $schema[] = $field;
+        }
+
+        $schema[] = Textarea::make('remarks')
+            ->label('Reviewer Remarks')
+            ->rows(4)
+            ->helperText('Required if no item is approved or if request is rejected.');
+
+        return $schema;
+    }
+
+    private function buildDynamicStepFormFields(array $stepConfig): array
+    {
+        $fields = [];
+        $formSchema = (array)($stepConfig['form_schema'] ?? []);
+
+        foreach ($formSchema as $config) {
+            $key = (string)($config['key'] ?? '');
+            $label = (string)($config['label'] ?? $key);
+            $type = (string)($config['type'] ?? 'text');
+            $required = (bool)($config['required'] ?? false);
+
+            if ($key === '') {
+                continue;
+            }
+
+            $fieldPath = "step_form_data.{$key}";
+
+            $field = match ($type) {
+                'number' => TextInput::make($fieldPath)->numeric(),
+                'textarea' => Textarea::make($fieldPath)->rows(3),
+                'date' => DatePicker::make($fieldPath),
+                default => TextInput::make($fieldPath),
+            };
+
+            $field->label($label);
+
+            if ($required) {
+                $field->required();
+            }
+
+            $fields[] = $field;
+        }
+
+        return $fields;
+    }
+
+    private function getCurrentStepConfig($record): array
+    {
+        $user = Auth::user();
+
+        if (!$user) {
+            return [];
+        }
+
+        return app(ForApprovalReplenishmentService::class)
+            ->getCurrentStepConfiguration($record, $user) ?? [];
     }
 
     private function canApplyReplenishmentAmount($record): bool

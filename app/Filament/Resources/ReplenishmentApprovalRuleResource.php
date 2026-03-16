@@ -4,6 +4,8 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\ReplenishmentApprovalRuleResource\Pages;
 use App\Models\RevolvingFund\ReplenishmentApprovalRule;
+use App\Models\User;
+use Filament\Forms\Get;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -14,6 +16,7 @@ use Filament\Tables;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Auth;
 
 class ReplenishmentApprovalRuleResource extends Resource
 {
@@ -73,8 +76,78 @@ class ReplenishmentApprovalRuleResource extends Resource
                             ->required()
                             ->disableOptionsWhenSelectedInSiblingRepeaterItems()
                             ->searchable(),
+
+                        Select::make('assigned_user_ids')
+                            ->label('Specific Users (Optional)')
+                            ->multiple()
+                            ->searchable()
+                            ->preload()
+                            ->options(function (Get $get): array {
+                                $role = $get('role_name');
+
+                                if (! filled($role)) {
+                                    return [];
+                                }
+
+                                return User::query()
+                                    ->whereHas('roles', fn($query) => $query->where('name', $role))
+                                    ->orderBy('name')
+                                    ->pluck('name', 'id')
+                                    ->toArray();
+                            })
+                            ->helperText('If empty, all users with the selected role can approve. If set, only selected users can approve this step.')
+                            ->visible(fn(Get $get) => filled($get('role_name')) && (bool) Auth::user()?->isSuperAdmin()),
+
+                        Toggle::make('can_approve')
+                            ->label('Can Approve')
+                            ->default(true),
+
+                        Toggle::make('can_reject')
+                            ->label('Can Reject')
+                            ->default(true),
+
+                        Toggle::make('use_item_selection')
+                            ->label('Use Item Selection')
+                            ->helperText('If disabled, this approver approves/rejects the request without selecting items.')
+                            ->default(true),
+
+                        Repeater::make('form_schema')
+                            ->label('Optional Custom Form')
+                            ->helperText('Optional. Configure extra fields for this approver step (e.g. Voucher Number for Treasury Staff).')
+                            ->defaultItems(0)
+                            ->addActionLabel('Add Field')
+                            ->schema([
+                                TextInput::make('key')
+                                    ->label('Field Key')
+                                    ->required()
+                                    ->alphaDash()
+                                    ->maxLength(50)
+                                    ->helperText('Database key for the value, e.g. voucher_no'),
+
+                                TextInput::make('label')
+                                    ->label('Field Label')
+                                    ->required()
+                                    ->maxLength(100),
+
+                                Select::make('type')
+                                    ->label('Field Type')
+                                    ->required()
+                                    ->options([
+                                        'text' => 'Text',
+                                        'number' => 'Number',
+                                        'textarea' => 'Textarea',
+                                        'date' => 'Date',
+                                    ])
+                                    ->default('text'),
+
+                                Toggle::make('required')
+                                    ->label('Required')
+                                    ->default(false),
+                            ])
+                            ->columns(2)
+                            ->columnSpanFull(),
                     ])
-                    ->columns(1)
+                    ->columns(2)
                     ->grid(1)
                     ->columnSpanFull(),
             ])
@@ -135,4 +208,3 @@ class ReplenishmentApprovalRuleResource extends Resource
         ];
     }
 }
-

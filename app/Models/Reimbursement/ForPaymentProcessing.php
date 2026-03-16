@@ -99,4 +99,10 @@ class ForPaymentProcessing extends Model
     {
         return $this->disbursement_type === 'payroll';
     }
+
+    public function reimbursementApprovals(): HasMany
+    {
+        return $this->hasMany(ReimbursementApproval::class, 'reimbursement_id')
+            ->orderBy('step_no');
+    }
 }

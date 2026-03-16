@@ -17,12 +17,17 @@ use RuntimeException;
 
 class ForApprovalRevolvingFundService
 {
-    public function approve(ForApprovalRevolvingFund $record)
+    public function getCurrentStepConfiguration(ForApprovalRevolvingFund $record, User $user): ?array
+    {
+        return app(RevolvingFundApprovalFlowService::class)->getCurrentStepConfiguration($record, $user);
+    }
+
+    public function approve(ForApprovalRevolvingFund $record, array $data = [])
     {
         try {
             $user = Auth::user();
             $previousStatus = $record->status;
-            $result = app(RevolvingFundApprovalFlowService::class)->applyApproval($record, $user);
+            $result = app(RevolvingFundApprovalFlowService::class)->applyApproval($record, $user, (array) ($data['step_form_data'] ?? []));
 
             activity()
                 ->causedBy($user)
@@ -35,6 +40,7 @@ class ForApprovalRevolvingFundService
                     'new_status' => $result['status'],
                     'status_remarks' => $result['status_remarks'],
                     'approved_role_name' => $result['approved_role_name'] ?? null,
+                    'step_form_data' => (array) ($data['step_form_data'] ?? []),
                 ])
                 ->log("Revolving fund {$record->fund_code} approval step was completed by {$user->name} ({$user->position})");
 
@@ -75,12 +81,12 @@ class ForApprovalRevolvingFundService
         }
     }
 
-    public function reject(ForApprovalRevolvingFund $record)
+    public function reject(ForApprovalRevolvingFund $record, array $data = [])
     {
         try {
             $user = Auth::user();
             $previousStatus = $record->status;
-            $result = app(RevolvingFundApprovalFlowService::class)->applyRejection($record, $user);
+            $result = app(RevolvingFundApprovalFlowService::class)->applyRejection($record, $user, (array) ($data['step_form_data'] ?? []));
 
             activity()
                 ->causedBy($user)
@@ -93,6 +99,7 @@ class ForApprovalRevolvingFundService
                     'new_status' => $result['status'],
                     'status_remarks' => $result['status_remarks'],
                     'rejected_role_name' => $result['rejected_role_name'] ?? null,
+                    'step_form_data' => (array) ($data['step_form_data'] ?? []),
                 ])
                 ->log("Revolving fund {$record->fund_code} was rejected by {$user->name} ({$user->position})");
 

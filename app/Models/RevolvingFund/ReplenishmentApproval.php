@@ -15,11 +15,15 @@ class ReplenishmentApproval extends Model
         'approved_by',
         'status',
         'acted_at',
+        'step_form_data',
+        'assigned_user_ids',
     ];
 
     protected $casts = [
         'step_order' => 'integer',
         'acted_at' => 'datetime',
+        'step_form_data' => 'array',
+        'assigned_user_ids' => 'array',
     ];
 
     public function replenishment(): BelongsTo
@@ -32,4 +36,3 @@ class ReplenishmentApproval extends Model
         return $this->belongsTo(User::class, 'approved_by');
     }
 }
-

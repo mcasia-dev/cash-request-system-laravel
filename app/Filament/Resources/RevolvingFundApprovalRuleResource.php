@@ -4,6 +4,8 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\RevolvingFundApprovalRuleResource\Pages;
 use App\Models\RevolvingFund\RevolvingFundApprovalRule;
+use App\Models\User;
+use Filament\Forms\Get;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -14,14 +16,15 @@ use Filament\Tables;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Auth;
 
 class RevolvingFundApprovalRuleResource extends Resource
 {
     protected static ?string $model = RevolvingFundApprovalRule::class;
     protected static ?string $navigationGroup = 'Revolving Funds';
-    protected static ?string $navigationLabel = 'Approval Rules';
-    protected static ?string $label = 'Approval Rule';
-    protected static ?string $pluralLabel = 'Approval Rules';
+//    protected static ?string $navigationLabel = 'Approval Rules';
+//    protected static ?string $label = 'Approval Rule';
+//    protected static ?string $pluralLabel = 'Approval Rules';
     protected static ?string $navigationIcon = 'heroicon-o-adjustments-horizontal';
 
     public static function form(Form $form): Form
@@ -73,8 +76,71 @@ class RevolvingFundApprovalRuleResource extends Resource
                             ->required()
                             ->disableOptionsWhenSelectedInSiblingRepeaterItems()
                             ->searchable(),
+
+                        Select::make('assigned_user_ids')
+                            ->label('Specific Users (Optional)')
+                            ->multiple()
+                            ->searchable()
+                            ->preload()
+                            ->options(function (Get $get): array {
+                                $role = $get('role_name');
+
+                                if (!filled($role)) {
+                                    return [];
+                                }
+
+                                return User::query()
+                                    ->whereHas('roles', fn($query) => $query->where('name', $role))
+                                    ->orderBy('name')
+                                    ->pluck('name', 'id')
+                                    ->toArray();
+                            })
+                            ->helperText('If empty, all users from selected role can approve. If set, only selected users can approve this step.')
+                            ->visible(fn(Get $get) => filled($get('role_name')) && (bool)Auth::user()?->isSuperAdmin()),
+
+                        Toggle::make('can_approve')
+                            ->label('Can Approve')
+                            ->default(true),
+
+                        Toggle::make('can_reject')
+                            ->label('Can Reject')
+                            ->default(true),
+
+                        Repeater::make('form_schema')
+                            ->label('Optional Custom Form')
+                            ->defaultItems(0)
+                            ->addActionLabel('Add Field')
+                            ->schema([
+                                TextInput::make('key')
+                                    ->label('Field Key')
+                                    ->required()
+                                    ->alphaDash()
+                                    ->maxLength(50),
+
+                                TextInput::make('label')
+                                    ->label('Field Label')
+                                    ->required()
+                                    ->maxLength(100),
+
+                                Select::make('type')
+                                    ->label('Field Type')
+                                    ->required()
+                                    ->options([
+                                        'text' => 'Text',
+                                        'number' => 'Number',
+                                        'textarea' => 'Textarea',
+                                        'date' => 'Date',
+                                    ])
+                                    ->default('text'),
+
+                                Toggle::make('required')
+                                    ->label('Required')
+                                    ->default(false),
+                            ])
+                            ->columns(2)
+                            ->columnSpanFull(),
                     ])
-                    ->columns(1)
+                    ->columns(2)
                     ->grid(1)
                     ->columnSpanFull(),
             ])

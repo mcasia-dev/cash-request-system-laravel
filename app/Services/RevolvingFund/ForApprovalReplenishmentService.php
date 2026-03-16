@@ -51,7 +51,31 @@ class ForApprovalReplenishmentService
         return app(ReplenishmentApprovalFlowService::class)->userCanReview($flowRecord, $user);
     }
 
-    public function submitItemReview($replenishment, array $approvedItemIds, ?string $remarks = null): void
+    public function getCurrentStepConfiguration($replenishment, User $user): ?array
+    {
+        $flowRecord = ForApprovalReplenishment::query()->find($replenishment->id);
+
+        if (! $flowRecord) {
+            return null;
+        }
+
+        $flowService = app(ReplenishmentApprovalFlowService::class);
+        $pendingApproval = $flowService->getPendingApprovalForUser($flowRecord, $user);
+
+        if (! $pendingApproval) {
+            return null;
+        }
+
+        return $flowService->getStepConfiguration($flowRecord, $pendingApproval);
+    }
+
+    public function submitItemReview(
+        $replenishment,
+        array $approvedItemIds,
+        ?string $remarks = null,
+        array $stepFormData = [],
+        bool $rejectRequest = false,
+    ): void
     {
         $reviewer = Auth::user();
 
@@ -79,16 +103,45 @@ class ForApprovalReplenishmentService
             throw new RuntimeException('All items are already marked as not approved.');
         }
 
-        $approvedIds = collect($approvedItemIds)
-            ->map(fn($id) => (int)$id)
-            ->intersect($reviewableItems->pluck('id'))
-            ->values();
+        $stepConfig = $this->getCurrentStepConfiguration($replenishment, $reviewer);
+
+        if (! $stepConfig) {
+            throw new RuntimeException('Step configuration for this approver could not be resolved.');
+        }
+
+        $useItemSelection = (bool) ($stepConfig['use_item_selection'] ?? true);
+        $canApprove = (bool) ($stepConfig['can_approve'] ?? true);
+        $canReject = (bool) ($stepConfig['can_reject'] ?? true);
+
+        if ($useItemSelection) {
+            $approvedIds = collect($approvedItemIds)
+                ->map(fn($id) => (int)$id)
+                ->intersect($reviewableItems->pluck('id'))
+                ->values();
+        } else {
+            $approvedIds = $rejectRequest
+                ? collect()
+                : $reviewableItems->pluck('id')->map(fn($id) => (int) $id)->values();
+        }
+
+        if ($approvedIds->isNotEmpty() && ! $canApprove) {
+            throw new RuntimeException('This approval step is not allowed to approve requests.');
+        }
+
+        if ($approvedIds->isEmpty() && ! $canReject) {
+            throw new RuntimeException('This approval step is not allowed to reject requests.');
+        }
 
         if ($approvedIds->isEmpty() && blank($remarks)) {
             throw new RuntimeException('Remarks are required when no items are approved.');
         }
 
-        $approvalResult = DB::transaction(function () use ($replenishment, $allItems, $reviewableItems, $approvedIds, $reviewer, $remarks): array {
+        $sanitizedStepFormData = $this->sanitizeStepFormData(
+            formData: $stepFormData,
+            stepSchema: (array) ($stepConfig['form_schema'] ?? []),
+        );
+
+        $approvalResult = DB::transaction(function () use ($replenishment, $allItems, $reviewableItems, $approvedIds, $reviewer, $remarks, $sanitizedStepFormData): array {
             $replenishment->replenishmentItems()
                 ->whereIn('id', $reviewableItems->pluck('id')->all())
                 ->update([
@@ -126,10 +179,10 @@ class ForApprovalReplenishmentService
             $flowService->initializeApprovals($flowRecord);
 
             if ($isRejected) {
-                $flowResult = $flowService->applyRejection($flowRecord, $reviewer, $remarks);
+                $flowResult = $flowService->applyRejection($flowRecord, $reviewer, $remarks, $sanitizedStepFormData);
                 $statusRemarks = (string)($flowResult['status_remarks'] ?? 'Rejected');
             } else {
-                $flowResult = $flowService->applyApproval($flowRecord, $reviewer);
+                $flowResult = $flowService->applyApproval($flowRecord, $reviewer, $sanitizedStepFormData);
                 $statusRemarks = (string)($flowResult['status_remarks'] ?? 'Approved');
             }
 
@@ -176,6 +229,7 @@ class ForApprovalReplenishmentService
                     'status' => $replenishment->status,
                     'status_remarks' => $statusRemarks,
                     'remarks' => $remarks,
+                    'step_form_data' => $sanitizedStepFormData,
                 ])
                 ->log("Replenishment request for {$fund?->fund_code} was reviewed by {$reviewer->name} ({$reviewer->position})");
 
@@ -334,6 +388,45 @@ class ForApprovalReplenishmentService
                     actionLabel: 'Review Request',
                 );
             });
+    }
+
+    private function sanitizeStepFormData(array $formData, array $stepSchema): array
+    {
+        if (empty($stepSchema)) {
+            return [];
+        }
+
+        $result = [];
+
+        foreach ($stepSchema as $fieldConfig) {
+            $key = (string) ($fieldConfig['key'] ?? '');
+
+            if ($key === '') {
+                continue;
+            }
+
+            $label = (string) ($fieldConfig['label'] ?? $key);
+            $required = (bool) ($fieldConfig['required'] ?? false);
+            $type = (string) ($fieldConfig['type'] ?? 'text');
+            $value = $formData[$key] ?? null;
+
+            if ($required && blank($value)) {
+                throw new RuntimeException("{$label} is required.");
+            }
+
+            if (blank($value)) {
+                $result[$key] = null;
+                continue;
+            }
+
+            $result[$key] = match ($type) {
+                'number' => (float) $value,
+                'date' => (string) $value,
+                default => (string) $value,
+            };
+        }
+
+        return $result;
     }
 
     private function sendMail(

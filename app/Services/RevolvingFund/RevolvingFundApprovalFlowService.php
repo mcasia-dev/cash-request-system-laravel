@@ -49,7 +49,7 @@ class RevolvingFundApprovalFlowService
         $steps = $rule->steps()
             ->orderBy('step_order')
             ->orderBy('id')
-            ->get(['role_name', 'step_order'])
+            ->get(['role_name', 'step_order', 'assigned_user_ids', 'can_approve', 'can_reject', 'form_schema'])
             ->filter(fn($step) => filled($step->role_name))
             ->values();
 
@@ -63,6 +63,10 @@ class RevolvingFundApprovalFlowService
                     'step_order' => $index + 1,
                     'role_name' => $step->role_name,
                     'status' => Status::PENDING->value,
+                    'assigned_user_ids' => ! empty($step->assigned_user_ids) ? array_values($step->assigned_user_ids) : null,
+                    'can_approve' => (bool) ($step->can_approve ?? true),
+                    'can_reject' => (bool) ($step->can_reject ?? true),
+                    'step_form_data' => null,
                 ];
             })->all()
         );
@@ -82,12 +86,17 @@ class RevolvingFundApprovalFlowService
 
         return $query
             ->pendingApproval()
-            ->whereExists(function ($subQuery) use ($roles) {
+            ->whereExists(function ($subQuery) use ($roles, $user) {
                 $subQuery->selectRaw('1')
                     ->from('revolving_fund_approvals as rfa')
                     ->whereColumn('rfa.revolving_fund_id', 'revolving_funds.id')
                     ->where('rfa.status', Status::PENDING->value)
                     ->whereIn('rfa.role_name', $roles)
+                    ->where(function ($assignedUserScope) use ($user) {
+                        $assignedUserScope->whereNull('rfa.assigned_user_ids')
+                            ->orWhereRaw('JSON_LENGTH(rfa.assigned_user_ids) = 0')
+                            ->orWhereRaw('JSON_CONTAINS(rfa.assigned_user_ids, JSON_ARRAY(?))', [$user->id]);
+                    })
                     ->whereRaw(
                         "rfa.id = (
                             SELECT rfa2.id
@@ -107,9 +116,9 @@ class RevolvingFundApprovalFlowService
         return $this->getPendingApprovalForUser($record, $user) !== null;
     }
 
-    public function applyApproval(ForApprovalRevolvingFund $record, User $user): array
+    public function applyApproval(ForApprovalRevolvingFund $record, User $user, array $stepFormData = []): array
     {
-        return DB::transaction(function () use ($record, $user): array {
+        return DB::transaction(function () use ($record, $user, $stepFormData): array {
             $this->initializeApprovals($record);
             $record->refresh();
 
@@ -119,10 +128,15 @@ class RevolvingFundApprovalFlowService
                 throw new RuntimeException('You are not allowed to approve this revolving fund request.');
             }
 
+            if (! (bool) $approval->can_approve) {
+                throw new RuntimeException('This step is not allowed to approve requests.');
+            }
+
             $approval->update([
                 'approved_by' => $user->id,
                 'status' => 'approved',
                 'acted_at' => now(),
+                'step_form_data' => $stepFormData ?: null,
             ]);
 
             $roleTitle = $this->roleTitle($approval->role_name);
@@ -156,9 +170,9 @@ class RevolvingFundApprovalFlowService
         });
     }
 
-    public function applyRejection(ForApprovalRevolvingFund $record, User $user): array
+    public function applyRejection(ForApprovalRevolvingFund $record, User $user, array $stepFormData = []): array
     {
-        return DB::transaction(function () use ($record, $user): array {
+        return DB::transaction(function () use ($record, $user, $stepFormData): array {
             $this->initializeApprovals($record);
             $record->refresh();
 
@@ -168,10 +182,15 @@ class RevolvingFundApprovalFlowService
                 throw new RuntimeException('You are not allowed to reject this revolving fund request.');
             }
 
+            if (! (bool) $approval->can_reject) {
+                throw new RuntimeException('This step is not allowed to reject requests.');
+            }
+
             $approval->update([
                 'approved_by' => $user->id,
                 'status' => 'declined',
                 'acted_at' => now(),
+                'step_form_data' => $stepFormData ?: null,
             ]);
 
             $roleTitle = $this->roleTitle($approval->role_name);
@@ -204,9 +223,20 @@ class RevolvingFundApprovalFlowService
             return collect();
         }
 
-        return User::query()
-            ->role($current->role_name)
-            ->get();
+        $query = User::query()
+            ->role($current->role_name);
+
+        $assignedUserIds = collect($current->assigned_user_ids ?? [])
+            ->map(fn($id) => (int) $id)
+            ->filter(fn($id) => $id > 0)
+            ->values()
+            ->all();
+
+        if (! empty($assignedUserIds)) {
+            $query->whereIn('id', $assignedUserIds);
+        }
+
+        return $query->get();
     }
 
     private function getPendingApprovalForUser(ForApprovalRevolvingFund $record, User $user): ?RevolvingFundApproval
@@ -221,11 +251,27 @@ class RevolvingFundApprovalFlowService
             return null;
         }
 
+        $currentPending = $record->revolvingFundApprovals()
+            ->where('status', Status::PENDING->value)
+            ->where('id', $currentPendingId)
+            ->first();
+
+        if (! $currentPending) {
+            return null;
+        }
+
+        $assignedUserIds = collect($currentPending->assigned_user_ids ?? [])
+            ->map(fn($id) => (int) $id)
+            ->filter(fn($id) => $id > 0)
+            ->values()
+            ->all();
+
         if ($user->isSuperAdmin()) {
-            return $record->revolvingFundApprovals()
-                ->where('status', Status::PENDING->value)
-                ->where('id', $currentPendingId)
-                ->first();
+            if (empty($assignedUserIds) || in_array((int) $user->id, $assignedUserIds, true)) {
+                return $currentPending;
+            }
+
+            return null;
         }
 
         $roles = $user->roles()->pluck('name')->all();
@@ -234,11 +280,36 @@ class RevolvingFundApprovalFlowService
             return null;
         }
 
-        return $record->revolvingFundApprovals()
-            ->where('status', Status::PENDING->value)
-            ->where('id', $currentPendingId)
-            ->whereIn('role_name', $roles)
+        if (! in_array($currentPending->role_name, $roles, true)) {
+            return null;
+        }
+
+        if (! empty($assignedUserIds) && ! in_array((int) $user->id, $assignedUserIds, true)) {
+            return null;
+        }
+
+        return $currentPending;
+    }
+
+    public function getCurrentStepConfiguration(ForApprovalRevolvingFund $record, User $user): ?array
+    {
+        $approval = $this->getPendingApprovalForUser($record, $user);
+
+        if (! $approval) {
+            return null;
+        }
+
+        $rule = $this->resolveRule($record);
+        $step = $rule?->steps()
+            ->where('step_order', $approval->step_order)
+            ->orderBy('id')
             ->first();
+
+        return [
+            'can_approve' => (bool) ($approval->can_approve ?? true),
+            'can_reject' => (bool) ($approval->can_reject ?? true),
+            'form_schema' => is_array($step?->form_schema) ? $step->form_schema : [],
+        ];
     }
 
     private function roleTitle(string $roleName): string

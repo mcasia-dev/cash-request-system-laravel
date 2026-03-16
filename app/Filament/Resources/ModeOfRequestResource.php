@@ -5,11 +5,14 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\ModeOfRequestResource\Pages;
 use App\Models\Department;
 use App\Models\Reimbursement\ModeOfRequest;
+use App\Models\User;
 use Filament\Forms;
+use Filament\Forms\Get;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Auth;
 use Spatie\Permission\Models\Role;
 
 class ModeOfRequestResource extends Resource
@@ -59,11 +62,76 @@ class ModeOfRequestResource extends Resource
                             ->options(Role::query()->orderBy('name')->pluck('name', 'name'))
                             ->searchable()
                             ->preload()
+                            ->live()
                             ->required(),
+
+                        Forms\Components\Select::make('assigned_user_ids')
+                            ->label('Specific Users (Optional)')
+                            ->multiple()
+                            ->searchable()
+                            ->preload()
+                            ->options(function (Get $get): array {
+                                $role = $get('role_name');
+
+                                if (! filled($role)) {
+                                    return [];
+                                }
+
+                                return User::query()
+                                    ->whereHas('roles', fn($query) => $query->where('name', $role))
+                                    ->orderBy('name')
+                                    ->pluck('name', 'id')
+                                    ->toArray();
+                            })
+                            ->helperText('If empty, all users from selected role can approve. If set, only selected users can approve this step.')
+                            ->visible(fn(Get $get) => filled($get('role_name')))
+                            ->disabled(fn() => ! (bool) Auth::user()?->isSuperAdmin()),
 
                         Forms\Components\Toggle::make('required')
                             ->label('Required')
                             ->default(true),
+
+                        Forms\Components\Toggle::make('can_approve')
+                            ->label('Can Approve')
+                            ->default(true),
+
+                        Forms\Components\Toggle::make('can_reject')
+                            ->label('Can Reject')
+                            ->default(true),
+
+                        Forms\Components\Repeater::make('form_schema')
+                            ->label('Optional Custom Form')
+                            ->defaultItems(0)
+                            ->addActionLabel('Add Field')
+                            ->schema([
+                                Forms\Components\TextInput::make('key')
+                                    ->label('Field Key')
+                                    ->required()
+                                    ->alphaDash()
+                                    ->maxLength(50),
+
+                                Forms\Components\TextInput::make('label')
+                                    ->label('Field Label')
+                                    ->required()
+                                    ->maxLength(100),
+
+                                Forms\Components\Select::make('type')
+                                    ->label('Field Type')
+                                    ->required()
+                                    ->options([
+                                        'text' => 'Text',
+                                        'number' => 'Number',
+                                        'textarea' => 'Textarea',
+                                        'date' => 'Date',
+                                    ])
+                                    ->default('text'),
+
+                                Forms\Components\Toggle::make('required')
+                                    ->label('Required')
+                                    ->default(false),
+                            ])
+                            ->columns(2)
+                            ->columnSpanFull(),
                     ])
                     ->columns(2)
                     ->columnSpanFull(),

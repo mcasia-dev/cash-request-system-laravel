@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ReimbursementResource\Pages;
 
+use App\Enums\Reimbursement\StatusRemarks;
 use App\Filament\Resources\ReimbursementResource;
 use Filament\Resources\Pages\ViewRecord;
 
@@ -18,7 +19,12 @@ class TrackReimbursementStatus extends ViewRecord
 
     public function getTrackerSteps(): array
     {
-        $record = $this->getRecord()->loadMissing(['reimbursementApprovals.approver']);
+        $record = $this->getRecord()->loadMissing([
+            'payee',
+            'reimbursementApprovals.approver',
+            'disbursementAddedBy',
+            'releasedBy',
+        ]);
 
         $submittedStep = [
             'title' => 'Request Submitted',
@@ -90,6 +96,122 @@ class TrackReimbursementStatus extends ViewRecord
             ->values()
             ->all();
 
-        return [$submittedStep, ...$approvalSteps];
+        $treasurySteps = $this->buildTreasurySteps($record);
+
+        return [$submittedStep, ...$approvalSteps, ...$treasurySteps];
+    }
+
+    private function buildTreasurySteps($record): array
+    {
+        $hasDeclinedApproval = $record->reimbursementApprovals
+            ->where('status', 'declined')
+            ->isNotEmpty();
+
+        $hasPendingApproval = $record->reimbursementApprovals
+            ->where('status', 'pending')
+            ->isNotEmpty();
+
+        $isTreasuryRejected = $record->status_remarks === StatusRemarks::TREASURY_REJECTED->value;
+        $isForPaymentProcessing = $record->status_remarks === StatusRemarks::FOR_PAYMENT_PROCESSING->value;
+        $isForReleasing = $record->status_remarks === StatusRemarks::FOR_RELEASING->value;
+        $isReleased = $record->status_remarks === StatusRemarks::REIMBURSEMENT_RELEASED->value;
+
+        $treasuryProcessingStep = [
+            'title' => 'Treasury Processing',
+            'status' => 'upcoming',
+            'statusLabel' => 'Not yet started',
+            'remarks' => 'Waiting for approval completion.',
+            'by' => 'N/A',
+            'date' => 'N/A',
+        ];
+
+        if ($hasDeclinedApproval) {
+            $treasuryProcessingStep = [
+                'title' => 'Treasury Processing',
+                'status' => 'stopped',
+                'statusLabel' => 'Stopped',
+                'remarks' => 'Process stopped due to previous approval rejection.',
+                'by' => 'N/A',
+                'date' => 'N/A',
+            ];
+        } elseif ($isTreasuryRejected) {
+            $treasuryProcessingStep = [
+                'title' => 'Treasury Processing',
+                'status' => 'rejected',
+                'statusLabel' => 'Rejected',
+                'remarks' => $record->reason_for_rejection ?: 'Treasury rejected this request.',
+                'by' => $record->disbursementAddedBy?->name ?? 'N/A',
+                'date' => 'N/A',
+            ];
+        } elseif ($isForReleasing || $isReleased) {
+            $treasuryProcessingStep = [
+                'title' => 'Treasury Processing',
+                'status' => 'approved',
+                'statusLabel' => 'Approved',
+                'remarks' => 'Treasury completed payment processing.',
+                'by' => $record->disbursementAddedBy?->name ?? 'N/A',
+                'date' => 'N/A',
+            ];
+        } elseif ($isForPaymentProcessing) {
+            $treasuryProcessingStep = [
+                'title' => 'Treasury Processing',
+                'status' => 'pending',
+                'statusLabel' => 'Pending',
+                'remarks' => 'In treasury queue for payment processing.',
+                'by' => 'N/A',
+                'date' => 'N/A',
+            ];
+        } elseif ($hasPendingApproval) {
+            $treasuryProcessingStep = [
+                'title' => 'Treasury Processing',
+                'status' => 'upcoming',
+                'statusLabel' => 'Not yet started',
+                'remarks' => 'Waiting for previous step completion.',
+                'by' => 'N/A',
+                'date' => 'N/A',
+            ];
+        }
+
+        $treasuryReleaseStep = [
+            'title' => 'Treasury Releasing',
+            'status' => 'upcoming',
+            'statusLabel' => 'Not yet started',
+            'remarks' => 'Waiting for treasury processing.',
+            'by' => 'N/A',
+            'date' => 'N/A',
+        ];
+
+        if ($hasDeclinedApproval || $isTreasuryRejected) {
+            $treasuryReleaseStep = [
+                'title' => 'Treasury Releasing',
+                'status' => 'stopped',
+                'statusLabel' => 'Stopped',
+                'remarks' => $isTreasuryRejected
+                    ? 'Process stopped due to treasury rejection.'
+                    : 'Process stopped due to previous approval rejection.',
+                'by' => 'N/A',
+                'date' => 'N/A',
+            ];
+        } elseif ($isReleased) {
+            $treasuryReleaseStep = [
+                'title' => 'Treasury Releasing',
+                'status' => 'approved',
+                'statusLabel' => 'Released',
+                'remarks' => 'Reimbursement released.',
+                'by' => $record->releasedBy?->name ?? 'N/A',
+                'date' => $record->released_at?->setTimezone(self::DISPLAY_TIMEZONE)->format('F d, Y h:i A') ?? 'N/A',
+            ];
+        } elseif ($isForReleasing) {
+            $treasuryReleaseStep = [
+                'title' => 'Treasury Releasing',
+                'status' => 'pending',
+                'statusLabel' => 'Pending',
+                'remarks' => 'Waiting for treasury release action.',
+                'by' => 'N/A',
+                'date' => 'N/A',
+            ];
+        }
+
+        return [$treasuryProcessingStep, $treasuryReleaseStep];
     }
 }

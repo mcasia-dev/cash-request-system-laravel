@@ -73,7 +73,24 @@ class RevolvingFundResource extends Resource
 
                 Select::make('user_id')
                     ->label('User')
-                    ->relationship('user', 'name')
+                    ->relationship(
+                        'user',
+                        'name',
+                        modifyQueryUsing: function (Builder $query): void {
+                            $authUser = Auth::user();
+
+                            if (!$authUser) {
+                                $query->whereRaw('1 = 0');
+                                return;
+                            }
+
+                            if ($authUser->isSuperAdmin()) {
+                                return;
+                            }
+
+                            $query->where('department_id', $authUser->department_id);
+                        }
+                    )
                     ->required()
                     ->preload()
                     ->searchable()
