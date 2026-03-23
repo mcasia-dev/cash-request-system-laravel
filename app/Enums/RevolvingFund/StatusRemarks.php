@@ -13,6 +13,10 @@ enum StatusRemarks: string
     case REJECTED_BY_HR = "Rejected By HR";
     case APPROVED_BY_THE_PRESIDENT = "Approved by the President";
     case REJECTED_BY_THE_PRESIDENT = "Rejected by the President";
+    case TREASURY_REJECTED = "Treasury Rejected Revolving Fund";
+    case FOR_PAYMENT_PROCESSING = "For Payment Processing";
+    case FOR_RELEASING = "For Releasing";
+    case FUND_RELEASED = "Revolving Fund Released";
     case FOR_REPLENISHMENT = "For Replenishment";
     case REPLENISHED = "Replenished";
 }

@@ -5,17 +5,39 @@ namespace App\Filament\Resources\ReimbursementResource\Pages;
 use App\Enums\CashRequest\Status;
 use App\Filament\Resources\ReimbursementResource;
 use App\Filament\Support\RendersAttachmentPreview;
+use App\Filament\Support\RendersDiscussionChat;
+use Facades\App\Services\Reimbursement\ForApprovalReimbursementService;
+use Filament\Actions\Action;
+use Filament\Forms\Components\Textarea;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
 use Filament\Resources\Pages\ViewRecord;
+use Illuminate\Support\Facades\Auth;
 
 class ViewReimbursement extends ViewRecord
 {
-    use RendersAttachmentPreview;
+    use RendersAttachmentPreview, RendersDiscussionChat;
 
     protected static string $resource = ReimbursementResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('respond_to_clarification')
+                ->label('Respond to Clarification')
+                ->color('info')
+                ->visible(fn($record) => $this->canRespond($record))
+                ->form([
+                    Textarea::make('remarks')
+                        ->label('Response')
+                        ->required()
+                        ->rows(4),
+                ])
+                ->action(fn($record, array $data) => ForApprovalReimbursementService::respondToClarification($record, $data)),
+        ];
+    }
 
     public function infolist(Infolist $infolist): Infolist
     {
@@ -94,6 +116,32 @@ class ViewReimbursement extends ViewRecord
                             ])
                             ->columns(2),
                     ]),
+
+                Section::make('Clarifications / Returns')
+                    ->schema([
+                        TextEntry::make('discussion_chat')
+                            ->hiddenLabel()
+                            ->state(fn($record) => $this->renderDiscussionChatHtml($record))
+                            ->html()
+                            ->columnSpanFull(),
+                    ]),
             ]);
+    }
+
+    private function canRespond($record): bool
+    {
+        $userId = Auth::id();
+
+        if (!$userId || (int)$record->payee_id !== (int)$userId) {
+            return false;
+        }
+
+        $status = $record->status instanceof Status ? $record->status->value : (string)$record->status;
+
+        if (!in_array($status, [Status::PENDING->value, Status::IN_PROGRESS->value], true)) {
+            return false;
+        }
+
+        return $record->discussions()->where('type', 'return')->exists();
     }
 }

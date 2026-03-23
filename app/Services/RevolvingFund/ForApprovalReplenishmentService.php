@@ -5,6 +5,8 @@ namespace App\Services\RevolvingFund;
 use App\Enums\RevolvingFund\Status;
 use App\Mail\RevolvingFund\RevolvingFundDiscussionMail;
 use App\Models\RevolvingFund\ForApprovalReplenishment;
+use App\Models\RevolvingFund\Replenishment;
+use App\Models\RevolvingFund\RequestDiscussion;
 use App\Models\User;
 use Filament\Notifications\Actions\Action as NotificationAction;
 use Filament\Notifications\Notification;
@@ -55,14 +57,14 @@ class ForApprovalReplenishmentService
     {
         $flowRecord = ForApprovalReplenishment::query()->find($replenishment->id);
 
-        if (! $flowRecord) {
+        if (!$flowRecord) {
             return null;
         }
 
         $flowService = app(ReplenishmentApprovalFlowService::class);
         $pendingApproval = $flowService->getPendingApprovalForUser($flowRecord, $user);
 
-        if (! $pendingApproval) {
+        if (!$pendingApproval) {
             return null;
         }
 
@@ -105,13 +107,15 @@ class ForApprovalReplenishmentService
 
         $stepConfig = $this->getCurrentStepConfiguration($replenishment, $reviewer);
 
-        if (! $stepConfig) {
+        if (!$stepConfig) {
             throw new RuntimeException('Step configuration for this approver could not be resolved.');
         }
 
-        $useItemSelection = (bool) ($stepConfig['use_item_selection'] ?? true);
-        $canApprove = (bool) ($stepConfig['can_approve'] ?? true);
-        $canReject = (bool) ($stepConfig['can_reject'] ?? true);
+        $useItemSelection = (bool)($stepConfig['use_item_selection'] ?? true);
+        $canApprove = (bool)($stepConfig['can_approve'] ?? true);
+        $canVerify = (bool)($stepConfig['can_verify'] ?? false);
+        $canReject = (bool)($stepConfig['can_reject'] ?? true);
+        $canAdvanceWithApprovedItems = $canApprove || $canVerify;
 
         if ($useItemSelection) {
             $approvedIds = collect($approvedItemIds)
@@ -121,14 +125,14 @@ class ForApprovalReplenishmentService
         } else {
             $approvedIds = $rejectRequest
                 ? collect()
-                : $reviewableItems->pluck('id')->map(fn($id) => (int) $id)->values();
+                : $reviewableItems->pluck('id')->map(fn($id) => (int)$id)->values();
         }
 
-        if ($approvedIds->isNotEmpty() && ! $canApprove) {
-            throw new RuntimeException('This approval step is not allowed to approve requests.');
+        if ($approvedIds->isNotEmpty() && !$canAdvanceWithApprovedItems) {
+            throw new RuntimeException('This step is not allowed to approve or verify replenishment requests.');
         }
 
-        if ($approvedIds->isEmpty() && ! $canReject) {
+        if ($approvedIds->isEmpty() && !$canReject) {
             throw new RuntimeException('This approval step is not allowed to reject requests.');
         }
 
@@ -138,7 +142,7 @@ class ForApprovalReplenishmentService
 
         $sanitizedStepFormData = $this->sanitizeStepFormData(
             formData: $stepFormData,
-            stepSchema: (array) ($stepConfig['form_schema'] ?? []),
+            stepSchema: (array)($stepConfig['form_schema'] ?? []),
         );
 
         $approvalResult = DB::transaction(function () use ($replenishment, $allItems, $reviewableItems, $approvedIds, $reviewer, $remarks, $sanitizedStepFormData): array {
@@ -307,27 +311,30 @@ class ForApprovalReplenishmentService
 
             $recordRemaining = (float)$replenishment->remaining_amount;
             $initialAmount = (float)$replenishment->initial_amount;
-            $newRemaining = $recordRemaining + $amount;
-
-            if ($newRemaining > $initialAmount) {
-                throw new RuntimeException('Amount to add is invalid. Remaining amount cannot exceed the initial amount.');
-            }
+            $gapToRestore = max($initialAmount - $recordRemaining, 0);
+            $amountAppliedToFund = min($amount, $gapToRestore);
+            $amountToReimburse = max($amount - $amountAppliedToFund, 0);
+            $newRemaining = min($recordRemaining + $amountAppliedToFund, $initialAmount);
 
             $replenishment->update([
+                'old_remaining_amount' => $recordRemaining,
+                'remaining_amount' => $newRemaining,
+                'amount_to_reimburse' => $amountToReimburse,
                 'status' => 'replenished',
                 'status_remarks' => 'Replenished',
                 'replenished_by' => $user->id,
                 'replenished_at' => now(),
             ]);
 
+            $fundCurrentRemaining = null;
+            $fundNewRemaining = null;
+
             if ($replenishment->revolvingFund) {
                 $fundCurrentRemaining = (float)$replenishment->revolvingFund->remaining_amount;
-                $fundNewRemaining = $fundCurrentRemaining + $amount;
+                $fundNewRemaining = min($fundCurrentRemaining + $amountAppliedToFund, $initialAmount);
 
                 $replenishment->revolvingFund->update([
                     'remaining_amount' => $fundNewRemaining,
-                    'status' => Status::REPLENISHED->value,
-                    'status_remarks' => 'Replenished',
                 ]);
             }
 
@@ -339,6 +346,8 @@ class ForApprovalReplenishmentService
                     'replenishment_id' => $replenishment->id,
                     'fund_code' => $replenishment->revolvingFund?->fund_code,
                     'added_amount' => $amount,
+                    'amount_applied_to_fund' => $amountAppliedToFund,
+                    'amount_to_reimburse' => $amountToReimburse,
                     'record_remaining_amount' => $recordRemaining,
                     'previous_fund_remaining_amount' => $fundCurrentRemaining ?? null,
                     'new_fund_remaining_amount' => $fundNewRemaining ?? null,
@@ -390,6 +399,142 @@ class ForApprovalReplenishmentService
             });
     }
 
+    public function returnForClarification($record, array $data): void
+    {
+        $approver = Auth::user();
+        $remarks = trim((string)($data['remarks'] ?? ''));
+
+        if ($remarks === '') {
+            Notification::make()
+                ->title('Remarks are required.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $record->update([
+            'status' => 'returned',
+            'status_remarks' => 'Returned for Clarification',
+        ]);
+
+        $discussion = $this->addDiscussion(
+            record: $record,
+            senderId: $approver?->id,
+            recipientId: $record->revolvingFund?->user_id,
+            type: 'return',
+            remarks: $remarks,
+        );
+
+        activity()
+            ->causedBy($approver)
+            ->performedOn($record)
+            ->event('returned_for_clarification')
+            ->withProperties([
+                'replenishment_id' => $record->id,
+                'fund_code' => $record->revolvingFund?->fund_code,
+                'remarks' => $remarks,
+                'discussion_id' => $discussion->id,
+            ])
+            ->log("Replenishment request for {$record->revolvingFund?->fund_code} was returned for clarification by {$approver?->name} ({$approver?->position})");
+
+        if ($record->revolvingFund?->user) {
+            Notification::make()
+                ->title('Replenishment Clarification Requested')
+                ->body("Your replenishment request for {$record->revolvingFund?->fund_code} was returned with remarks: {$remarks}")
+                ->actions([
+                    NotificationAction::make('markAsRead')
+                        ->button()
+                        ->markAsRead(),
+                    NotificationAction::make('view')
+                        ->link()
+                        ->url(route('filament.admin.resources.replenishments.view', ['record' => $record->id])),
+                ])
+                ->sendToDatabase($record->revolvingFund->user);
+        }
+
+        Notification::make()
+            ->title('Returned to requestor for clarification.')
+            ->success()
+            ->send();
+    }
+
+    public function respondToClarification($record, array $data): void
+    {
+        $requestor = Auth::user();
+        $remarks = trim((string)($data['remarks'] ?? ''));
+
+        if ($remarks === '') {
+            Notification::make()
+                ->title('Response is required.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $discussion = $this->addDiscussion(
+            record: $record,
+            senderId: $requestor?->id,
+            recipientId: null,
+            type: 'response',
+            remarks: $remarks,
+        );
+
+        activity()
+            ->causedBy($requestor)
+            ->performedOn($record)
+            ->event('clarification_response_submitted')
+            ->withProperties([
+                'replenishment_id' => $record->id,
+                'fund_code' => $record->revolvingFund?->fund_code,
+                'remarks' => $remarks,
+                'discussion_id' => $discussion->id,
+            ])
+            ->log("Replenishment clarification response for {$record->revolvingFund?->fund_code} was submitted by {$requestor?->name} ({$requestor?->position})");
+
+        $approvers = app(ReplenishmentApprovalFlowService::class)
+            ->getCurrentPendingApprovers(ForApprovalReplenishment::query()->findOrFail($record->id));
+
+        if ($approvers->isNotEmpty()) {
+            Notification::make()
+                ->title('Clarification Response Received')
+                ->body("{$requestor?->name} responded to the replenishment for {$record->revolvingFund?->fund_code}: {$remarks}")
+                ->actions([
+                    NotificationAction::make('markAsRead')
+                        ->button()
+                        ->markAsRead(),
+                    NotificationAction::make('view')
+                        ->link()
+                        ->url(route('filament.admin.resources.for-approval-replenishments.view', ['record' => $record->id])),
+                ])
+                ->sendToDatabase($approvers);
+        }
+
+        Notification::make()
+            ->title('Response sent to approver(s).')
+            ->success()
+            ->send();
+    }
+
+    private function addDiscussion(
+        $record,
+        ?int $senderId,
+        ?int $recipientId,
+        string $type,
+        string $remarks,
+    ): RequestDiscussion
+    {
+        return RequestDiscussion::query()->create([
+            'discussable_type' => Replenishment::class,
+            'discussable_id' => $record->id,
+            'sender_id' => $senderId,
+            'recipient_id' => $recipientId,
+            'type' => $type,
+            'remarks' => $remarks,
+        ]);
+    }
+
     private function sanitizeStepFormData(array $formData, array $stepSchema): array
     {
         if (empty($stepSchema)) {
@@ -399,15 +544,15 @@ class ForApprovalReplenishmentService
         $result = [];
 
         foreach ($stepSchema as $fieldConfig) {
-            $key = (string) ($fieldConfig['key'] ?? '');
+            $key = (string)($fieldConfig['key'] ?? '');
 
             if ($key === '') {
                 continue;
             }
 
-            $label = (string) ($fieldConfig['label'] ?? $key);
-            $required = (bool) ($fieldConfig['required'] ?? false);
-            $type = (string) ($fieldConfig['type'] ?? 'text');
+            $label = (string)($fieldConfig['label'] ?? $key);
+            $required = (bool)($fieldConfig['required'] ?? false);
+            $type = (string)($fieldConfig['type'] ?? 'text');
             $value = $formData[$key] ?? null;
 
             if ($required && blank($value)) {
@@ -420,9 +565,9 @@ class ForApprovalReplenishmentService
             }
 
             $result[$key] = match ($type) {
-                'number' => (float) $value,
-                'date' => (string) $value,
-                default => (string) $value,
+                'number' => (float)$value,
+                'date' => (string)$value,
+                default => (string)$value,
             };
         }
 

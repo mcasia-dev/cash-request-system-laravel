@@ -4,7 +4,9 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\RevolvingFundApprovalRuleResource\Pages;
 use App\Models\RevolvingFund\RevolvingFundApprovalRule;
+use App\Models\Department;
 use App\Models\User;
+use App\Models\Role;
 use Filament\Forms\Get;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -22,9 +24,6 @@ class RevolvingFundApprovalRuleResource extends Resource
 {
     protected static ?string $model = RevolvingFundApprovalRule::class;
     protected static ?string $navigationGroup = 'Revolving Funds';
-//    protected static ?string $navigationLabel = 'Approval Rules';
-//    protected static ?string $label = 'Approval Rule';
-//    protected static ?string $pluralLabel = 'Approval Rules';
     protected static ?string $navigationIcon = 'heroicon-o-adjustments-horizontal';
 
     public static function form(Form $form): Form
@@ -59,43 +58,31 @@ class RevolvingFundApprovalRuleResource extends Resource
                     ->schema([
                         Select::make('role_name')
                             ->label('Approver Role')
-                            ->options([
-                                'department_head' => 'Department Head',
-                                'president' => 'President',
-                                'sales_channel_manager' => 'Sales Channel Manager',
-                                'national_sales_manager' => 'National Sales Manager',
-                                'treasury_manager' => 'Treasury Manager',
-                                'treasury_supervisor' => 'Treasury Supervisor',
-                                'hr_manager' => 'HR Manager',
-                                'accounting_manager' => 'Accounting Manager',
-                                'treasury_staff' => 'Treasury Staff',
-                                'finance_staff' => 'Finance Staff',
-                                'hr_staff' => 'HR Staff',
-                                'accounting_staff' => 'Accounting Staff',
-                            ])
+                            ->options(fn() => Role::query()
+                                ->orderBy('name')
+                                ->pluck('name', 'name')
+                                ->toArray())
                             ->required()
                             ->disableOptionsWhenSelectedInSiblingRepeaterItems()
                             ->searchable(),
+
+                        Select::make('department_id')
+                            ->label('Department')
+                            ->options(fn() => Department::query()->orderBy('department_name')->pluck('department_name', 'id')->toArray())
+                            ->searchable()
+                            ->preload()
+                            ->helperText('Optional: limit this approver role to a specific department.'),
 
                         Select::make('assigned_user_ids')
                             ->label('Specific Users (Optional)')
                             ->multiple()
                             ->searchable()
                             ->preload()
-                            ->options(function (Get $get): array {
-                                $role = $get('role_name');
-
-                                if (!filled($role)) {
-                                    return [];
-                                }
-
-                                return User::query()
-                                    ->whereHas('roles', fn($query) => $query->where('name', $role))
-                                    ->orderBy('name')
-                                    ->pluck('name', 'id')
-                                    ->toArray();
-                            })
-                            ->helperText('If empty, all users from selected role can approve. If set, only selected users can approve this step.')
+                            ->options(fn() => User::query()
+                                ->orderBy('name')
+                                ->pluck('name', 'id')
+                                ->toArray())
+                            ->helperText('If empty, all users with this role can approve. If set, only the chosen users can approve this step.')
                             ->visible(fn(Get $get) => filled($get('role_name')) && (bool)Auth::user()?->isSuperAdmin()),
 
                         Toggle::make('can_approve')

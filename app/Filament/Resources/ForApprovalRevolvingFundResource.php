@@ -97,6 +97,7 @@ class ForApprovalRevolvingFundResource extends Resource
                         Status::APPROVED->value => 'success',
                         Status::REJECTED->value => 'danger',
                         Status::REPLENISHED->value => 'info',
+                        Status::RELEASED->value => 'info',
                         default => 'secondary',
                     }),
 

@@ -5,6 +5,7 @@ namespace App\Services\RevolvingFund;
 use App\Models\RevolvingFund\ForApprovalReplenishment;
 use App\Models\RevolvingFund\ReplenishmentApproval;
 use App\Models\RevolvingFund\ReplenishmentApprovalRule;
+use App\Models\RevolvingFund\ReplenishmentApprovalRuleStep;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -48,7 +49,16 @@ class ReplenishmentApprovalFlowService
         $steps = $rule->steps()
             ->orderBy('step_order')
             ->orderBy('id')
-            ->get(['role_name', 'step_order', 'assigned_user_ids'])
+            ->get([
+                'role_name',
+                'step_order',
+                'assigned_user_ids',
+                'can_approve',
+                'can_reject',
+                'can_verify',
+                'can_replenish',
+                'use_item_selection',
+            ])
             ->filter(fn($step) => filled($step->role_name))
             ->values();
 
@@ -59,10 +69,16 @@ class ReplenishmentApprovalFlowService
         $record->replenishmentApprovals()->createMany(
             $steps->map(function ($step, int $index) {
                 return [
-                    'step_order' => $index + 1,
+                    // Persist the configured step order so later lookups can align with the rule definition.
+                    'step_order' => (int)($step->step_order ?? ($index + 1)),
                     'role_name' => $step->role_name,
                     'status' => 'pending',
-                    'assigned_user_ids' => ! empty($step->assigned_user_ids) ? array_values($step->assigned_user_ids) : null,
+                    'assigned_user_ids' => !empty($step->assigned_user_ids) ? array_values($step->assigned_user_ids) : null,
+                    'can_approve' => (bool)($step->can_approve ?? true),
+                    'can_reject' => (bool)($step->can_reject ?? true),
+                    'can_verify' => (bool)($step->can_verify ?? false),
+                    'can_replenish' => (bool)($step->can_replenish ?? false),
+                    'use_item_selection' => (bool)($step->use_item_selection ?? true),
                 ];
             })->all()
         );
@@ -260,12 +276,12 @@ class ReplenishmentApprovalFlowService
             ->role($current->role_name);
 
         $assignedUserIds = collect($current->assigned_user_ids ?? [])
-            ->map(fn($id) => (int) $id)
+            ->map(fn($id) => (int)$id)
             ->filter(fn($id) => $id > 0)
             ->values()
             ->all();
 
-        if (! empty($assignedUserIds)) {
+        if (!empty($assignedUserIds)) {
             $usersQuery->whereIn('id', $assignedUserIds);
         }
 
@@ -295,20 +311,20 @@ class ReplenishmentApprovalFlowService
         }
 
         $assignedUserIds = collect($currentPending->assigned_user_ids ?? [])
-            ->map(fn($id) => (int) $id)
+            ->map(fn($id) => (int)$id)
             ->filter(fn($id) => $id > 0)
             ->values()
             ->all();
 
         if ($user->isSuperAdmin()) {
-            if (empty($assignedUserIds) || in_array((int) $user->id, $assignedUserIds, true)) {
+            if (empty($assignedUserIds) || in_array((int)$user->id, $assignedUserIds, true)) {
                 return $currentPending;
             }
 
             return null;
         }
 
-        if (! empty($assignedUserIds) && ! in_array((int) $user->id, $assignedUserIds, true)) {
+        if (!empty($assignedUserIds) && !in_array((int)$user->id, $assignedUserIds, true)) {
             return null;
         }
 
@@ -338,13 +354,13 @@ class ReplenishmentApprovalFlowService
     {
         $rule = $this->resolveRule($record);
 
-        if (! $rule) {
+        if (!$rule) {
             return null;
         }
 
         $targetApproval = $approval;
 
-        if (! $targetApproval) {
+        if (!$targetApproval) {
             $targetApproval = $record->replenishmentApprovals()
                 ->where('status', 'pending')
                 ->orderByRaw('COALESCE(step_order, id)')
@@ -352,29 +368,51 @@ class ReplenishmentApprovalFlowService
                 ->first();
         }
 
-        if (! $targetApproval) {
+        if (!$targetApproval) {
             return null;
         }
 
-        $step = $rule->steps()
-            ->where('step_order', $targetApproval->step_order)
+        $steps = $rule->steps()
+            ->orderBy('step_order')
             ->orderBy('id')
+            ->get();
+
+        // Primary lookup: match configured step_order to the approval's step_order.
+        $step = $steps
+            ->filter(fn($step) => (int)$step->step_order === (int)$targetApproval->step_order)
             ->first();
 
-        if (! $step) {
+        // Fallback: align by position when legacy data saved sequential step orders instead of the configured values.
+        if (!$step) {
+            $approvals = $record->replenishmentApprovals()
+                ->orderByRaw('COALESCE(step_order, id)')
+                ->orderBy('id')
+                ->get()
+                ->values();
+
+            $index = $approvals->search(fn($approvalRow) => $approvalRow->id === $targetApproval->id);
+
+            if ($index !== false) {
+                $step = $steps->get($index);
+            }
+        }
+
+        if (!$step) {
             return null;
         }
 
         return [
-            'can_approve' => (bool) ($step->can_approve ?? true),
-            'can_reject' => (bool) ($step->can_reject ?? true),
-            'use_item_selection' => (bool) ($step->use_item_selection ?? true),
+            'can_approve' => (bool)($targetApproval->can_approve ?? $step->can_approve ?? true),
+            'can_reject' => (bool)($targetApproval->can_reject ?? $step->can_reject ?? true),
+            'can_verify' => (bool)($targetApproval->can_verify ?? $step->can_verify ?? false),
+            'can_replenish' => (bool)($targetApproval->can_replenish ?? $step->can_replenish ?? false),
+            'use_item_selection' => (bool)($targetApproval->use_item_selection ?? $step->use_item_selection ?? true),
             'form_schema' => is_array($step->form_schema) ? $step->form_schema : [],
             'assigned_user_ids' => is_array($targetApproval->assigned_user_ids ?? null)
                 ? $targetApproval->assigned_user_ids
                 : (is_array($step->assigned_user_ids) ? $step->assigned_user_ids : []),
-            'role_name' => (string) $step->role_name,
-            'step_order' => (int) $step->step_order,
+            'role_name' => (string)$step->role_name,
+            'step_order' => (int)$step->step_order,
         ];
     }
 

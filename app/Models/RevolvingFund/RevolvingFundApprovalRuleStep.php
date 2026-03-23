@@ -10,6 +10,7 @@ class RevolvingFundApprovalRuleStep extends Model
     protected $fillable = [
         'revolving_fund_approval_rule_id',
         'role_name',
+        'department_id',
         'step_order',
         'assigned_user_ids',
         'can_approve',
@@ -19,6 +20,7 @@ class RevolvingFundApprovalRuleStep extends Model
 
     protected $casts = [
         'step_order' => 'integer',
+        'department_id' => 'integer',
         'assigned_user_ids' => 'array',
         'can_approve' => 'boolean',
         'can_reject' => 'boolean',

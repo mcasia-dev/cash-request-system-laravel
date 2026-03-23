@@ -3,9 +3,12 @@
 namespace App\Models\RevolvingFund;
 
 use App\Enums\RevolvingFund\Status;
+use App\Models\RevolvingFundModeOfTransfer;
+use App\Models\RevolvingFundPurpose;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ForApprovalRevolvingFund extends Model
@@ -20,11 +23,16 @@ class ForApprovalRevolvingFund extends Model
         'added_by',
         'status',
         'status_remarks',
+        'revolving_fund_mode_of_transfer_id',
+        'area_of_assignment',
+        'field_work_assignment',
+        'other_purpose',
     ];
 
     protected $casts = [
         'initial_amount' => 'decimal:2',
         'remaining_amount' => 'decimal:2',
+        'field_work_assignment' => 'array'
     ];
 
     public function user(): BelongsTo
@@ -52,5 +60,19 @@ class ForApprovalRevolvingFund extends Model
     public function scopePendingApproval($query)
     {
         return $query->whereIn('status', [Status::PENDING->value, Status::IN_PROGRESS->value]);
+    }
+
+    public function purposes(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            RevolvingFundPurpose::class,
+            'revolving_fund_revolving_fund_purpose',
+            'revolving_fund_id',
+        )->withTimestamps();
+    }
+
+    public function modeOfTransfer(): BelongsTo
+    {
+        return $this->belongsTo(RevolvingFundModeOfTransfer::class, 'revolving_fund_mode_of_transfer_id');
     }
 }

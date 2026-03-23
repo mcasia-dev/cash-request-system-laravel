@@ -3,6 +3,7 @@
 namespace App\Services\RevolvingFund;
 
 use App\Enums\RevolvingFund\Status;
+use App\Enums\RevolvingFund\StatusRemarks;
 use App\Models\RevolvingFund\ForApprovalRevolvingFund;
 use App\Models\RevolvingFund\RevolvingFundApproval;
 use App\Models\RevolvingFund\RevolvingFundApprovalRule;
@@ -55,6 +56,36 @@ class RevolvingFundApprovalFlowService
 
         if ($steps->isEmpty()) {
             throw new RuntimeException('The matched revolving fund approval rule has no configured approver roles.');
+        }
+
+        $requestor = $record->addedBy ?? $record->user ?? null;
+        $needsDepartmentHeadGate = $requestor
+            && ! $requestor->isSuperAdmin()
+            && ! $requestor->hasRole('department_head');
+        $hasDepartmentHeadStep = $steps->contains(fn($step) => $step->role_name === 'department_head');
+
+        if ($needsDepartmentHeadGate && ! $hasDepartmentHeadStep) {
+            $departmentId = $requestor->department_id;
+
+            $departmentHeads = $departmentId
+                ? User::query()
+                    ->role('department_head')
+                    ->where('department_id', $departmentId)
+                    ->pluck('id')
+                    ->map(fn($id) => (int) $id)
+                    ->filter()
+                    ->values()
+                    ->all()
+                : [];
+
+            $steps->prepend((object) [
+                'role_name' => 'department_head',
+                'step_order' => 0,
+                'assigned_user_ids' => $departmentHeads ?: null,
+                'can_approve' => true,
+                'can_reject' => true,
+                'form_schema' => [],
+            ]);
         }
 
         $record->revolvingFundApprovals()->createMany(
@@ -157,14 +188,14 @@ class RevolvingFundApprovalFlowService
             }
 
             $record->update([
-                'status' => Status::APPROVED->value,
-                'status_remarks' => "{$roleTitle} Approved",
+                'status' => Status::IN_PROGRESS->value,
+                'status_remarks' => StatusRemarks::FOR_PAYMENT_PROCESSING->value,
             ]);
 
             return [
                 'is_final_step' => true,
-                'status' => Status::APPROVED->value,
-                'status_remarks' => "{$roleTitle} Approved",
+                'status' => Status::IN_PROGRESS->value,
+                'status_remarks' => StatusRemarks::FOR_PAYMENT_PROCESSING->value,
                 'approved_role_name' => $approval->role_name,
             ];
         });

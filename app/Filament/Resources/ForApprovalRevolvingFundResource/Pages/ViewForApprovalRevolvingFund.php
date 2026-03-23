@@ -60,16 +60,50 @@ class ViewForApprovalRevolvingFund extends ViewRecord
                     ->schema([
                         TextEntry::make('fund_code')
                             ->label('Fund Code'),
+
                         TextEntry::make('addedBy.name')
                             ->label('Requestor'),
+
                         TextEntry::make('user.name')
-                            ->label('Recipient'),
+                            ->label('Recipient')
+                            ->formatStateUsing(fn($record) => "{$record->user->name} ({$record->user->position} | {$record->user->department->department_name})"),
+
                         TextEntry::make('initial_amount')
                             ->label('Initial Amount')
                             ->money('PHP'),
+
                         TextEntry::make('remaining_amount')
                             ->label('Remaining Amount')
                             ->money('PHP'),
+
+                        TextEntry::make('area_of_assignment')
+                            ->label('Area of Assignment'),
+
+                        TextEntry::make('purposes.purpose')
+                            ->label('Purposes')
+                            ->badge()
+                            ->columnSpan(2),
+
+                        TextEntry::make('other_purpose')
+                            ->label('Other Purpose')
+                            ->visible(fn($record) => filled($record->other_purpose)),
+
+                        TextEntry::make('field_work_assignment')
+                            ->label('Field Work Assignment')
+                            ->state(function ($record) {
+                                return collect($record->field_work_assignment ?? [])
+                                    ->map(function ($item) {
+                                        $day = isset($item['day']) ? ucfirst($item['day']) : 'Day';
+                                        $from = $item['time_from'] ?? '-';
+                                        $to = $item['time_to'] ?? '-';
+
+                                        return "{$day}: {$from} - {$to}";
+                                    })
+                                    ->join('<br>');
+                            })
+                            ->html()
+                            ->columnSpanFull(),
+
                         TextEntry::make('status')
                             ->badge()
                             ->color(fn(string $state): string => match ($state) {
@@ -122,32 +156,32 @@ class ViewForApprovalRevolvingFund extends ViewRecord
     {
         $config = $this->getCurrentStepConfig($record);
 
-        return (bool) ($config['can_approve'] ?? true);
+        return (bool)($config['can_approve'] ?? true);
     }
 
     private function canRejectCurrentStep($record): bool
     {
         $config = $this->getCurrentStepConfig($record);
 
-        return (bool) ($config['can_reject'] ?? true);
+        return (bool)($config['can_reject'] ?? true);
     }
 
     private function buildDynamicStepForm($record): array
     {
         $config = $this->getCurrentStepConfig($record);
-        $schema = (array) ($config['form_schema'] ?? []);
+        $schema = (array)($config['form_schema'] ?? []);
         $fields = [];
 
         foreach ($schema as $item) {
-            $key = (string) ($item['key'] ?? '');
+            $key = (string)($item['key'] ?? '');
 
             if ($key === '') {
                 continue;
             }
 
-            $label = (string) ($item['label'] ?? $key);
-            $type = (string) ($item['type'] ?? 'text');
-            $required = (bool) ($item['required'] ?? false);
+            $label = (string)($item['label'] ?? $key);
+            $type = (string)($item['type'] ?? 'text');
+            $required = (bool)($item['required'] ?? false);
             $fieldPath = "step_form_data.{$key}";
 
             $field = match ($type) {
@@ -173,7 +207,7 @@ class ViewForApprovalRevolvingFund extends ViewRecord
     {
         $user = Auth::user();
 
-        if (! $user) {
+        if (!$user) {
             return [];
         }
 

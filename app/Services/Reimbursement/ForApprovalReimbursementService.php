@@ -2,8 +2,11 @@
 
 namespace App\Services\Reimbursement;
 
+use App\Enums\CashRequest\Status;
 use App\Jobs\Reimbursement\RejectReimbursementJob;
 use App\Jobs\Reimbursement\SubmitReimbursementForApprovalJob;
+use App\Models\Reimbursement\Reimbursement;
+use App\Models\RevolvingFund\RequestDiscussion;
 use App\Models\User;
 use Filament\Notifications\Actions\Action as NotificationAction;
 use Filament\Notifications\Notification;
@@ -158,6 +161,125 @@ class ForApprovalReimbursementService
                     ->url(route('filament.admin.resources.for-approval-reimbursements.view', ['record' => $record->id])),
             ])
             ->sendToDatabase($approvers);
+    }
+
+    public function returnForClarification($record, array $data): void
+    {
+        $approver = Auth::user();
+        $remarks = trim((string)($data['remarks'] ?? ''));
+
+        if ($remarks === '') {
+            Notification::make()
+                ->title('Remarks are required.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $record->update([
+            'status' => Status::IN_PROGRESS->value,
+            'status_remarks' => 'Returned for Clarification',
+        ]);
+
+        $discussion = RequestDiscussion::query()->create([
+            'discussable_type' => Reimbursement::class,
+            'discussable_id' => $record->id,
+            'sender_id' => $approver?->id,
+            'recipient_id' => $record->payee_id,
+            'type' => 'return',
+            'remarks' => $remarks,
+        ]);
+
+        activity()
+            ->causedBy($approver)
+            ->performedOn($record)
+            ->event('returned_for_clarification')
+            ->withProperties([
+                'reimbursement_id' => $record->id,
+                'reimbursement_no' => $record->reimbursement_no,
+                'remarks' => $remarks,
+                'discussion_id' => $discussion->id,
+            ])
+            ->log("Reimbursement {$record->reimbursement_no} was returned for clarification by {$approver?->name} ({$approver?->position})");
+
+        if ($record->payee) {
+            Notification::make()
+                ->title('Reimbursement Clarification Requested')
+                ->body("Your reimbursement {$record->reimbursement_no} was returned with remarks: {$remarks}")
+                ->actions([
+                    NotificationAction::make('markAsRead')
+                        ->button()
+                        ->markAsRead(),
+                    NotificationAction::make('view')
+                        ->link()
+                        ->url(route('filament.admin.resources.reimbursements.view', ['record' => $record->id])),
+                ])
+                ->sendToDatabase($record->payee);
+        }
+
+        Notification::make()
+            ->title('Returned to requestor for clarification.')
+            ->success()
+            ->send();
+    }
+
+    public function respondToClarification($record, array $data): void
+    {
+        $requestor = Auth::user();
+        $remarks = trim((string)($data['remarks'] ?? ''));
+
+        if ($remarks === '') {
+            Notification::make()
+                ->title('Response is required.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $discussion = RequestDiscussion::query()->create([
+            'discussable_type' => Reimbursement::class,
+            'discussable_id' => $record->id,
+            'sender_id' => $requestor?->id,
+            'recipient_id' => null,
+            'type' => 'response',
+            'remarks' => $remarks,
+        ]);
+
+        activity()
+            ->causedBy($requestor)
+            ->performedOn($record)
+            ->event('clarification_response_submitted')
+            ->withProperties([
+                'reimbursement_id' => $record->id,
+                'reimbursement_no' => $record->reimbursement_no,
+                'remarks' => $remarks,
+                'discussion_id' => $discussion->id,
+            ])
+            ->log("Reimbursement {$record->reimbursement_no} clarification response was submitted by {$requestor?->name} ({$requestor?->position})");
+
+        $approvers = app(ReimbursementApprovalFlowService::class)->getCurrentPendingApprovers($record);
+
+        if ($approvers->isNotEmpty()) {
+            Notification::make()
+                ->title('Clarification Response Received')
+                ->body("{$requestor?->name} responded to {$record->reimbursement_no}: {$remarks}")
+                ->actions([
+                    NotificationAction::make('markAsRead')
+                        ->button()
+                        ->markAsRead(),
+                    NotificationAction::make('view')
+                        ->link()
+                        ->url(route('filament.admin.resources.for-approval-reimbursements.view', ['record' => $record->id])),
+                ])
+                ->sendToDatabase($approvers);
+        }
+
+        Notification::make()
+            ->title('Response sent to approver(s).')
+            ->success()
+            ->send();
     }
 
     private function notifyPaymentProcessingApprovers($record): void

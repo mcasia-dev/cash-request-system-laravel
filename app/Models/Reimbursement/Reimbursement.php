@@ -6,6 +6,8 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
+use App\Models\RevolvingFund\RequestDiscussion;
 
 class Reimbursement extends Model
 {
@@ -120,6 +122,11 @@ class Reimbursement extends Model
     {
         return $this->hasMany(ReimbursementApproval::class, 'reimbursement_id')
             ->orderBy('step_no');
+    }
+
+    public function discussions(): MorphMany
+    {
+        return $this->morphMany(RequestDiscussion::class, 'discussable')->latest('id');
     }
 
     public function isCheckDisbursement(): bool

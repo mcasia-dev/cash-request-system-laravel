@@ -4,7 +4,9 @@ namespace App\Filament\Resources\ForApprovalReplenishmentResource\Pages;
 
 use App\Filament\Resources\ForApprovalReplenishmentResource;
 use App\Filament\Support\RendersAttachmentPreview;
+use App\Filament\Support\RendersDiscussionChat;
 use App\Services\RevolvingFund\ForApprovalReplenishmentService;
+use App\Services\RevolvingFund\ReplenishmentApprovalFlowService;
 use Facades\App\Services\RevolvingFund\ForApprovalReplenishmentService as ForApprovalReplenishmentFacade;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
@@ -23,7 +25,7 @@ use RuntimeException;
 
 class ViewForApprovalReplenishment extends ViewRecord
 {
-    use RendersAttachmentPreview;
+    use RendersAttachmentPreview, RendersDiscussionChat;
 
     protected static string $resource = ForApprovalReplenishmentResource::class;
 
@@ -31,12 +33,12 @@ class ViewForApprovalReplenishment extends ViewRecord
     {
         return [
             Action::make('submit_item_review')
-                ->label('Approve')
+                ->label(fn($record) => $this->getReviewActionLabel($record))
                 ->color('success')
                 ->visible(fn($record) => $this->canCurrentUserReview($record))
                 ->form(fn($record): array => $this->buildReviewFormSchema($record))
-                ->modalHeading('Review Replenishment Items')
-                ->modalSubmitActionLabel('Submit Review')
+                ->modalHeading(fn($record) => $this->getReviewModalHeading($record))
+                ->modalSubmitActionLabel(fn($record) => $this->getReviewSubmitLabel($record))
                 ->action(function ($record, array $data): void {
                     try {
                         ForApprovalReplenishmentFacade::submitItemReview(
@@ -51,8 +53,6 @@ class ViewForApprovalReplenishment extends ViewRecord
                             ->title('Replenishment review submitted.')
                             ->success()
                             ->send();
-
-                        $this->redirect(ForApprovalReplenishmentResource::getUrl('index'));
                     } catch (RuntimeException $exception) {
                         Notification::make()
                             ->title($exception->getMessage())
@@ -61,13 +61,27 @@ class ViewForApprovalReplenishment extends ViewRecord
                     }
                 }),
 
+            Action::make('return_for_clarification')
+                ->label('Return')
+                ->color('warning')
+                ->visible(fn($record) => $this->canCurrentUserReview($record))
+                ->form([
+                    Textarea::make('remarks')
+                        ->label('Return Remarks')
+                        ->required()
+                        ->rows(4),
+                ])
+                ->action(function ($record, array $data): void {
+                    ForApprovalReplenishmentFacade::returnForClarification($record, $data);
+                }),
+
             Action::make('replenish_amount')
                 ->label('Replenish')
                 ->color('primary')
                 ->visible(fn($record) => $this->canApplyReplenishmentAmount($record))
                 ->form([
                     TextInput::make('initial_amount')
-                        ->label('Initial Amount')
+                        ->label('Revolving Fund Amount')
                         ->numeric()
                         ->prefix('PHP')
                         ->default(fn($record) => (float)$record->initial_amount)
@@ -83,13 +97,15 @@ class ViewForApprovalReplenishment extends ViewRecord
                         ->dehydrated(false),
 
                     TextInput::make('amount_to_add')
-                        ->label('Amount to Add')
+                        ->label('Replenish Amount')
+                        ->default(fn($record) => (float)$record->total_amount)
                         ->numeric()
                         ->prefix('PHP')
                         ->minValue(0.01)
+                        ->helperText('Any amount above the missing fund balance will be saved as Amount to Reimburse.')
                         ->required(),
                 ])
-                ->modalHeading('Apply Replenishment Amount')
+                ->modalHeading('Replenish Amount')
                 ->modalSubmitActionLabel('Apply')
                 ->action(function ($record, array $data): void {
                     try {
@@ -120,24 +136,41 @@ class ViewForApprovalReplenishment extends ViewRecord
             ->schema([
                 Section::make('Replenishment Details')
                     ->schema([
-                        TextEntry::make('id')
-                            ->label('Replenishment #'),
                         TextEntry::make('revolvingFund.fund_code')
                             ->label('Fund Code'),
+
                         TextEntry::make('revolvingFund.user.name')
                             ->label('Requestor'),
+
                         TextEntry::make('initial_amount')
-                            ->label('Initial Amount')
+                            ->label('Revolving Fund Amount')
                             ->money('PHP'),
+
+                        TextEntry::make('old_remaining_amount')
+                            ->label('Old Remaining Amount')
+                            ->money('PHP')
+                            ->placeholder('-')
+                            ->visible(fn($state) => !is_null($state)),
+
                         TextEntry::make('total_amount')
-                            ->label('Approved Total')
+                            ->label('Replenish Total Amount')
                             ->money('PHP'),
-                        TextEntry::make('amount_to_return')
-                            ->label('Amount to Return/Deduct')
-                            ->money('PHP'),
+
                         TextEntry::make('remaining_amount')
                             ->label('Remaining Amount')
                             ->money('PHP'),
+
+                        TextEntry::make('amount_to_return')
+                            ->label('Amount to Return/Deduct')
+                            ->color(fn($state) => $state > 0 ? 'danger' : null)
+                            ->money('PHP'),
+
+                        TextEntry::make('amount_to_reimburse')
+                            ->label('Amount to Reimburse')
+                            ->money('PHP')
+                            ->color(fn($state) => $state > 0 || !is_null($state) ? 'success' : null)
+                            ->visible(fn($state) => !is_null($state)),
+
                         TextEntry::make('status')
                             ->badge()
                             ->color(fn(string $state): string => match ($state) {
@@ -148,16 +181,22 @@ class ViewForApprovalReplenishment extends ViewRecord
                                 'replenished' => 'primary',
                                 default => 'secondary',
                             }),
+
                         TextEntry::make('status_remarks')
                             ->label('Status Remarks')
                             ->placeholder('-'),
+
                         TextEntry::make('replenishedBy.name')
                             ->label('Replenished By')
-                            ->placeholder('-'),
+                            ->placeholder('-')
+                            ->visible(fn($state) => !is_null($state)),
+
                         TextEntry::make('replenished_at')
                             ->label('Replenished At')
                             ->dateTime('F d, Y h:i A')
-                            ->placeholder('-'),
+                            ->placeholder('-')
+                            ->visible(fn($state) => !is_null($state)),
+
                         TextEntry::make('reason_for_rejection')
                             ->label('Rejection Reason')
                             ->visible(fn($record) => filled($record->reason_for_rejection))
@@ -200,6 +239,17 @@ class ViewForApprovalReplenishment extends ViewRecord
                                     ->columnSpanFull(),
                             ])
                             ->columns(3),
+                    ]),
+
+                Section::make('Clarifications / Returns')
+                    ->collapsed()
+                    ->collapsible()
+                    ->schema([
+                        TextEntry::make('discussion_chat')
+                            ->hiddenLabel()
+                            ->state(fn($record) => $this->renderDiscussionChatHtml($record))
+                            ->html()
+                            ->columnSpanFull(),
                     ]),
             ]);
     }
@@ -263,6 +313,27 @@ class ViewForApprovalReplenishment extends ViewRecord
         return $schema;
     }
 
+    private function getReviewActionLabel($record): string
+    {
+        $stepConfig = $this->getCurrentStepConfig($record);
+
+        if (($stepConfig['can_verify'] ?? false) && !($stepConfig['can_approve'] ?? true)) {
+            return 'Verify';
+        }
+
+        return 'Approve';
+    }
+
+    private function getReviewModalHeading($record): string
+    {
+        return $this->getReviewActionLabel($record) . ' Replenishment Items';
+    }
+
+    private function getReviewSubmitLabel($record): string
+    {
+        return 'Submit ' . $this->getReviewActionLabel($record);
+    }
+
     private function buildDynamicStepFormFields(array $stepConfig): array
     {
         $fields = [];
@@ -319,7 +390,8 @@ class ViewForApprovalReplenishment extends ViewRecord
             return false;
         }
 
-        if (!in_array((string)$record->status, ['approved', 'rejected'], true)) {
+        // Only allow after the request is fully approved.
+        if ((string)$record->status !== 'approved') {
             return false;
         }
 
@@ -327,16 +399,40 @@ class ViewForApprovalReplenishment extends ViewRecord
             return false;
         }
 
-        $latestAction = $record->replenishmentApprovals()
-            ->whereIn('status', ['approved', 'declined'])
-            ->orderByDesc('acted_at')
-            ->orderByDesc('id')
-            ->first();
+        $approvals = $record->replenishmentApprovals()
+            ->orderByRaw('COALESCE(step_order, id)')
+            ->orderBy('id')
+            ->get();
 
-        if (!$latestAction) {
+        if ($approvals->isEmpty()) {
             return false;
         }
 
-        return (int)$latestAction->approved_by === (int)$user->id;
+        // Ensure no pending steps remain.
+        if ($approvals->contains(fn($approval) => $approval->status === 'pending')) {
+            return false;
+        }
+
+        // Show only to the final approver who completed the last step.
+        $lastAction = $approvals
+            ->filter(fn($approval) => in_array($approval->status, ['approved', 'declined'], true))
+            ->last();
+
+        if (!$lastAction) {
+            return false;
+        }
+
+        if ($lastAction->status !== 'approved' || (int)$lastAction->approved_by !== (int)$user->id) {
+            return false;
+        }
+
+        if ((bool)($lastAction->can_replenish ?? false)) {
+            return true;
+        }
+
+        $stepConfig = app(ReplenishmentApprovalFlowService::class)
+            ->getStepConfiguration($record, $lastAction);
+
+        return (bool)($stepConfig['can_replenish'] ?? false);
     }
 }

@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\ReplenishmentApprovalRuleResource\Pages;
 use App\Models\RevolvingFund\ReplenishmentApprovalRule;
+use App\Models\Role;
 use App\Models\User;
 use Filament\Forms\Get;
 use Filament\Forms\Components\Repeater;
@@ -21,7 +22,7 @@ use Illuminate\Support\Facades\Auth;
 class ReplenishmentApprovalRuleResource extends Resource
 {
     protected static ?string $model = ReplenishmentApprovalRule::class;
-    protected static ?string $navigationGroup = 'Revolving Funds';
+    protected static ?string $navigationGroup = 'Replenishments';
     protected static ?string $navigationLabel = 'Replenishment Approval Rules';
     protected static ?string $label = 'Replenishment Approval Rule';
     protected static ?string $pluralLabel = 'Replenishment Approval Rules';
@@ -59,20 +60,10 @@ class ReplenishmentApprovalRuleResource extends Resource
                     ->schema([
                         Select::make('role_name')
                             ->label('Approver Role')
-                            ->options([
-                                'department_head' => 'Department Head',
-                                'president' => 'President',
-                                'sales_channel_manager' => 'Sales Channel Manager',
-                                'national_sales_manager' => 'National Sales Manager',
-                                'treasury_manager' => 'Treasury Manager',
-                                'treasury_supervisor' => 'Treasury Supervisor',
-                                'hr_manager' => 'HR Manager',
-                                'accounting_manager' => 'Accounting Manager',
-                                'treasury_staff' => 'Treasury Staff',
-                                'finance_staff' => 'Finance Staff',
-                                'hr_staff' => 'HR Staff',
-                                'accounting_staff' => 'Accounting Staff',
-                            ])
+                            ->options(fn() => Role::query()
+                                ->orderBy('name')
+                                ->pluck('name', 'name')
+                                ->toArray())
                             ->required()
                             ->disableOptionsWhenSelectedInSiblingRepeaterItems()
                             ->searchable(),
@@ -82,21 +73,12 @@ class ReplenishmentApprovalRuleResource extends Resource
                             ->multiple()
                             ->searchable()
                             ->preload()
-                            ->options(function (Get $get): array {
-                                $role = $get('role_name');
-
-                                if (! filled($role)) {
-                                    return [];
-                                }
-
-                                return User::query()
-                                    ->whereHas('roles', fn($query) => $query->where('name', $role))
-                                    ->orderBy('name')
-                                    ->pluck('name', 'id')
-                                    ->toArray();
-                            })
-                            ->helperText('If empty, all users with the selected role can approve. If set, only selected users can approve this step.')
-                            ->visible(fn(Get $get) => filled($get('role_name')) && (bool) Auth::user()?->isSuperAdmin()),
+                            ->options(fn() => User::query()
+                                ->orderBy('name')
+                                ->pluck('name', 'id')
+                                ->toArray())
+                            ->helperText('If empty, all users with this role can approve. If set, only the chosen users can approve this step.')
+                            ->visible(fn(Get $get) => filled($get('role_name')) && (bool)Auth::user()?->isSuperAdmin()),
 
                         Toggle::make('can_approve')
                             ->label('Can Approve')
@@ -105,6 +87,16 @@ class ReplenishmentApprovalRuleResource extends Resource
                         Toggle::make('can_reject')
                             ->label('Can Reject')
                             ->default(true),
+
+                        Toggle::make('can_verify')
+                            ->label('Can Verify')
+                            ->helperText('Enable this for the treasury step that can verify and apply the replenished amount.')
+                            ->default(false),
+
+                        Toggle::make('can_replenish')
+                            ->label('Can Replenish')
+                            ->helperText('Enable this for the step allowed to apply the replenishment amount after approval.')
+                            ->default(false),
 
                         Toggle::make('use_item_selection')
                             ->label('Use Item Selection')

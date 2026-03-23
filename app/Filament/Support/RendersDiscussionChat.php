@@ -6,10 +6,38 @@ use Illuminate\Support\Facades\Auth;
 
 trait RendersDiscussionChat
 {
+    protected function canViewDiscussionChat($record): bool
+    {
+        $currentUserId = Auth::id();
+
+        if (!$currentUserId) {
+            return false;
+        }
+
+        return $record->discussions()
+            ->where(function ($query) use ($currentUserId): void {
+                $query
+                    ->where('sender_id', $currentUserId)
+                    ->orWhere('recipient_id', $currentUserId);
+            })
+            ->exists();
+    }
+
     protected function renderDiscussionChatHtml($record): string
     {
+        $currentUserId = Auth::id();
+
+        if (!$currentUserId) {
+            return '<div style="padding:12px;border:1px dashed #374151;border-radius:12px;color:#9ca3af;">No messages yet.</div>';
+        }
+
         $messages = $record->discussions()
             ->with(['sender', 'recipient'])
+            ->where(function ($query) use ($currentUserId): void {
+                $query
+                    ->where('sender_id', $currentUserId)
+                    ->orWhere('recipient_id', $currentUserId);
+            })
             ->orderBy('id')
             ->get();
 
@@ -17,7 +45,6 @@ trait RendersDiscussionChat
             return '<div style="padding:12px;border:1px dashed #374151;border-radius:12px;color:#9ca3af;">No messages yet.</div>';
         }
 
-        $currentUserId = Auth::id();
         $html = '<div style="display:flex;flex-direction:column;gap:10px;padding:4px 0;">';
 
         foreach ($messages as $message) {

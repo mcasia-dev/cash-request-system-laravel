@@ -5,6 +5,7 @@ namespace App\Filament\Resources\ForApprovalReimbursementResource\Pages;
 use App\Enums\CashRequest\Status;
 use App\Filament\Resources\ForApprovalReimbursementResource;
 use App\Filament\Support\RendersAttachmentPreview;
+use App\Filament\Support\RendersDiscussionChat;
 use App\Models\Reimbursement\ReimbursementModeApproval;
 use Facades\App\Services\Reimbursement\ForApprovalReimbursementService;
 use App\Services\Reimbursement\ReimbursementApprovalFlowService;
@@ -23,7 +24,7 @@ use Illuminate\Support\Facades\Auth;
 
 class ViewForApprovalReimbursement extends ViewRecord
 {
-    use RendersAttachmentPreview;
+    use RendersAttachmentPreview, RendersDiscussionChat;
 
     protected static string $resource = ForApprovalReimbursementResource::class;
 
@@ -49,6 +50,17 @@ class ViewForApprovalReimbursement extends ViewRecord
                 ->modalHeading('Reject Reimbursement')
                 ->modalSubmitActionLabel('Reject')
                 ->action(fn($record, array $data) => ForApprovalReimbursementService::reject($record, $data)),
+
+            Action::make('Return')
+                ->visible(fn($record) => ($record->status === Status::PENDING->value || $record->status === Status::IN_PROGRESS->value) && $this->canCurrentUserReview($record))
+                ->color('warning')
+                ->form([
+                    Textarea::make('remarks')
+                        ->label('Return Remarks')
+                        ->required()
+                        ->rows(4),
+                ])
+                ->action(fn($record, array $data) => ForApprovalReimbursementService::returnForClarification($record, $data)),
         ];
     }
 
@@ -212,6 +224,17 @@ class ViewForApprovalReimbursement extends ViewRecord
                         TextEntry::make('custom_step_forms')
                             ->hiddenLabel()
                             ->state(fn($record) => $this->renderCustomStepFormsHtml($record))
+                            ->html()
+                            ->columnSpanFull(),
+                    ]),
+
+                Section::make('Clarifications / Returns')
+                    ->collapsed()
+                    ->collapsible()
+                    ->schema([
+                        TextEntry::make('discussion_chat')
+                            ->hiddenLabel()
+                            ->state(fn($record) => $this->renderDiscussionChatHtml($record))
                             ->html()
                             ->columnSpanFull(),
                     ]),
