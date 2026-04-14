@@ -1,8 +1,10 @@
 <?php
+
 namespace App\Providers;
 
 use Filament\Tables\Table;
 use Illuminate\Support\ServiceProvider;
+use Spatie\MediaLibrary\MediaLibraryServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -11,7 +13,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        MediaLibraryServiceProvider::ignoreMigrations();
     }
 
     /**
