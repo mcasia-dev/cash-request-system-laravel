@@ -29,7 +29,7 @@ class ReimbursementPolicy
      */
     public function create(User $user): bool
     {
-        return $user->checkPermissionTo('create Reimbursement');
+        return true;
     }
 
     /**

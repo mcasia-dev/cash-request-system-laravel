@@ -15,6 +15,8 @@ class CreateRevolvingFund extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
+        $data['user_id'] = $data['user_id'] ?? Auth::id();
+
         $rule = app(RevolvingFundApprovalFlowService::class)->resolveRule((object) [
             'initial_amount' => $data['initial_amount'] ?? 0,
         ]);

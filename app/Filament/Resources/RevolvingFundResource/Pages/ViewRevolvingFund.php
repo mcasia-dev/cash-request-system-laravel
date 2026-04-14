@@ -34,12 +34,17 @@ class ViewRevolvingFund extends ViewRecord
                         ->latest('id')
                         ->first();
 
-                    if (! $replenishment) {
+                    if (!$replenishment) {
                         return '#';
                     }
 
                     return route('filament.admin.resources.for-approval-replenishments.view', ['record' => $replenishment->id]);
                 }),
+
+            Action::make('tracking')
+                ->label('Tracking Status')
+                ->color('warning')
+                ->url(fn($record) => route('filament.admin.resources.revolving-funds.tracking', ['record' => $record])),
 
             Action::make('Respond')
                 ->label('Respond to Clarification')
@@ -63,16 +68,50 @@ class ViewRevolvingFund extends ViewRecord
                     ->schema([
                         TextEntry::make('fund_code')
                             ->label('Fund Code'),
+
                         TextEntry::make('addedBy.name')
                             ->label('Requestor'),
+
                         TextEntry::make('user.name')
-                            ->label('Recipient'),
+                            ->label('Recipient')
+                            ->formatStateUsing(fn($record) => "{$record->user->name} ({$record->user->position} | {$record->user->department->department_name})"),
+
                         TextEntry::make('initial_amount')
                             ->label('Initial Amount')
                             ->money('PHP'),
+
                         TextEntry::make('remaining_amount')
                             ->label('Remaining Amount')
                             ->money('PHP'),
+
+                        TextEntry::make('area_of_assignment')
+                            ->label('Area of Assignment'),
+
+                        TextEntry::make('purposes.purpose')
+                            ->label('Purposes')
+                            ->badge()
+                            ->columnSpan(2),
+
+                        TextEntry::make('other_purpose')
+                            ->label('Other Purpose')
+                            ->visible(fn($record) => filled($record->other_purpose)),
+
+                        TextEntry::make('field_work_assignment')
+                            ->label('Field Work Assignment')
+                            ->state(function ($record) {
+                                return collect($record->field_work_assignment ?? [])
+                                    ->map(function ($item) {
+                                        $day = isset($item['day']) ? ucfirst($item['day']) : 'Day';
+                                        $from = $item['time_from'] ?? '-';
+                                        $to = $item['time_to'] ?? '-';
+
+                                        return "{$day}: {$from} - {$to}";
+                                    })
+                                    ->join('<br>');
+                            })
+                            ->html()
+                            ->columnSpanFull(),
+
                         TextEntry::make('status')
                             ->badge()
                             ->color(fn(string $state): string => match ($state) {
@@ -81,6 +120,7 @@ class ViewRevolvingFund extends ViewRecord
                                 Status::APPROVED->value => 'success',
                                 Status::REJECTED->value => 'danger',
                                 Status::REPLENISHED->value => 'info',
+                                Status::RELEASED->value => 'info',
                                 default => 'secondary',
                             }),
                         TextEntry::make('status_remarks')
@@ -109,6 +149,7 @@ class ViewRevolvingFund extends ViewRecord
                     ->columns(3),
 
                 Section::make('Clarifications / Returns')
+                    ->visible(fn($record) => $this->canViewDiscussionChat($record))
                     ->schema([
                         TextEntry::make('discussion_chat')
                             ->hiddenLabel()
@@ -124,11 +165,11 @@ class ViewRevolvingFund extends ViewRecord
     {
         $userId = Auth::id();
 
-        if (! $userId || (int) $record->added_by !== (int) $userId) {
+        if (!$userId || (int)$record->added_by !== (int)$userId) {
             return false;
         }
 
-        if (! in_array($record->status, [Status::PENDING->value, Status::IN_PROGRESS->value], true)) {
+        if (!in_array($record->status, [Status::PENDING->value, Status::IN_PROGRESS->value], true)) {
             return false;
         }
 

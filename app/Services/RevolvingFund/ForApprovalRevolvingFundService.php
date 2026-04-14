@@ -17,12 +17,17 @@ use RuntimeException;
 
 class ForApprovalRevolvingFundService
 {
-    public function approve(ForApprovalRevolvingFund $record)
+    public function getCurrentStepConfiguration(ForApprovalRevolvingFund $record, User $user): ?array
+    {
+        return app(RevolvingFundApprovalFlowService::class)->getCurrentStepConfiguration($record, $user);
+    }
+
+    public function approve(ForApprovalRevolvingFund $record, array $data = [])
     {
         try {
             $user = Auth::user();
             $previousStatus = $record->status;
-            $result = app(RevolvingFundApprovalFlowService::class)->applyApproval($record, $user);
+            $result = app(RevolvingFundApprovalFlowService::class)->applyApproval($record, $user, (array) ($data['step_form_data'] ?? []));
 
             activity()
                 ->causedBy($user)
@@ -35,11 +40,15 @@ class ForApprovalRevolvingFundService
                     'new_status' => $result['status'],
                     'status_remarks' => $result['status_remarks'],
                     'approved_role_name' => $result['approved_role_name'] ?? null,
+                    'step_form_data' => (array) ($data['step_form_data'] ?? []),
                 ])
                 ->log("Revolving fund {$record->fund_code} approval step was completed by {$user->name} ({$user->position})");
 
             if (($result['is_final_step'] ?? false) !== true) {
                 $this->notifyCurrentApprovers($record->fresh());
+            } else {
+                app(ForPaymentProcessingRevolvingFundService::class)
+                    ->notifyTreasuryForPaymentProcessing($record->fresh());
             }
 
             if ($record->addedBy) {
@@ -47,7 +56,7 @@ class ForApprovalRevolvingFundService
                     ->title('Revolving Fund Update')
                     ->body(
                         ($result['is_final_step'] ?? false)
-                            ? "Your revolving fund request {$record->fund_code} has been fully approved."
+                            ? "Your revolving fund request {$record->fund_code} is now for payment processing."
                             : "Your revolving fund request {$record->fund_code} has been approved by one step."
                     )
                     ->actions([
@@ -62,7 +71,7 @@ class ForApprovalRevolvingFundService
             }
 
             Notification::make()
-                ->title(($result['is_final_step'] ?? false) ? 'Revolving fund request fully approved.' : 'Approval step completed.')
+                ->title(($result['is_final_step'] ?? false) ? 'Forwarded to payment processing.' : 'Approval step completed.')
                 ->success()
                 ->send();
 
@@ -75,12 +84,12 @@ class ForApprovalRevolvingFundService
         }
     }
 
-    public function reject(ForApprovalRevolvingFund $record)
+    public function reject(ForApprovalRevolvingFund $record, array $data = [])
     {
         try {
             $user = Auth::user();
             $previousStatus = $record->status;
-            $result = app(RevolvingFundApprovalFlowService::class)->applyRejection($record, $user);
+            $result = app(RevolvingFundApprovalFlowService::class)->applyRejection($record, $user, (array) ($data['step_form_data'] ?? []));
 
             activity()
                 ->causedBy($user)
@@ -93,6 +102,7 @@ class ForApprovalRevolvingFundService
                     'new_status' => $result['status'],
                     'status_remarks' => $result['status_remarks'],
                     'rejected_role_name' => $result['rejected_role_name'] ?? null,
+                    'step_form_data' => (array) ($data['step_form_data'] ?? []),
                 ])
                 ->log("Revolving fund {$record->fund_code} was rejected by {$user->name} ({$user->position})");
 
@@ -238,6 +248,11 @@ class ForApprovalRevolvingFundService
     {
         $requestor = Auth::user();
         $remarks = trim((string)($data['remarks'] ?? ''));
+        $targetApproverId = $record->discussions()
+            ->where('type', 'return')
+            ->where('recipient_id', $requestor?->id)
+            ->latest('id')
+            ->value('sender_id');
 
         if ($remarks === '') {
             Notification::make()
@@ -251,7 +266,7 @@ class ForApprovalRevolvingFundService
         $discussion = $this->addDiscussion(
             record: $record,
             senderId: $requestor?->id,
-            recipientId: null,
+            recipientId: $targetApproverId,
             type: 'response',
             remarks: $remarks,
         );
@@ -267,9 +282,9 @@ class ForApprovalRevolvingFundService
             ])
             ->log("Revolving fund {$record->fund_code} clarification response was submitted by {$requestor->name} ({$requestor->position})");
 
-        $approvers = app(RevolvingFundApprovalFlowService::class)->getCurrentPendingApprovers($record);
+        $targetApprover = $targetApproverId ? User::query()->find($targetApproverId) : null;
 
-        if ($approvers->isNotEmpty()) {
+        if ($targetApprover) {
             Notification::make()
                 ->title('Clarification Response Received')
                 ->body("{$requestor?->name} responded to {$record->fund_code}: {$remarks}")
@@ -281,16 +296,42 @@ class ForApprovalRevolvingFundService
                         ->link()
                         ->url(route('filament.admin.resources.for-approval-revolving-funds.view', ['record' => $record->id])),
                 ])
-                ->sendToDatabase($approvers);
+                ->sendToDatabase($targetApprover);
 
-            $this->sendBulkMail(
-                users: $approvers,
+            $this->sendMail(
+                user: $targetApprover,
                 subject: "Revolving Fund {$record->fund_code} Clarification Response",
                 title: 'Clarification Response',
                 message: "{$requestor?->name} responded: {$remarks}",
                 actionUrl: route('filament.admin.resources.for-approval-revolving-funds.view', ['record' => $record->id]),
-                actionLabel: 'Review Response',
+                actionLabel: 'Review Response'
             );
+        } else {
+            $approvers = app(RevolvingFundApprovalFlowService::class)->getCurrentPendingApprovers($record);
+
+            if ($approvers->isNotEmpty()) {
+                Notification::make()
+                    ->title('Clarification Response Received')
+                    ->body("{$requestor?->name} responded to {$record->fund_code}: {$remarks}")
+                    ->actions([
+                        NotificationAction::make('markAsRead')
+                            ->button()
+                            ->markAsRead(),
+                        NotificationAction::make('view')
+                            ->link()
+                            ->url(route('filament.admin.resources.for-approval-revolving-funds.view', ['record' => $record->id])),
+                    ])
+                    ->sendToDatabase($approvers);
+
+                $this->sendBulkMail(
+                    users: $approvers,
+                    subject: "Revolving Fund {$record->fund_code} Clarification Response",
+                    title: 'Clarification Response',
+                    message: "{$requestor?->name} responded: {$remarks}",
+                    actionUrl: route('filament.admin.resources.for-approval-revolving-funds.view', ['record' => $record->id]),
+                    actionLabel: 'Review Response',
+                );
+            }
         }
 
         Notification::make()

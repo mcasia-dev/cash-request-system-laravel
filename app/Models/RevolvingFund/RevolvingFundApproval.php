@@ -15,11 +15,19 @@ class RevolvingFundApproval extends Model
         'approved_by',
         'status',
         'acted_at',
+        'assigned_user_ids',
+        'can_approve',
+        'can_reject',
+        'step_form_data',
     ];
 
     protected $casts = [
         'step_order' => 'integer',
         'acted_at' => 'datetime',
+        'assigned_user_ids' => 'array',
+        'can_approve' => 'boolean',
+        'can_reject' => 'boolean',
+        'step_form_data' => 'array',
     ];
 
     public function revolvingFund(): BelongsTo

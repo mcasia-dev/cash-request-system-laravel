@@ -1,8 +1,11 @@
 <?php
+
 namespace Database\Seeders;
 
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Database\Seeders\Models\PermissionSeeder;
+use Database\Seeders\RevolvingFund\ModeOfTransferSeeder;
+use Database\Seeders\RevolvingFund\PurposeSeeder;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
@@ -19,6 +22,8 @@ class DatabaseSeeder extends Seeder
             RoleSeeder::class,
             ApprovalRuleSeeder::class,
             PermissionSeeder::class,
+            PurposeSeeder::class,
+            ModeOfTransferSeeder::class,
         ]);
     }
 }

@@ -2,8 +2,11 @@
 
 namespace App\Services\Reimbursement;
 
+use App\Enums\CashRequest\Status;
 use App\Jobs\Reimbursement\RejectReimbursementJob;
 use App\Jobs\Reimbursement\SubmitReimbursementForApprovalJob;
+use App\Models\Reimbursement\Reimbursement;
+use App\Models\RevolvingFund\RequestDiscussion;
 use App\Models\User;
 use Filament\Notifications\Actions\Action as NotificationAction;
 use Filament\Notifications\Notification;
@@ -12,12 +15,17 @@ use RuntimeException;
 
 class ForApprovalReimbursementService
 {
-    public function approve($record)
+    public function getCurrentStepConfiguration($record, User $user): ?array
+    {
+        return app(ReimbursementApprovalFlowService::class)->getCurrentStepConfiguration($record, $user);
+    }
+
+    public function approve($record, array $data = [])
     {
         try {
             $user = Auth::user();
             $previousStatus = $record->status;
-            $result = app(ReimbursementApprovalFlowService::class)->applyApproval($record, $user);
+            $result = app(ReimbursementApprovalFlowService::class)->applyApproval($record, $user, (array) ($data['step_form_data'] ?? []));
 
             activity()
                 ->causedBy($user)
@@ -30,11 +38,12 @@ class ForApprovalReimbursementService
                     'new_status' => $result['status'],
                     'status_remarks' => $result['status_remarks'],
                     'approved_role_name' => $result['approved_role_name'] ?? null,
+                    'step_form_data' => (array) ($data['step_form_data'] ?? []),
                 ])
                 ->log("Reimbursement {$record->reimbursement_no} approval step was completed by {$user->name} ({$user->position})");
 
             if (($result['is_final_step'] ?? false) === true) {
-                $this->notifyAccountingStaff($record->fresh());
+                $this->notifyPaymentProcessingApprovers($record->fresh());
             } else {
                 SubmitReimbursementForApprovalJob::dispatch($record->id);
                 $this->notifyCurrentApprovers($record->fresh());
@@ -45,7 +54,7 @@ class ForApprovalReimbursementService
                     ->title('Reimbursement Update')
                     ->body(
                         ($result['is_final_step'] ?? false)
-                            ? "Your reimbursement {$record->reimbursement_no} is now for accounting verification."
+                            ? "Your reimbursement {$record->reimbursement_no} is now for payment processing."
                             : "Your reimbursement {$record->reimbursement_no} has been approved."
                     )
                     ->actions([
@@ -60,7 +69,7 @@ class ForApprovalReimbursementService
             }
 
             Notification::make()
-                ->title(($result['is_final_step'] ?? false) ? 'Forwarded to Accounting Verification' : 'Approval step completed.')
+                ->title(($result['is_final_step'] ?? false) ? 'Forwarded to Payment Processing' : 'Approval step completed.')
                 ->success()
                 ->send();
 
@@ -78,7 +87,12 @@ class ForApprovalReimbursementService
         try {
             $user = Auth::user();
             $previousStatus = $record->status;
-            $result = app(ReimbursementApprovalFlowService::class)->applyRejection($record, $user, $data['rejection_reason']);
+            $result = app(ReimbursementApprovalFlowService::class)->applyRejection(
+                $record,
+                $user,
+                $data['rejection_reason'],
+                (array) ($data['step_form_data'] ?? []),
+            );
 
             activity()
                 ->causedBy($user)
@@ -92,6 +106,7 @@ class ForApprovalReimbursementService
                     'status_remarks' => $result['status_remarks'],
                     'reason_for_rejection' => $data['rejection_reason'],
                     'rejected_role_name' => $result['rejected_role_name'] ?? null,
+                    'step_form_data' => (array) ($data['step_form_data'] ?? []),
                 ])
                 ->log("Reimbursement {$record->reimbursement_no} was rejected by {$user->name} ({$user->position})");
 
@@ -148,29 +163,148 @@ class ForApprovalReimbursementService
             ->sendToDatabase($approvers);
     }
 
-    private function notifyAccountingStaff($record): void
+    public function returnForClarification($record, array $data): void
     {
-        $accountingUsers = User::query()
+        $approver = Auth::user();
+        $remarks = trim((string)($data['remarks'] ?? ''));
+
+        if ($remarks === '') {
+            Notification::make()
+                ->title('Remarks are required.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $record->update([
+            'status' => Status::IN_PROGRESS->value,
+            'status_remarks' => 'Returned for Clarification',
+        ]);
+
+        $discussion = RequestDiscussion::query()->create([
+            'discussable_type' => Reimbursement::class,
+            'discussable_id' => $record->id,
+            'sender_id' => $approver?->id,
+            'recipient_id' => $record->payee_id,
+            'type' => 'return',
+            'remarks' => $remarks,
+        ]);
+
+        activity()
+            ->causedBy($approver)
+            ->performedOn($record)
+            ->event('returned_for_clarification')
+            ->withProperties([
+                'reimbursement_id' => $record->id,
+                'reimbursement_no' => $record->reimbursement_no,
+                'remarks' => $remarks,
+                'discussion_id' => $discussion->id,
+            ])
+            ->log("Reimbursement {$record->reimbursement_no} was returned for clarification by {$approver?->name} ({$approver?->position})");
+
+        if ($record->payee) {
+            Notification::make()
+                ->title('Reimbursement Clarification Requested')
+                ->body("Your reimbursement {$record->reimbursement_no} was returned with remarks: {$remarks}")
+                ->actions([
+                    NotificationAction::make('markAsRead')
+                        ->button()
+                        ->markAsRead(),
+                    NotificationAction::make('view')
+                        ->link()
+                        ->url(route('filament.admin.resources.reimbursements.view', ['record' => $record->id])),
+                ])
+                ->sendToDatabase($record->payee);
+        }
+
+        Notification::make()
+            ->title('Returned to requestor for clarification.')
+            ->success()
+            ->send();
+    }
+
+    public function respondToClarification($record, array $data): void
+    {
+        $requestor = Auth::user();
+        $remarks = trim((string)($data['remarks'] ?? ''));
+
+        if ($remarks === '') {
+            Notification::make()
+                ->title('Response is required.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $discussion = RequestDiscussion::query()->create([
+            'discussable_type' => Reimbursement::class,
+            'discussable_id' => $record->id,
+            'sender_id' => $requestor?->id,
+            'recipient_id' => null,
+            'type' => 'response',
+            'remarks' => $remarks,
+        ]);
+
+        activity()
+            ->causedBy($requestor)
+            ->performedOn($record)
+            ->event('clarification_response_submitted')
+            ->withProperties([
+                'reimbursement_id' => $record->id,
+                'reimbursement_no' => $record->reimbursement_no,
+                'remarks' => $remarks,
+                'discussion_id' => $discussion->id,
+            ])
+            ->log("Reimbursement {$record->reimbursement_no} clarification response was submitted by {$requestor?->name} ({$requestor?->position})");
+
+        $approvers = app(ReimbursementApprovalFlowService::class)->getCurrentPendingApprovers($record);
+
+        if ($approvers->isNotEmpty()) {
+            Notification::make()
+                ->title('Clarification Response Received')
+                ->body("{$requestor?->name} responded to {$record->reimbursement_no}: {$remarks}")
+                ->actions([
+                    NotificationAction::make('markAsRead')
+                        ->button()
+                        ->markAsRead(),
+                    NotificationAction::make('view')
+                        ->link()
+                        ->url(route('filament.admin.resources.for-approval-reimbursements.view', ['record' => $record->id])),
+                ])
+                ->sendToDatabase($approvers);
+        }
+
+        Notification::make()
+            ->title('Response sent to approver(s).')
+            ->success()
+            ->send();
+    }
+
+    private function notifyPaymentProcessingApprovers($record): void
+    {
+        $approvers = User::query()
             ->whereHas('roles', function ($query) {
-                $query->whereIn('name', ['accounting_staff']);
+                $query->whereIn('name', ['treasury_staff', 'treasury_manager']);
             })
             ->get();
 
-        if ($accountingUsers->isEmpty()) {
+        if ($approvers->isEmpty()) {
             return;
         }
 
         Notification::make()
-            ->title('Reimbursement For Accounting Verification')
-            ->body("{$record->reimbursement_no} is ready for accounting verification.")
+            ->title('Reimbursement For Payment Processing')
+            ->body("{$record->reimbursement_no} is ready for payment processing.")
             ->actions([
                 NotificationAction::make('markAsRead')
                     ->button()
                     ->markAsRead(),
                 NotificationAction::make('view')
                     ->link()
-                    ->url(route('filament.admin.resources.for-accounting-verifications.view', ['record' => $record->id])),
+                    ->url(route('filament.admin.resources.for-payment-processing-reimbursements.view', ['record' => $record->id])),
             ])
-            ->sendToDatabase($accountingUsers);
+            ->sendToDatabase($approvers);
     }
 }

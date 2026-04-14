@@ -4,6 +4,10 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\RevolvingFundApprovalRuleResource\Pages;
 use App\Models\RevolvingFund\RevolvingFundApprovalRule;
+use App\Models\Department;
+use App\Models\User;
+use App\Models\Role;
+use Filament\Forms\Get;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -14,14 +18,12 @@ use Filament\Tables;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Auth;
 
 class RevolvingFundApprovalRuleResource extends Resource
 {
     protected static ?string $model = RevolvingFundApprovalRule::class;
     protected static ?string $navigationGroup = 'Revolving Funds';
-    protected static ?string $navigationLabel = 'Approval Rules';
-    protected static ?string $label = 'Approval Rule';
-    protected static ?string $pluralLabel = 'Approval Rules';
     protected static ?string $navigationIcon = 'heroicon-o-adjustments-horizontal';
 
     public static function form(Form $form): Form
@@ -56,25 +58,76 @@ class RevolvingFundApprovalRuleResource extends Resource
                     ->schema([
                         Select::make('role_name')
                             ->label('Approver Role')
-                            ->options([
-                                'department_head' => 'Department Head',
-                                'president' => 'President',
-                                'sales_channel_manager' => 'Sales Channel Manager',
-                                'national_sales_manager' => 'National Sales Manager',
-                                'treasury_manager' => 'Treasury Manager',
-                                'treasury_supervisor' => 'Treasury Supervisor',
-                                'hr_manager' => 'HR Manager',
-                                'accounting_manager' => 'Accounting Manager',
-                                'treasury_staff' => 'Treasury Staff',
-                                'finance_staff' => 'Finance Staff',
-                                'hr_staff' => 'HR Staff',
-                                'accounting_staff' => 'Accounting Staff',
-                            ])
+                            ->options(fn() => Role::query()
+                                ->orderBy('name')
+                                ->pluck('name', 'name')
+                                ->toArray())
                             ->required()
                             ->disableOptionsWhenSelectedInSiblingRepeaterItems()
                             ->searchable(),
+
+                        Select::make('department_id')
+                            ->label('Department')
+                            ->options(fn() => Department::query()->orderBy('department_name')->pluck('department_name', 'id')->toArray())
+                            ->searchable()
+                            ->preload()
+                            ->helperText('Optional: limit this approver role to a specific department.'),
+
+                        Select::make('assigned_user_ids')
+                            ->label('Specific Users (Optional)')
+                            ->multiple()
+                            ->searchable()
+                            ->preload()
+                            ->options(fn() => User::query()
+                                ->orderBy('name')
+                                ->pluck('name', 'id')
+                                ->toArray())
+                            ->helperText('If empty, all users with this role can approve. If set, only the chosen users can approve this step.')
+                            ->visible(fn(Get $get) => filled($get('role_name')) && (bool)Auth::user()?->isSuperAdmin()),
+
+                        Toggle::make('can_approve')
+                            ->label('Can Approve')
+                            ->default(true),
+
+                        Toggle::make('can_reject')
+                            ->label('Can Reject')
+                            ->default(true),
+
+                        Repeater::make('form_schema')
+                            ->label('Optional Custom Form')
+                            ->defaultItems(0)
+                            ->addActionLabel('Add Field')
+                            ->schema([
+                                TextInput::make('key')
+                                    ->label('Field Key')
+                                    ->required()
+                                    ->alphaDash()
+                                    ->maxLength(50),
+
+                                TextInput::make('label')
+                                    ->label('Field Label')
+                                    ->required()
+                                    ->maxLength(100),
+
+                                Select::make('type')
+                                    ->label('Field Type')
+                                    ->required()
+                                    ->options([
+                                        'text' => 'Text',
+                                        'number' => 'Number',
+                                        'textarea' => 'Textarea',
+                                        'date' => 'Date',
+                                    ])
+                                    ->default('text'),
+
+                                Toggle::make('required')
+                                    ->label('Required')
+                                    ->default(false),
+                            ])
+                            ->columns(2)
+                            ->columnSpanFull(),
                     ])
-                    ->columns(1)
+                    ->columns(2)
                     ->grid(1)
                     ->columnSpanFull(),
             ])

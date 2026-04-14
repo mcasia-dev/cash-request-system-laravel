@@ -6,6 +6,7 @@ use App\Models\CashRequest\LiquidationReceipt;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
 use Filament\Notifications\Notification;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -57,10 +58,19 @@ class OcrSpaceService
             throw new RuntimeException('Receipt image is not readable.');
         }
 
+        $timeout = max(5, (int)config('ocr-space.timeout', 30));
+        $connectTimeout = max(3, (int)config('ocr-space.connect_timeout', 10));
+        $retryTimes = max(0, (int)config('ocr-space.retry_times', 2));
+        $retrySleepMs = max(0, (int)config('ocr-space.retry_sleep_ms', 1000));
+
         try {
-            $response = Http::retry(2, 1000)
-                ->timeout(45)
-                ->connectTimeout(15)
+            $response = Http::retry(
+                $retryTimes,
+                $retrySleepMs,
+                fn(Throwable $exception): bool => $exception instanceof ConnectionException
+            )
+                ->timeout($timeout)
+                ->connectTimeout($connectTimeout)
                 ->asMultipart()
                 ->withHeaders([
                     'apikey' => $apiKey,
@@ -82,7 +92,7 @@ class OcrSpaceService
                 'error' => $message,
             ]);
 
-            if (str_contains(strtolower($message), 'timed out') || str_contains($message, 'cURL error 28')) {
+            if ($this->isTimeoutMessage($message)) {
                 throw new RuntimeException('OCR request timed out. Please try again in a few seconds.');
             }
 
@@ -133,6 +143,12 @@ class OcrSpaceService
         return $text;
     }
 
+    private function isTimeoutMessage(string $message): bool
+    {
+        return str_contains(strtolower($message), 'timed out')
+            || str_contains($message, 'cURL error 28');
+    }
+
     /**
      * Extract a normalized receipt number from OCR text.
      */
@@ -151,6 +167,7 @@ class OcrSpaceService
             '/\bofficial\s*receipt\s*[:=\-]?\s*([A-Z0-9\-\/]{3,})/i',
             '/\b(?:o\.?\s*r\.?|or)\s*(?:no\.?|number|#)\s*[:=\-]?\s*([A-Z0-9\-\/]{3,})/i',
             '/\b(?:s\.?\s*i\.?|si)\s*no\.?\s*[:=\-]?\s*([A-Z0-9\-\/]{3,})/i',
+            '/\b(?:s\.?\s*i\.?|si)\s*#\s*[:=\-]?\s*([A-Z0-9\-\/]{3,})/i',
             '/\bsales\s*(?:invoice|inv)\s*no\.?\s*[:=\-]?\s*([A-Z0-9\-\/]{3,})/i',
             '/\bsales\s*invoice\s*no\.?\s*[:=\-]?\s*([A-Z0-9\-\/]{3,})/i',
             '/\bsales\s*invoice\s*#\s*[:=\-]?\s*([A-Z0-9\-\/]{3,})/i',
@@ -325,18 +342,30 @@ class OcrSpaceService
                 'receipt_number' => $receiptNumber,
             ]);
         } catch (Throwable $exception) {
+            $isTimeout = $this->isTimeoutMessage((string)$exception->getMessage());
+
             Log::error('Liquidation upload validation exception', [
                 'user_id' => Auth::id(),
                 'receipt_path' => $path,
                 'error' => $exception->getMessage(),
+                'is_timeout' => $isTimeout,
             ]);
 
-            $this->clearInvalidReceiptUpload($state, $path, $set, $receiptFieldPath);
+            if (!$isTimeout) {
+                $this->clearInvalidReceiptUpload($state, $path, $set, $receiptFieldPath);
+            }
 
-            Notification::make()
-                ->title('Unable to read the receipt image. Please upload a clearer image.')
-                ->danger()
-                ->send();
+            if ($isTimeout) {
+                Notification::make()
+                    ->title('OCR service timed out. Please try again in a few seconds.')
+                    ->warning()
+                    ->send();
+            } else {
+                Notification::make()
+                    ->title('Unable to read the receipt image. Please upload a clearer image.')
+                    ->danger()
+                    ->send();
+            }
 
             return false;
         }

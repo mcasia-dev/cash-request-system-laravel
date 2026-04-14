@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Auth;
 class ForApprovalReplenishmentResource extends Resource
 {
     protected static ?string $model = ForApprovalReplenishment::class;
-    protected static ?string $navigationGroup = 'Revolving Funds';
+    protected static ?string $navigationGroup = 'Replenishments';
     protected static ?string $navigationLabel = 'Replenishment Approvals';
     protected static ?string $navigationIcon = 'heroicon-o-document-check';
 
@@ -61,10 +61,6 @@ class ForApprovalReplenishmentResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('id')
-                    ->label('Replenishment #')
-                    ->sortable(),
-
                 Tables\Columns\TextColumn::make('revolvingFund.fund_code')
                     ->label('Fund Code')
                     ->searchable()
@@ -93,7 +89,7 @@ class ForApprovalReplenishmentResource extends Resource
 
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Date Submitted')
-                    ->dateTime()
+                    ->dateTime('F d, Y H:i A')
                     ->sortable(),
             ])
             ->filters([])

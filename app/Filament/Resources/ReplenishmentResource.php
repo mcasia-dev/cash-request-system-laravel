@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\ReplenishmentResource\Pages;
 use App\Models\RevolvingFund\Replenishment;
 use App\Models\RevolvingFund\RevolvingFund;
+use App\Enums\RevolvingFund\Status as RevolvingFundStatus;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -20,9 +21,19 @@ use Illuminate\Support\Facades\Auth;
 class ReplenishmentResource extends Resource
 {
     protected static ?string $model = Replenishment::class;
-    protected static ?string $navigationGroup = 'Revolving Funds';
+    protected static ?string $navigationGroup = 'Replenishments';
     protected static ?string $navigationLabel = 'Replenishments';
     protected static ?string $navigationIcon = 'heroicon-o-arrow-path';
+
+    private static function eligibleRevolvingFundQuery(): Builder
+    {
+        return RevolvingFund::query()
+            ->where('user_id', Auth::id())
+            ->whereIn('status', [
+                RevolvingFundStatus::APPROVED->value,
+                RevolvingFundStatus::RELEASED->value,
+            ]);
+    }
 
     public static function getEloquentQuery(): Builder
     {
@@ -41,25 +52,26 @@ class ReplenishmentResource extends Resource
                     ->relationship(
                         name: 'revolvingFund',
                         titleAttribute: 'fund_code',
-                        modifyQueryUsing: fn(Builder $query) => $query->where('user_id', Auth::id()),
+                        modifyQueryUsing: fn(Builder $query) => $query
+                            ->where('user_id', Auth::id())
+                            ->whereIn('status', [
+                                RevolvingFundStatus::APPROVED->value,
+                                RevolvingFundStatus::RELEASED->value,
+                            ]),
                     )
                     ->preload()
                     ->required()
                     ->disabled()
                     ->dehydrated(true)
                     ->helperText('Auto-assigned from your revolving fund.')
-                    ->default(fn() => RevolvingFund::query()
-                        ->where('user_id', Auth::id())
-                        ->value('id')),
+                    ->default(fn() => self::eligibleRevolvingFundQuery()->value('id')),
 
                 TextInput::make('initial_amount')
-                    ->label('Initial Amount')
+                    ->label('Revolving Fund Amount')
                     ->numeric()
                     ->readOnly()
                     ->prefix('PHP')
-                    ->default(fn() => RevolvingFund::query()
-                        ->where('user_id', Auth::id())
-                        ->value('initial_amount'))
+                    ->default(fn() => self::eligibleRevolvingFundQuery()->value('initial_amount'))
                     ->required(),
 
                 TextInput::make('remaining_amount')
@@ -67,9 +79,7 @@ class ReplenishmentResource extends Resource
                     ->numeric()
                     ->readOnly()
                     ->prefix('PHP')
-                    ->default(fn() => RevolvingFund::query()
-                        ->where('user_id', Auth::id())
-                        ->value('initial_amount'))
+                    ->default(fn() => self::eligibleRevolvingFundQuery()->value('remaining_amount'))
                     ->required(),
 
                 TextInput::make('total_amount')
@@ -136,7 +146,7 @@ class ReplenishmentResource extends Resource
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('initial_amount')
-                    ->label('Initial Amount')
+                    ->label('Revolving Fund Amount')
                     ->money('PHP')
                     ->sortable(),
 
@@ -184,9 +194,7 @@ class ReplenishmentResource extends Resource
 
     public static function canCreate(): bool
     {
-        return RevolvingFund::query()
-            ->where('user_id', Auth::id())
-            ->exists();
+        return self::eligibleRevolvingFundQuery()->exists();
     }
 
     private static function sumItemAmounts(?array $items): float

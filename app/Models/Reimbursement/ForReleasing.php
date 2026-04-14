@@ -74,5 +74,11 @@ class ForReleasing extends Model
     {
         return $this->hasMany(ReimbursementItem::class, 'reimbursement_id', 'id');
     }
+
+    public function reimbursementApprovals(): HasMany
+    {
+        return $this->hasMany(ReimbursementApproval::class, 'reimbursement_id')
+            ->orderBy('step_no');
+    }
 }
 

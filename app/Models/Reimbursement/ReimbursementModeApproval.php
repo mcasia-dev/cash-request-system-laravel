@@ -14,11 +14,19 @@ class ReimbursementModeApproval extends Model
         'department_id',
         'role_name',
         'required',
+        'assigned_user_ids',
+        'can_approve',
+        'can_reject',
+        'form_schema',
     ];
 
     protected $casts = [
         'step_no' => 'integer',
         'required' => 'boolean',
+        'assigned_user_ids' => 'array',
+        'can_approve' => 'boolean',
+        'can_reject' => 'boolean',
+        'form_schema' => 'array',
     ];
 
     public function reimbursementMode(): BelongsTo
@@ -31,4 +39,3 @@ class ReimbursementModeApproval extends Model
         return $this->belongsTo(Department::class);
     }
 }
-

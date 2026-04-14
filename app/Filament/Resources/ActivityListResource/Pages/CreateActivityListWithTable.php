@@ -234,7 +234,7 @@ class CreateActivityListWithTable extends Page implements HasForms, HasTable
                     ->requiresConfirmation()
                     ->form([
                         Checkbox::make('is_approved_the_authority_to_deduct')
-                            ->label('I authorize the company to deduct from my salary any unliquidated cash advance in accordance with company policy.')
+                            ->label(config('fund_deduction_authorization.authorization_statement'))
                             ->accepted()
                             ->required(),
                     ])
