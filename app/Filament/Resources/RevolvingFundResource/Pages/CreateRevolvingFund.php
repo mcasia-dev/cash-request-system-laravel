@@ -2,7 +2,9 @@
 
 namespace App\Filament\Resources\RevolvingFundResource\Pages;
 
+use App\Enums\RevolvingFund\Status;
 use App\Filament\Resources\RevolvingFundResource;
+use App\Models\RevolvingFund\RevolvingFund;
 use App\Services\RevolvingFund\ForApprovalRevolvingFundService;
 use App\Services\RevolvingFund\RevolvingFundApprovalFlowService;
 use Filament\Resources\Pages\CreateRecord;
@@ -17,11 +19,25 @@ class CreateRevolvingFund extends CreateRecord
     {
         $data['user_id'] = $data['user_id'] ?? Auth::id();
 
-        $rule = app(RevolvingFundApprovalFlowService::class)->resolveRule((object) [
+        $existingFund = RevolvingFund::query()
+            ->where('user_id', $data['user_id'])
+            ->where(function ($query): void {
+                $query->whereNull('status')
+                    ->orWhere('status', '!=', Status::REJECTED->value);
+            })
+            ->exists();
+
+        if ($existingFund) {
+            throw ValidationException::withMessages([
+                'user_id' => 'This employee already has an existing revolving fund request.',
+            ]);
+        }
+
+        $rule = app(RevolvingFundApprovalFlowService::class)->resolveRule((object)[
             'initial_amount' => $data['initial_amount'] ?? 0,
         ]);
 
-        if (! $rule) {
+        if (!$rule) {
             throw ValidationException::withMessages([
                 'initial_amount' => 'No active revolving fund approval rule found. Please configure one in Revolving Fund Approval Rules first.',
             ]);

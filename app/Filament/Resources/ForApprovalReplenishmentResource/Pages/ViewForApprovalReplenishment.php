@@ -39,27 +39,7 @@ class ViewForApprovalReplenishment extends ViewRecord
                 ->form(fn($record): array => $this->buildReviewFormSchema($record))
                 ->modalHeading(fn($record) => $this->getReviewModalHeading($record))
                 ->modalSubmitActionLabel(fn($record) => $this->getReviewSubmitLabel($record))
-                ->action(function ($record, array $data): void {
-                    try {
-                        ForApprovalReplenishmentFacade::submitItemReview(
-                            $record,
-                            $data['approved_item_ids'] ?? [],
-                            $data['remarks'] ?? null,
-                            $data['step_form_data'] ?? [],
-                            (bool)($data['reject_request'] ?? false),
-                        );
-
-                        Notification::make()
-                            ->title('Replenishment review submitted.')
-                            ->success()
-                            ->send();
-                    } catch (RuntimeException $exception) {
-                        Notification::make()
-                            ->title($exception->getMessage())
-                            ->danger()
-                            ->send();
-                    }
-                }),
+                ->action(fn($record, array $data) => ForApprovalReplenishmentFacade::submitItemReviewAction($record, $data)),
 
             Action::make('return_for_clarification')
                 ->label('Return')
@@ -71,9 +51,7 @@ class ViewForApprovalReplenishment extends ViewRecord
                         ->required()
                         ->rows(4),
                 ])
-                ->action(function ($record, array $data): void {
-                    ForApprovalReplenishmentFacade::returnForClarification($record, $data);
-                }),
+                ->action(fn($record, array $data) => ForApprovalReplenishmentFacade::returnForClarification($record, $data)),
 
             Action::make('replenish_amount')
                 ->label('Replenish')
@@ -108,24 +86,7 @@ class ViewForApprovalReplenishment extends ViewRecord
                 ->modalHeading('Replenish Amount')
                 ->modalSubmitActionLabel('Apply')
                 ->action(function ($record, array $data): void {
-                    try {
-                        ForApprovalReplenishmentFacade::applyReplenishmentAmount(
-                            $record,
-                            (float)($data['amount_to_add'] ?? 0),
-                        );
-
-                        Notification::make()
-                            ->title('Replenishment amount applied.')
-                            ->success()
-                            ->send();
-
-                        $this->redirect(ForApprovalReplenishmentResource::getUrl('view', ['record' => $record]));
-                    } catch (RuntimeException $exception) {
-                        Notification::make()
-                            ->title($exception->getMessage())
-                            ->danger()
-                            ->send();
-                    }
+                    $this->replenishAction($record, $data['amount_to_add']);
                 }),
         ];
     }
@@ -211,9 +172,11 @@ class ViewForApprovalReplenishment extends ViewRecord
                             ->schema([
                                 TextEntry::make('expense_name')
                                     ->label('Expense'),
+
                                 TextEntry::make('amount')
                                     ->label('Amount')
                                     ->money('PHP'),
+
                                 TextEntry::make('is_approved')
                                     ->label('Item Review')
                                     ->state(function ($record): string {
@@ -229,9 +192,11 @@ class ViewForApprovalReplenishment extends ViewRecord
                                         'Not Approved' => 'danger',
                                         default => 'warning',
                                     }),
+
                                 TextEntry::make('approval_remarks')
                                     ->label('Reviewer Remarks')
                                     ->placeholder('-'),
+
                                 TextEntry::make('attachment')
                                     ->label('Attachment')
                                     ->state(fn($record) => $this->renderAttachmentsHtml($record))
@@ -331,7 +296,7 @@ class ViewForApprovalReplenishment extends ViewRecord
 
     private function getReviewSubmitLabel($record): string
     {
-        return 'Submit ' . $this->getReviewActionLabel($record);
+        return 'Submit';
     }
 
     private function buildDynamicStepFormFields(array $stepConfig): array

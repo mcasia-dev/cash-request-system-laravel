@@ -14,4 +14,5 @@ enum Status: string
     case REJECTED = 'rejected';
     case REPLENISHED = 'replenished';
     case RELEASED = 'released';
+    case RETURNED = 'returned';
 }

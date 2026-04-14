@@ -75,8 +75,8 @@ class RevolvingFundResource extends Resource
                     ->numeric()
                     ->minValue(0)
                     ->prefix('PHP')
-                    ->live()
-                    ->afterStateUpdated(fn(Set $set, $state) => $set('remaining_amount', $state)),
+                    ->live(onBlur: true)
+                    ->afterStateUpdated(fn(Set $set, $state) => filled($state) ? $set('remaining_amount', $state) : null),
 
                 TextInput::make('remaining_amount')
                     ->label('Remaining Amount')
@@ -116,17 +116,12 @@ class RevolvingFundResource extends Resource
                                 ->when($record, fn($query) => $query->whereKeyNot($record->getKey()))
                                 ->where(function ($query) {
                                     $query->whereNull('status')
-                                        ->orWhereIn('status', [
-                                            Status::PENDING->value,
-                                            Status::IN_PROGRESS->value,
-                                            Status::APPROVED->value,
-                                            Status::RELEASED->value,
-                                        ]);
+                                        ->orWhere('status', '!=', Status::REJECTED->value);
                                 })
                                 ->exists();
 
                             if ($existingFund) {
-                                $fail('This employee has already an active revolving fund request.');
+                                $fail('This employee already has an existing revolving fund request that is not rejected.');
                             }
                         };
                     }),
@@ -158,7 +153,7 @@ class RevolvingFundResource extends Resource
                             )
                             ->multiple()
                             ->required()
-                            ->live()
+                            ->live(onBlur: true)
                             ->preload()
                             ->searchable()
                             ->afterStateUpdated(function (Set $set, $state) use ($otherPurposeId): void {
@@ -197,32 +192,11 @@ class RevolvingFundResource extends Resource
                                 $existing = collect($get('field_work_assignment') ?? [])->pluck('day')->filter()->values()->all();
                                 $set('field_work_days', $existing);
                             })
-                            ->afterStateUpdated(function (Set $set, Get $get, $state): void {
-                                $selectedDays = collect($state ?? [])->values();
-                                $existingAssignments = collect($get('field_work_assignment') ?? []);
+                            ->afterStateUpdated(fn(Set $set, Get $get, $state) => self::getAfterStateUpdateForFieldWorkDays($state, $get, $set)),
 
-                                $newAssignments = $selectedDays->map(function (string $day) use ($existingAssignments) {
-                                    $existing = $existingAssignments->firstWhere('day', $day);
-
-                                    return [
-                                        'day' => $day,
-                                        'time_from' => $existing['time_from'] ?? null,
-                                        'time_to' => $existing['time_to'] ?? null,
-                                    ];
-                                })->all();
-
-                                $set('field_work_assignment', $newAssignments);
-                            }),
 
                         Grid::make(['default' => 1, 'sm' => 2])
-                            ->schema([
-                                Placeholder::make('field_work_assignment_count')
-                                    ->label('Selected days')
-                                    ->content(fn(Get $get) => count($get('field_work_days') ?? [])),
-                                Placeholder::make('field_work_assignment_hint')
-                                    ->label('Tip')
-                                    ->content('Times are saved per checked day.'),
-                            ])
+                            ->schema(fn() => self::getPlaceholders())
                             ->columnSpanFull(),
 
                         Repeater::make('field_work_assignment')
@@ -372,5 +346,42 @@ class RevolvingFundResource extends Resource
             'view' => Pages\ViewRevolvingFund::route('/{record}/view'),
             'tracking' => Pages\TrackRevolvingFund::route('/{record}/tracking'),
         ];
+    }
+
+    private static function getPlaceholders()
+    {
+        return [
+            Placeholder::make('field_work_assignment_count')
+                ->label('Selected days')
+                ->content(fn(Get $get) => count($get('field_work_days') ?? [])),
+
+            Placeholder::make('field_work_assignment_hint')
+                ->label('Tip')
+                ->content('Times are saved per checked day.'),
+        ];
+    }
+
+    /**
+     * @param $state
+     * @param Get $get
+     * @param Set $set
+     * @return void
+     */
+    private static function getAfterStateUpdateForFieldWorkDays($state, Get $get, Set $set): void
+    {
+        $selectedDays = collect($state ?? [])->values();
+        $existingAssignments = collect($get('field_work_assignment') ?? []);
+
+        $newAssignments = $selectedDays->map(function (string $day) use ($existingAssignments) {
+            $existing = $existingAssignments->firstWhere('day', $day);
+
+            return [
+                'day' => $day,
+                'time_from' => $existing['time_from'] ?? null,
+                'time_to' => $existing['time_to'] ?? null,
+            ];
+        })->all();
+
+        $set('field_work_assignment', $newAssignments);
     }
 }

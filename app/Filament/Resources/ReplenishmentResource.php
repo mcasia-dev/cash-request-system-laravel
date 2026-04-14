@@ -6,6 +6,7 @@ use App\Filament\Resources\ReplenishmentResource\Pages;
 use App\Models\RevolvingFund\Replenishment;
 use App\Models\RevolvingFund\RevolvingFund;
 use App\Enums\RevolvingFund\Status as RevolvingFundStatus;
+use Facades\App\Services\Replenishment\ReplenishmentService;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -93,21 +94,9 @@ class ReplenishmentResource extends Resource
                 Repeater::make('replenishmentItems')
                     ->label('Expense Items')
                     ->relationship('replenishmentItems')
-                    ->live()
-                    ->afterStateHydrated(function (Set $set, Get $get, ?array $state): void {
-                        $total = self::sumItemAmounts($state);
-                        $initial = (float)($get('initial_amount') ?? 0);
-
-                        $set('total_amount', number_format($total, 2, '.', ''));
-                        $set('remaining_amount', number_format(self::calculateRemainingAmount($initial, $total), 2, '.', ''));
-                    })
-                    ->afterStateUpdated(function (Set $set, Get $get, ?array $state): void {
-                        $total = self::sumItemAmounts($state);
-                        $initial = (float)($get('initial_amount') ?? 0);
-
-                        $set('total_amount', number_format($total, 2, '.', ''));
-                        $set('remaining_amount', number_format(self::calculateRemainingAmount($initial, $total), 2, '.', ''));
-                    })
+                    ->live(onBlur: true)
+                    ->afterStateHydrated(fn(Set $set, Get $get, ?array $state) => ReplenishmentService::getClosure($set, $get, $state))
+                    ->afterStateUpdated(fn(Set $set, Get $get, ?array $state) => ReplenishmentService::getClosure($set, $get, $state))
                     ->schema([
                         TextInput::make('expense_name')
                             ->label('Expense')
@@ -195,22 +184,5 @@ class ReplenishmentResource extends Resource
     public static function canCreate(): bool
     {
         return self::eligibleRevolvingFundQuery()->exists();
-    }
-
-    private static function sumItemAmounts(?array $items): float
-    {
-        return collect($items ?? [])
-            ->sum(function ($item) {
-                if (!is_array($item)) {
-                    return 0;
-                }
-
-                return (float)($item['amount'] ?? 0);
-            });
-    }
-
-    private static function calculateRemainingAmount(float $initial, float $total): float
-    {
-        return max($initial - $total, 0);
     }
 }

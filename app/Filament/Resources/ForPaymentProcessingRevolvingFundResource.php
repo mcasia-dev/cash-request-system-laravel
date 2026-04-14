@@ -57,27 +57,33 @@ class ForPaymentProcessingRevolvingFundResource extends Resource
                     ->label('Fund Code')
                     ->sortable()
                     ->searchable(),
+
                 Tables\Columns\TextColumn::make('addedBy.name')
                     ->label('Requestor')
                     ->sortable()
                     ->searchable(),
+
                 Tables\Columns\TextColumn::make('user.name')
                     ->label('Recipient')
                     ->sortable()
                     ->searchable(),
+
                 Tables\Columns\TextColumn::make('initial_amount')
                     ->label('Initial Amount')
                     ->money('PHP')
                     ->sortable(),
+
                 Tables\Columns\TextColumn::make('remaining_amount')
                     ->label('Remaining Amount')
                     ->money('PHP')
                     ->sortable(),
+
                 Tables\Columns\TextColumn::make('modeOfTransfer.name')
                     ->label('Mode of Transfer')
                     ->badge()
                     ->sortable()
                     ->searchable(),
+
                 Tables\Columns\TextColumn::make('status')
                     ->badge()
                     ->sortable()
@@ -90,6 +96,7 @@ class ForPaymentProcessingRevolvingFundResource extends Resource
                         Status::REPLENISHED->value => 'gray',
                         default => 'secondary',
                     }),
+
                 Tables\Columns\TextColumn::make('status_remarks')
                     ->label('Status Remarks')
                     ->badge()

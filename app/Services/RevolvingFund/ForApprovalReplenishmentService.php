@@ -2,7 +2,7 @@
 
 namespace App\Services\RevolvingFund;
 
-use App\Enums\RevolvingFund\Status;
+use App\Filament\Resources\ForApprovalReplenishmentResource;
 use App\Mail\RevolvingFund\RevolvingFundDiscussionMail;
 use App\Models\RevolvingFund\ForApprovalReplenishment;
 use App\Models\RevolvingFund\Replenishment;
@@ -204,15 +204,10 @@ class ForApprovalReplenishmentService
 
             $fund = $replenishment->revolvingFund;
 
-            if ($fund) {
-                $fundUpdate = ['status_remarks' => $statusRemarks];
-
-                if ($isRejected || ($flowResult['is_final_step'] ?? false) === true) {
-                    $fundUpdate['remaining_amount'] = $remainingAmount;
-                    $fundUpdate['status'] = $isRejected ? Status::APPROVED->value : Status::REPLENISHED->value;
-                }
-
-                $fund->update($fundUpdate);
+            if ($fund && ($isRejected || ($flowResult['is_final_step'] ?? false) === true)) {
+                $fund->update([
+                    'remaining_amount' => $remainingAmount,
+                ]);
             }
 
             activity()
@@ -594,5 +589,60 @@ class ForApprovalReplenishmentService
             actionUrl: $actionUrl,
             actionLabel: $actionLabel,
         ));
+    }
+
+    /**
+     * @param $record
+     * @param array $data
+     * @return void
+     */
+    public function submitItemReviewAction($record, array $data): void
+    {
+        try {
+            $this->submitItemReview(
+                $record,
+                $data['approved_item_ids'] ?? [],
+                $data['remarks'] ?? null,
+                $data['step_form_data'] ?? [],
+                (bool)($data['reject_request'] ?? false),
+            );
+
+            Notification::make()
+                ->title('Replenishment review submitted.')
+                ->success()
+                ->send();
+        } catch (RuntimeException $exception) {
+            Notification::make()
+                ->title($exception->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    /**
+     * @param $record
+     * @param $amount_to_add
+     * @return void
+     */
+    public function replenishAction($record, $amount_to_add): void
+    {
+        try {
+            $this->applyReplenishmentAmount(
+                $record,
+                (float)($amount_to_add ?? 0),
+            );
+
+            Notification::make()
+                ->title('Replenishment amount applied.')
+                ->success()
+                ->send();
+
+            $this->redirect(ForApprovalReplenishmentResource::getUrl('view', ['record' => $record]));
+        } catch (RuntimeException $exception) {
+            Notification::make()
+                ->title($exception->getMessage())
+                ->danger()
+                ->send();
+        }
     }
 }

@@ -50,8 +50,6 @@ class CreateReplenishment extends CreateRecord
 
         $this->record->revolvingFund?->update([
             'remaining_amount' => $remaining,
-            'status' => Status::IN_PROGRESS->value,
-            'status_remarks' => StatusRemarks::FOR_REPLENISHMENT->value,
         ]);
 
         activity()

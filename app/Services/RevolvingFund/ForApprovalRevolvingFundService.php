@@ -8,6 +8,9 @@ use App\Models\RevolvingFund\ForApprovalRevolvingFund;
 use App\Models\RevolvingFund\RequestDiscussion;
 use App\Models\RevolvingFund\RevolvingFund;
 use App\Models\User;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Actions\Action as NotificationAction;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Collection;
@@ -27,7 +30,7 @@ class ForApprovalRevolvingFundService
         try {
             $user = Auth::user();
             $previousStatus = $record->status;
-            $result = app(RevolvingFundApprovalFlowService::class)->applyApproval($record, $user, (array) ($data['step_form_data'] ?? []));
+            $result = app(RevolvingFundApprovalFlowService::class)->applyApproval($record, $user, (array)($data['step_form_data'] ?? []));
 
             activity()
                 ->causedBy($user)
@@ -40,7 +43,7 @@ class ForApprovalRevolvingFundService
                     'new_status' => $result['status'],
                     'status_remarks' => $result['status_remarks'],
                     'approved_role_name' => $result['approved_role_name'] ?? null,
-                    'step_form_data' => (array) ($data['step_form_data'] ?? []),
+                    'step_form_data' => (array)($data['step_form_data'] ?? []),
                 ])
                 ->log("Revolving fund {$record->fund_code} approval step was completed by {$user->name} ({$user->position})");
 
@@ -89,7 +92,7 @@ class ForApprovalRevolvingFundService
         try {
             $user = Auth::user();
             $previousStatus = $record->status;
-            $result = app(RevolvingFundApprovalFlowService::class)->applyRejection($record, $user, (array) ($data['step_form_data'] ?? []));
+            $result = app(RevolvingFundApprovalFlowService::class)->applyRejection($record, $user, (array)($data['step_form_data'] ?? []));
 
             activity()
                 ->causedBy($user)
@@ -102,7 +105,7 @@ class ForApprovalRevolvingFundService
                     'new_status' => $result['status'],
                     'status_remarks' => $result['status_remarks'],
                     'rejected_role_name' => $result['rejected_role_name'] ?? null,
-                    'step_form_data' => (array) ($data['step_form_data'] ?? []),
+                    'step_form_data' => (array)($data['step_form_data'] ?? []),
                 ])
                 ->log("Revolving fund {$record->fund_code} was rejected by {$user->name} ({$user->position})");
 
@@ -133,6 +136,83 @@ class ForApprovalRevolvingFundService
                 ->danger()
                 ->send();
         }
+    }
+
+    public function canCurrentUserReview($record): bool
+    {
+        $user = Auth::user();
+
+        if (!$user) {
+            return false;
+        }
+
+        if (!in_array($record->status, [Status::PENDING->value, Status::IN_PROGRESS->value], true)) {
+            return false;
+        }
+
+        return app(RevolvingFundApprovalFlowService::class)->userCanReview($record, $user);
+    }
+
+    public function canApproveCurrentStep($record): bool
+    {
+        $config = $this->getCurrentStepConfig($record);
+
+        return (bool)($config['can_approve'] ?? true);
+    }
+
+    public function canRejectCurrentStep($record): bool
+    {
+        $config = $this->getCurrentStepConfig($record);
+
+        return (bool)($config['can_reject'] ?? true);
+    }
+
+    private function getCurrentStepConfig($record): array
+    {
+        $user = Auth::user();
+
+        if (!$user) {
+            return [];
+        }
+
+        return ForApprovalRevolvingFundService::getCurrentStepConfiguration($record, $user) ?? [];
+    }
+
+    public function buildDynamicStepForm($record): array
+    {
+        $config = $this->getCurrentStepConfig($record);
+        $schema = (array)($config['form_schema'] ?? []);
+        $fields = [];
+
+        foreach ($schema as $item) {
+            $key = (string)($item['key'] ?? '');
+
+            if ($key === '') {
+                continue;
+            }
+
+            $label = (string)($item['label'] ?? $key);
+            $type = (string)($item['type'] ?? 'text');
+            $required = (bool)($item['required'] ?? false);
+            $fieldPath = "step_form_data.{$key}";
+
+            $field = match ($type) {
+                'number' => TextInput::make($fieldPath)->numeric(),
+                'textarea' => Textarea::make($fieldPath)->rows(3),
+                'date' => DatePicker::make($fieldPath),
+                default => TextInput::make($fieldPath),
+            };
+
+            $field->label($label);
+
+            if ($required) {
+                $field->required();
+            }
+
+            $fields[] = $field;
+        }
+
+        return $fields;
     }
 
     public function notifyCurrentApprovers($record, bool $isSubmission = false): void

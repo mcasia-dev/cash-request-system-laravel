@@ -5,15 +5,14 @@ namespace App\Filament\Resources\RevolvingFundResource\Pages;
 use App\Enums\RevolvingFund\Status;
 use App\Filament\Resources\RevolvingFundResource;
 use App\Filament\Support\RendersDiscussionChat;
+use Facades\App\Services\RevolvingFund\RevolvingFundService;
 use Facades\App\Services\RevolvingFund\ForApprovalRevolvingFundService;
-use Facades\App\Services\RevolvingFund\ReplenishmentApprovalService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
 use Filament\Resources\Pages\ViewRecord;
-use Illuminate\Support\Facades\Auth;
 
 class ViewRevolvingFund extends ViewRecord
 {
@@ -27,29 +26,18 @@ class ViewRevolvingFund extends ViewRecord
             Action::make('review_replenishment_request')
                 ->label('Review Replenishment Request')
                 ->color('success')
-                ->visible(fn($record) => $this->canDepartmentHeadReviewReplenishment($record))
-                ->url(function ($record): string {
-                    $replenishment = $record->replenishments()
-                        ->whereIn('status', ['pending', 'returned'])
-                        ->latest('id')
-                        ->first();
-
-                    if (!$replenishment) {
-                        return '#';
-                    }
-
-                    return route('filament.admin.resources.for-approval-replenishments.view', ['record' => $replenishment->id]);
-                }),
+                ->visible(fn($record) => RevolvingFundService::canDepartmentHeadReviewReplenishment($record))
+                ->url(fn($record) => $this->getReviewReplenishmentUrl($record)),
 
             Action::make('tracking')
                 ->label('Tracking Status')
                 ->color('warning')
-                ->url(fn($record) => route('filament.admin.resources.revolving-funds.tracking', ['record' => $record])),
+                ->url(fn($record) => $this->getTrackingStatusUrl($record)),
 
             Action::make('Respond')
                 ->label('Respond to Clarification')
                 ->color('info')
-                ->visible(fn($record) => $this->canRespond($record))
+                ->visible(fn($record) => RevolvingFundService::canRespond($record))
                 ->form([
                     Textarea::make('remarks')
                         ->label('Response')
@@ -74,7 +62,7 @@ class ViewRevolvingFund extends ViewRecord
 
                         TextEntry::make('user.name')
                             ->label('Recipient')
-                            ->formatStateUsing(fn($record) => "{$record->user->name} ({$record->user->position} | {$record->user->department->department_name})"),
+                            ->formatStateUsing(fn($record) => RevolvingFundService::getFormattedName($record)),
 
                         TextEntry::make('initial_amount')
                             ->label('Initial Amount')
@@ -98,17 +86,7 @@ class ViewRevolvingFund extends ViewRecord
 
                         TextEntry::make('field_work_assignment')
                             ->label('Field Work Assignment')
-                            ->state(function ($record) {
-                                return collect($record->field_work_assignment ?? [])
-                                    ->map(function ($item) {
-                                        $day = isset($item['day']) ? ucfirst($item['day']) : 'Day';
-                                        $from = $item['time_from'] ?? '-';
-                                        $to = $item['time_to'] ?? '-';
-
-                                        return "{$day}: {$from} - {$to}";
-                                    })
-                                    ->join('<br>');
-                            })
+                            ->state(fn($record) => $this->fieldWorkAssignmentState($record))
                             ->html()
                             ->columnSpanFull(),
 
@@ -123,30 +101,27 @@ class ViewRevolvingFund extends ViewRecord
                                 Status::RELEASED->value => 'info',
                                 default => 'secondary',
                             }),
+
                         TextEntry::make('status_remarks')
                             ->label('Status Remarks')
                             ->badge(),
+                        
                         TextEntry::make('created_at')
                             ->label('Date Submitted')
                             ->dateTime('F d, Y h:i A'),
                     ])
                     ->columns(3),
 
-                Section::make('Latest Replenishment Request')
+                Section::make('Replenishment History')
+                    ->visible(fn($record) => $record->replenishments()->exists())
                     ->schema([
-                        TextEntry::make('latest_replenishment_status')
-                            ->label('Status')
-                            ->state(fn($record) => $record->replenishments()->latest('id')->value('status') ?? 'N/A')
-                            ->badge(),
-                        TextEntry::make('latest_replenishment_remarks')
-                            ->label('Status Remarks')
-                            ->state(fn($record) => $record->replenishments()->latest('id')->value('status_remarks') ?? '-'),
-                        TextEntry::make('latest_replenishment_total')
-                            ->label('Total Amount')
-                            ->state(fn($record) => $record->replenishments()->latest('id')->value('total_amount'))
-                            ->money('PHP'),
+                        TextEntry::make('replenishment_history')
+                            ->hiddenLabel()
+                            ->state(fn($record) => RevolvingFundService::renderReplenishmentHistoryTable($record))
+                            ->html()
+                            ->columnSpanFull(),
                     ])
-                    ->columns(3),
+                    ->columnSpanFull(),
 
                 Section::make('Clarifications / Returns')
                     ->visible(fn($record) => $this->canViewDiscussionChat($record))
@@ -161,24 +136,35 @@ class ViewRevolvingFund extends ViewRecord
             ]);
     }
 
-    private function canRespond($record): bool
+    private function getReviewReplenishmentUrl($record): string
     {
-        $userId = Auth::id();
+        $replenishment = $record->replenishments()
+            ->whereIn('status', ['pending', 'returned'])
+            ->latest('id')
+            ->first();
 
-        if (!$userId || (int)$record->added_by !== (int)$userId) {
-            return false;
+        if (!$replenishment) {
+            return '#';
         }
 
-        if (!in_array($record->status, [Status::PENDING->value, Status::IN_PROGRESS->value], true)) {
-            return false;
-        }
-
-        return $record->discussions()->where('type', 'return')->exists();
+        return route('filament.admin.resources.for-approval-replenishments.view', ['record' => $replenishment->id]);
     }
 
-    private function canDepartmentHeadReviewReplenishment($record): bool
+    private function getTrackingStatusUrl($record): string
     {
-        return ReplenishmentApprovalService::canCurrentDepartmentHeadReview($record)
-            && ReplenishmentApprovalService::hasActionableReplenishment($record);
+        return route('filament.admin.resources.revolving-funds.tracking', ['record' => $record]);
+    }
+
+    private function fieldWorkAssignmentState($record)
+    {
+        return collect($record->field_work_assignment ?? [])
+            ->map(function ($item) {
+                $day = isset($item['day']) ? ucfirst($item['day']) : 'Day';
+                $from = $item['time_from'] ?? '-';
+                $to = $item['time_to'] ?? '-';
+
+                return "{$day}: {$from} - {$to}";
+            })
+            ->join('<br>');
     }
 }
