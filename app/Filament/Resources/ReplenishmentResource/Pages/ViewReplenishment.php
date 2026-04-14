@@ -5,6 +5,7 @@ namespace App\Filament\Resources\ReplenishmentResource\Pages;
 use App\Filament\Resources\ReplenishmentResource;
 use App\Filament\Support\RendersAttachmentPreview;
 use App\Filament\Support\RendersDiscussionChat;
+use Facades\App\Services\Replenishment\ReplenishmentService;
 use Facades\App\Services\RevolvingFund\ForApprovalReplenishmentService;
 use Filament\Actions\Action;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -13,7 +14,6 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Forms\Components\Textarea;
-use Illuminate\Support\Facades\Auth;
 
 class ViewReplenishment extends ViewRecord
 {
@@ -27,7 +27,7 @@ class ViewReplenishment extends ViewRecord
             Action::make('respond_to_clarification')
                 ->label('Respond to Clarification')
                 ->color('info')
-                ->visible(fn($record) => $this->canRespond($record))
+                ->visible(fn($record) => ReplenishmentService::canRespond($record))
                 ->form([
                     Textarea::make('remarks')
                         ->label('Response')
@@ -162,20 +162,5 @@ class ViewReplenishment extends ViewRecord
                             ->columnSpanFull(),
                     ]),
             ]);
-    }
-
-    private function canRespond($record): bool
-    {
-        $userId = Auth::id();
-
-        if (!$userId || (int)($record->revolvingFund?->user_id ?? 0) !== (int)$userId) {
-            return false;
-        }
-
-        if (!in_array((string)$record->status, ['pending', 'returned'], true)) {
-            return false;
-        }
-
-        return $record->discussions()->where('type', 'return')->exists();
     }
 }

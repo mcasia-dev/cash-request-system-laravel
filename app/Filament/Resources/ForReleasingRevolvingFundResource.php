@@ -28,7 +28,7 @@ class ForReleasingRevolvingFundResource extends Resource
             ->where('status_remarks', StatusRemarks::FOR_RELEASING->value)
             ->count();
 
-        return $count > 0 ? (string) $count : null;
+        return $count > 0 ? (string)$count : null;
     }
 
     public static function getNavigationBadgeColor(): ?string
@@ -56,26 +56,31 @@ class ForReleasingRevolvingFundResource extends Resource
                     ->label('Fund Code')
                     ->sortable()
                     ->searchable(),
+
                 Tables\Columns\TextColumn::make('addedBy.name')
                     ->label('Requestor')
                     ->sortable()
                     ->searchable(),
+
                 Tables\Columns\TextColumn::make('user.name')
                     ->label('Recipient')
                     ->sortable()
                     ->searchable(),
+
                 Tables\Columns\TextColumn::make('initial_amount')
                     ->label('Initial Amount')
                     ->money('PHP')
                     ->sortable(),
+
                 Tables\Columns\TextColumn::make('releasing_date')
                     ->label('Releasing Date')
                     ->date()
                     ->sortable(),
+
                 Tables\Columns\TextColumn::make('status')
                     ->badge()
                     ->sortable()
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn(string $state): string => match ($state) {
                         Status::PENDING->value => 'warning',
                         Status::IN_PROGRESS->value => 'secondary',
                         Status::APPROVED->value => 'success',
@@ -84,6 +89,7 @@ class ForReleasingRevolvingFundResource extends Resource
                         Status::REPLENISHED->value => 'gray',
                         default => 'secondary',
                     }),
+
                 Tables\Columns\TextColumn::make('status_remarks')
                     ->label('Status Remarks')
                     ->badge()

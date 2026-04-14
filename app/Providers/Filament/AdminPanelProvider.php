@@ -48,6 +48,8 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('')
+            ->unsavedChangesAlerts()
+            ->databaseTransactions()
             ->login(CustomLogin::class)
             ->registration(Register::class)
             ->profile(EditProfile::class, isSimple: false)

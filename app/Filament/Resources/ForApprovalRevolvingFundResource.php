@@ -49,8 +49,7 @@ class ForApprovalRevolvingFundResource extends Resource
             return parent::getEloquentQuery()->whereRaw('1 = 0');
         }
 
-        return app(RevolvingFundApprovalFlowService::class)
-            ->filterPendingForUser(parent::getEloquentQuery(), $user);
+        return app(RevolvingFundApprovalFlowService::class)->filterPendingForUser(parent::getEloquentQuery(), $user);
     }
 
     public static function form(Form $form): Form

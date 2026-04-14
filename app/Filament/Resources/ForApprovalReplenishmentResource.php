@@ -17,7 +17,8 @@ class ForApprovalReplenishmentResource extends Resource
 {
     protected static ?string $model = ForApprovalReplenishment::class;
     protected static ?string $navigationGroup = 'Replenishments';
-    protected static ?string $navigationLabel = 'Replenishment Approvals';
+    protected static ?string $navigationLabel = 'For Approval';
+    protected static ?string $label = 'For Approval';
     protected static ?string $navigationIcon = 'heroicon-o-document-check';
 
     public static function getNavigationBadge(): ?string

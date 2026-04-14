@@ -18,6 +18,7 @@ class RevolvingFundModeOfTransferResource extends Resource
     protected static ?string $model = RevolvingFundModeOfTransfer::class;
     protected static ?string $navigationGroup = 'Revolving Funds';
     protected static ?string $navigationLabel = 'Mode of Transfer';
+    protected static ?string $label = 'Mode of Transfer';
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
 
     public static function form(Form $form): Form

@@ -6,6 +6,7 @@ use App\Enums\RevolvingFund\Status;
 use App\Filament\Resources\ForApprovalRevolvingFundResource;
 use App\Filament\Support\RendersDiscussionChat;
 use App\Services\RevolvingFund\RevolvingFundApprovalFlowService;
+use Facades\App\Services\RevolvingFund\RevolvingFundService;
 use Facades\App\Services\RevolvingFund\ForApprovalRevolvingFundService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
@@ -27,20 +28,20 @@ class ViewForApprovalRevolvingFund extends ViewRecord
     {
         return [
             Action::make('Approve')
-                ->visible(fn($record) => $this->canCurrentUserReview($record) && $this->canApproveCurrentStep($record))
+                ->visible(fn($record) => ForApprovalRevolvingFundService::canCurrentUserReview($record) && ForApprovalRevolvingFundService::canApproveCurrentStep($record))
                 ->requiresConfirmation()
-                ->form(fn($record) => $this->buildDynamicStepForm($record))
+                ->form(fn($record) => ForApprovalRevolvingFundService::buildDynamicStepForm($record))
                 ->action(fn($record, array $data) => ForApprovalRevolvingFundService::approve($record, $data)),
 
             Action::make('Reject')
-                ->visible(fn($record) => $this->canCurrentUserReview($record) && $this->canRejectCurrentStep($record))
+                ->visible(fn($record) => ForApprovalRevolvingFundService::canCurrentUserReview($record) && ForApprovalRevolvingFundService::canRejectCurrentStep($record))
                 ->color('secondary')
                 ->requiresConfirmation()
-                ->form(fn($record) => $this->buildDynamicStepForm($record))
+                ->form(fn($record) => ForApprovalRevolvingFundService::buildDynamicStepForm($record))
                 ->action(fn($record, array $data) => ForApprovalRevolvingFundService::reject($record, $data)),
 
             Action::make('Return')
-                ->visible(fn($record) => $this->canCurrentUserReview($record))
+                ->visible(fn($record) => ForApprovalRevolvingFundService::canCurrentUserReview($record))
                 ->color('warning')
                 ->form([
                     Textarea::make('remarks')
@@ -66,7 +67,7 @@ class ViewForApprovalRevolvingFund extends ViewRecord
 
                         TextEntry::make('user.name')
                             ->label('Recipient')
-                            ->formatStateUsing(fn($record) => "{$record->user->name} ({$record->user->position} | {$record->user->department->department_name})"),
+                            ->formatStateUsing(fn($record) => RevolvingFundService::getFormattedName($record)),
 
                         TextEntry::make('initial_amount')
                             ->label('Initial Amount')
@@ -90,17 +91,7 @@ class ViewForApprovalRevolvingFund extends ViewRecord
 
                         TextEntry::make('field_work_assignment')
                             ->label('Field Work Assignment')
-                            ->state(function ($record) {
-                                return collect($record->field_work_assignment ?? [])
-                                    ->map(function ($item) {
-                                        $day = isset($item['day']) ? ucfirst($item['day']) : 'Day';
-                                        $from = $item['time_from'] ?? '-';
-                                        $to = $item['time_to'] ?? '-';
-
-                                        return "{$day}: {$from} - {$to}";
-                                    })
-                                    ->join('<br>');
-                            })
+                            ->state(fn($record) => $this->getFieldOfWorkState($record))
                             ->html()
                             ->columnSpanFull(),
 
@@ -114,9 +105,11 @@ class ViewForApprovalRevolvingFund extends ViewRecord
                                 Status::REPLENISHED->value => 'info',
                                 default => 'secondary',
                             }),
+
                         TextEntry::make('status_remarks')
                             ->label('Status Remarks')
                             ->badge(),
+
                         TextEntry::make('created_at')
                             ->label('Date Submitted')
                             ->dateTime('F d, Y h:i A'),
@@ -137,80 +130,20 @@ class ViewForApprovalRevolvingFund extends ViewRecord
             ]);
     }
 
-    private function canCurrentUserReview($record): bool
+    /**
+     * @param $record
+     * @return string
+     */
+    function getFieldOfWorkState($record): string
     {
-        $user = Auth::user();
+        return collect($record->field_work_assignment ?? [])
+            ->map(function ($item) {
+                $day = isset($item['day']) ? ucfirst($item['day']) : 'Day';
+                $from = $item['time_from'] ?? '-';
+                $to = $item['time_to'] ?? '-';
 
-        if (!$user) {
-            return false;
-        }
-
-        if (!in_array($record->status, [Status::PENDING->value, Status::IN_PROGRESS->value], true)) {
-            return false;
-        }
-
-        return app(RevolvingFundApprovalFlowService::class)->userCanReview($record, $user);
-    }
-
-    private function canApproveCurrentStep($record): bool
-    {
-        $config = $this->getCurrentStepConfig($record);
-
-        return (bool)($config['can_approve'] ?? true);
-    }
-
-    private function canRejectCurrentStep($record): bool
-    {
-        $config = $this->getCurrentStepConfig($record);
-
-        return (bool)($config['can_reject'] ?? true);
-    }
-
-    private function buildDynamicStepForm($record): array
-    {
-        $config = $this->getCurrentStepConfig($record);
-        $schema = (array)($config['form_schema'] ?? []);
-        $fields = [];
-
-        foreach ($schema as $item) {
-            $key = (string)($item['key'] ?? '');
-
-            if ($key === '') {
-                continue;
-            }
-
-            $label = (string)($item['label'] ?? $key);
-            $type = (string)($item['type'] ?? 'text');
-            $required = (bool)($item['required'] ?? false);
-            $fieldPath = "step_form_data.{$key}";
-
-            $field = match ($type) {
-                'number' => TextInput::make($fieldPath)->numeric(),
-                'textarea' => Textarea::make($fieldPath)->rows(3),
-                'date' => DatePicker::make($fieldPath),
-                default => TextInput::make($fieldPath),
-            };
-
-            $field->label($label);
-
-            if ($required) {
-                $field->required();
-            }
-
-            $fields[] = $field;
-        }
-
-        return $fields;
-    }
-
-    private function getCurrentStepConfig($record): array
-    {
-        $user = Auth::user();
-
-        if (!$user) {
-            return [];
-        }
-
-        return ForApprovalRevolvingFundService::getCurrentStepConfiguration($record, $user) ?? [];
+                return "{$day}: {$from} - {$to}";
+            })
+            ->join('<br>');
     }
 }

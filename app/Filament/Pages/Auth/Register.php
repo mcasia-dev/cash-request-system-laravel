@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Filament\Pages\Auth;
 
 use App\Jobs\ConfirmRegistrationJob;
@@ -122,8 +123,8 @@ class Register extends BaseRegister
     {
         return TextInput::make('contact_number')
             ->label('Mobile Number (+63)')
-            ->tel()
-            ->rules(['required', 'regex:/^(09\d{9}|\+639\d{9}|639\d{9})$/'])
+            ->numeric()
+            ->rules(['required', 'regex:/^(09\d{9}|\+639\d{9}|639\d{9})$/', 'numeric', 'min:9', 'max_digits::11'])
             ->placeholder('09123456789')
             ->maxLength(11)
             ->unique($this->getUserModel());
@@ -152,7 +153,7 @@ class Register extends BaseRegister
                     ->symbols()
                     ->uncompromised(),
             ])
-        // ->showAllValidationMessages()
+            // ->showAllValidationMessages()
             ->dehydrateStateUsing(fn($state) => Hash::make($state))
             ->same('passwordConfirmation');
     }
@@ -181,7 +182,7 @@ class Register extends BaseRegister
      * Remove the 'terms' field from data before registration
      * since it's only used for validation, not storage.
      *
-     * @param  array<string, mixed>  $data
+     * @param array<string, mixed> $data
      * @return array<string, mixed>
      */
     protected function mutateFormDataBeforeRegister(array $data): array

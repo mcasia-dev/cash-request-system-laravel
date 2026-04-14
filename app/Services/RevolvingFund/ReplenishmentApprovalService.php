@@ -2,7 +2,6 @@
 
 namespace App\Services\RevolvingFund;
 
-use App\Enums\RevolvingFund\Status;
 use App\Mail\RevolvingFund\RevolvingFundDiscussionMail;
 use App\Models\RevolvingFund\ForApprovalReplenishment;
 use App\Models\RevolvingFund\RequestDiscussion;
@@ -63,11 +62,6 @@ class ReplenishmentApprovalService
             'reviewed_at' => now(),
         ]);
 
-        $fund->update([
-            'status' => Status::REPLENISHED->value,
-            'status_remarks' => 'Replenishment Approved by Department Head',
-        ]);
-
         activity()
             ->causedBy($reviewer)
             ->performedOn($fund)
@@ -99,10 +93,6 @@ class ReplenishmentApprovalService
             'reason_for_rejection' => $reason,
             'reviewed_by' => $reviewer?->id,
             'reviewed_at' => now(),
-        ]);
-
-        $fund->update([
-            'status_remarks' => 'Replenishment Rejected by Department Head',
         ]);
 
         activity()
