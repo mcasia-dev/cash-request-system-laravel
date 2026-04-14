@@ -38,7 +38,7 @@ use Illuminate\Support\HtmlString;
 class CashRequestResource extends Resource
 {
     protected static ?string $model = CashRequest::class;
-    protected static ?string $navigationGroup = 'Cash Requests';
+    protected static ?string $navigationGroup = 'Cash Requestsss';
     protected static ?string $navigationIcon = 'heroicon-o-document-text';
     protected ?string $pollingInterval = '5s';
 
