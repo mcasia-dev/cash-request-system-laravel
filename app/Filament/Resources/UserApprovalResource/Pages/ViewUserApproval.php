@@ -152,30 +152,37 @@ class ViewUserApproval extends ViewRecord
         return function ($record) {
             $approver = Auth::user();
             $previousStatus = $record->status;
+            $user = User::findOrFail($record->id);
 
-            $record->update([
+            $updatedRecord = $user->update([
                 'status' => Status::APPROVED->value,
                 'review_by' => $approver->id,
                 'review_at' => now(),
             ]);
 
+            if (!$updatedRecord) {
+                throw new \Exception("Failed to update record.");
+            }
+
             activity()
                 ->causedBy($approver)
-                ->performedOn($record)
+                ->performedOn($user)
                 ->event('approved')
                 ->withProperties([
                     'previous_status' => $previousStatus,
                     'new_status' => Status::APPROVED->value,
                     'review_by' => $approver->id,
                 ])
-                ->log("User {$record->name} was approved by {$approver->name} ({$approver->position})");
+                ->log("User {$user->name} was approved by {$approver->name} ({$approver->position})");
 
-            ApproveUserRegistrationJob::dispatch($record);
+            ApproveUserRegistrationJob::dispatch($user);
 
             Notification::make()
                 ->title('User Approved!')
                 ->success()
                 ->send();
+
+            redirect()->route('filament.admin.resources.user-request-approval.index');
         };
     }
 
@@ -188,17 +195,22 @@ class ViewUserApproval extends ViewRecord
         return function ($record, array $data) {
             $approver = Auth::user();
             $previousStatus = $record->status;
+            $user = User::findOrFail($record->id);
 
-            $record->update([
+            $updatedRecord = $user->update([
                 'status' => Status::DISAPPROVED->value,
                 'review_by' => $approver->id,
                 'review_at' => now(),
                 'reason_for_rejection' => $data['reason_for_rejection'],
             ]);
 
+            if (!$updatedRecord) {
+                throw new \Exception("Failed to update record.");
+            }
+
             activity()
                 ->causedBy($approver)
-                ->performedOn($record)
+                ->performedOn($user)
                 ->event('disapproved')
                 ->withProperties([
                     'previous_status' => $previousStatus,
@@ -206,14 +218,16 @@ class ViewUserApproval extends ViewRecord
                     'review_by' => $approver->id,
                     'reason' => $data['reason_for_rejection'],
                 ])
-                ->log("User {$record->name} was disapproved by {$approver->name} ({$approver->position})");
+                ->log("User {$user->name} was disapproved by {$approver->name} ({$approver->position})");
 
-            RejectUserRegistrationJob::dispatch($record);
+            RejectUserRegistrationJob::dispatch($user);
 
             Notification::make()
-                ->title('User Rejected!')
-                ->danger()
+                ->title('User Rejected Successfully!')
+                ->success()
                 ->send();
+
+            redirect()->route('filament.admin.resources.user-request-approval.index');
         };
     }
 }
